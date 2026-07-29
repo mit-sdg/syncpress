@@ -7,6 +7,183 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
+### Collecting
+
+**Purpose.** Keep a named ordered set of items with a small card for each, so listings can
+be rendered without reaching back into the full item.
+
+**Principle.** Ada declares `posts` descending and includes cards for three items. They are
+read newest first, ties break by source path ascending, and a missing sort key
+comes last. Re-including an identical item reports no change. Changing its card
+reports a change. Excluding it removes it, and resetting removes all declared
+collections.
+
+Actions:
+
+- `declare (direction, name)`
+- `exclude (collection, item)` — may refuse `NOT_INCLUDED`
+- `include (card, collection, item, key, tiebreak)` — may refuse `COLLECTION_NOT_FOUND`
+- `reset (…)`
+- `withdraw (item)`
+
+Queries (standing questions the state answers):
+
+- `_catalog (…)` — promises exactly one row
+- `_collections (…)` — promises any number of rows
+- `_items (collection)` — promises any number of rows
+- `_membership (item)` — promises any number of rows
+- `_named (name)` — promises at most one row
+- `_position (collection, item)` — promises at most one row
+
+### Composing
+
+**Purpose.** Assemble one record from parts that are known separately, so each contributor
+can supply only the fields it owns.
+
+**Principle.** Ada sets `site`, `page.data`, and `page.url` for a page context. The resulting
+record nests the page fields together. She sets `page.content` as raw, and the
+record names that key among its raw values. Replacing `page.url` changes only
+that value. A second part of the page is independent. Trying to nest inside a
+scalar is refused.
+
+Actions:
+
+- `clear (part, subject)`
+- `set (key, part, raw, subject, value)` — may refuse `KEY_CONFLICTS`
+
+Queries (standing questions the state answers):
+
+- `_keys (part, subject)` — promises any number of rows
+- `_record (part, subject)` — promises exactly one row
+- `_value (key, part, subject)` — promises at most one row
+
+### Configuring
+
+**Purpose.** Turn one declarative configuration document into an addressable settings tree,
+so later behavior reads settings without depending on the notation that wrote
+them.
+
+**Principle.** Ada loads a YAML document. Its `site.title` value is available by dotted key,
+and the rules under `defaults` retain their written order and source locations.
+Loading the same source reports no change and preserves the active tree.
+Loading different source replaces the active configuration. Malformed YAML and
+unsupported notation are refused without replacing the configuration.
+
+Actions:
+
+- `discard (configuration)` — may refuse `CONFIGURATION_NOT_FOUND`
+- `load (notation, source)` — may refuse `MALFORMED_CONFIGURATION`, `UNSUPPORTED_NOTATION`
+
+Queries (standing questions the state answers):
+
+- `_active (…)` — promises at most one row
+- `_child (key, node)` — promises at most one row
+- `_entries (node)` — promises any number of rows
+- `_items (node)` — promises any number of rows
+- `_record (node)` — promises exactly one row
+- `_scalar (key, node, otherwise)` — promises exactly one row
+- `_values (key, node, otherwise)` — promises exactly one row
+- `_where (node)` — promises exactly one row
+
+### Documenting
+
+**Purpose.** Keep a document's front-matter attributes beside its authored body, so prose
+and metadata travel in one ordinary file while each remains independently
+readable.
+
+**Principle.** Ada parses a document that opens with YAML front matter. Its attributes contain
+`title`, its body is the prose after the closing fence, and the body start line
+is retained. A document without front matter has empty attributes. Malformed or
+unclosed front matter is refused and records no document. Parsing a subject
+again replaces its document, and forgetting it removes it.
+
+Actions:
+
+- `forget (subject)` — may refuse `DOCUMENT_NOT_FOUND`
+- `parse (subject, text)` — may refuse `MALFORMED_ATTRIBUTES`
+
+Queries (standing questions the state answers):
+
+- `_all (…)` — promises any number of rows
+- `_document (subject)` — promises at most one row
+
+### Filing
+
+**Purpose.** Hold named trees of files and report precisely when their contents change, so
+the rest of the generator can address ordinary project files without owning a
+filesystem.
+
+**Principle.** Ada opens a content root and places `posts/compiler-design/index.md` in it.
+Reading it returns its bytes and digest. Placing those bytes again reports no
+change; replacing them reports a change. Listing `posts/` returns the page in
+path order, and resolving `./pipeline.png` finds its sibling when it exists.
+Paths that leave the root are refused. Discarding the page removes it, and
+discarding it again is refused.
+
+Actions:
+
+- `discard (file)` — may refuse `FILE_NOT_FOUND`
+- `open (name)`
+- `place (content, path, root)` — may refuse `PATH_LEAVES_ROOT`
+
+Queries (standing questions the state answers):
+
+- `_at (path, root)` — promises at most one row
+- `_directory (path)` — promises exactly one row
+- `_file (file)` — promises at most one row
+- `_join (name, prefix)` — promises exactly one row
+- `_medium (path)` — promises exactly one row
+- `_named (name)` — promises at most one row
+- `_resolve (address, file)` — promises at most one row
+- `_root (root)` — promises at most one row
+- `_under (prefix, root)` — promises any number of rows
+
+### Layering
+
+**Purpose.** Resolve one record from ranked contributions, so values can be defaulted,
+overridden, and explained afterwards.
+
+**Principle.** Ada contributes a broad default at rank 0, a narrower default at rank 1, and a
+page's attributes at rank 1000000. Resolution retains the page title, takes the
+narrower template, and merges nested mappings. Sequences and scalars replace.
+The template's origin identifies rank 1. Withdrawing that rank restores the
+broad template; a duplicate rank and an absent withdrawal are refused.
+
+Actions:
+
+- `clear (subject)`
+- `contribute (rank, subject, values)` — may refuse `RANK_TAKEN`
+- `withdraw (rank, subject)` — may refuse `NO_SUCH_LAYER`
+
+Queries (standing questions the state answers):
+
+- `_flag (key, otherwise, subject)` — promises exactly one row
+- `_holds (key, subject, value)` — promises exactly one row
+- `_layers (subject)` — promises any number of rows
+- `_origin (key, subject)` — promises at most one row
+- `_resolved (subject)` — promises exactly one row
+- `_value (key, subject)` — promises at most one row
+
+### Matching
+
+**Purpose.** Compile a selection pattern and test paths against it, so the same rule can be
+declared once and applied everywhere.
+
+**Principle.** Ada compiles `posts/**/*.md`. It matches
+`posts/compiler-design/index.md`, but not `about/index.md` or
+`posts/notes.txt`. Compiling it again returns the same pattern. Compiling the
+malformed pattern `posts/**{` is refused, and an uncompiled pattern matches
+nothing.
+
+Actions:
+
+- `compile (text)` — may refuse `MALFORMED_PATTERN`
+
+Queries (standing questions the state answers):
+
+- `_compiled (text)` — promises at most one row
+- `_matches (path, pattern)` — promises exactly one row
+
 ### RequestBoundary
 
 **Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
