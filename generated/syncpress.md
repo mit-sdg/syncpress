@@ -9,22 +9,21 @@ _specifications and composition source, then regenerate this file._
 
 ### Collecting
 
-**Purpose.** Keep a named ordered set of items with a small card for each, so listings can
-be rendered without reaching back into the full item.
+**Purpose.** Keep named lists in a dependable order, with a small summary for each item.
 
-**Principle.** Ada declares `posts` descending and includes cards for three items. They are
-read newest first, ties break by source path ascending, and a missing sort key
-comes last. Re-including an identical item reports no change. Changing its card
-reports a change. Excluding it removes it, and resetting removes all declared
-collections.
+**Principle.** Ada makes a `favorites` list and adds a few items with scores and short
+summaries. Reading it gives the items in score order. Equal scores are settled
+by a supplied label and then by item identity, while an item without a score
+comes last. Adding the same item again changes nothing; changing its score,
+label, or summary updates it.
 
 Actions:
 
-- `declare (direction, name)`
-- `exclude (collection, item)` — may refuse `NOT_INCLUDED`
-- `include (card, collection, item, key, tiebreak)` — may refuse `COLLECTION_NOT_FOUND`
+- `declare (direction, name)` — may refuse `INVALID_DIRECTION`, `INVALID_TEXT`
+- `exclude (collection, item)` — may refuse `INVALID_TEXT`, `NOT_INCLUDED`
+- `include (card, collection, item, key, tiebreak)` — may refuse `COLLECTION_NOT_FOUND`, `INVALID_CARD`, `INVALID_SORT_KEY`, `INVALID_TEXT`
 - `reset (…)`
-- `withdraw (item)`
+- `withdraw (item)` — may refuse `INVALID_TEXT`
 
 Queries (standing questions the state answers):
 
@@ -37,25 +36,28 @@ Queries (standing questions the state answers):
 
 ### Composing
 
-**Purpose.** Assemble one record from parts that are known separately, so each contributor
-can supply only the fields it owns.
+**Purpose.** Build one record from pieces supplied separately, so each person or process can
+add what it knows without rebuilding the whole record.
 
-**Principle.** Ada sets `site`, `page.data`, and `page.url` for a page context. The resulting
-record nests the page fields together. She sets `page.content` as raw, and the
-record names that key among its raw values. Replacing `page.url` changes only
-that value. A second part of the page is independent. Trying to nest inside a
-scalar is refused.
+**Principle.** Rosa is planning a neighborhood picnic. One friend adds the venue name, another
+adds a contact phone number, and a third adds the capacity. They may add those
+pieces in any order and Rosa reads the same complete plan. Correcting the phone
+number replaces it. A shopping list is a separate part and remains unchanged.
+No one may also add the whole contact record, because that would overlap the
+phone-number piece. Clearing the plan leaves it empty.
 
 Actions:
 
 - `clear (part, subject)`
-- `set (key, part, raw, subject, value)` — may refuse `KEY_CONFLICTS`
+- `set (part, path, subject, value)` — may refuse `INVALID_PATH`, `INVALID_VALUE`, `KEY_CONFLICTS`
 
 Queries (standing questions the state answers):
 
+- `_field (field, part, subject)` — promises at most one row
+- `_holds (field, part, subject, value)` — promises exactly one row
 - `_keys (part, subject)` — promises any number of rows
 - `_record (part, subject)` — promises exactly one row
-- `_value (key, part, subject)` — promises at most one row
+- `_value (part, path, subject)` — promises at most one row
 
 ### Configuring
 
@@ -86,44 +88,51 @@ Queries (standing questions the state answers):
 
 ### Converting
 
-**Purpose.** Turn lightweight markup into HTML, so authors write prose while the rendering
-pipeline receives the markup browsers read.
+**Purpose.** Convert Markdown to HTML or pass verbatim text through unchanged, while keeping
+independent, reusable results for named parts of a subject.
 
-**Principle.** Ada declares Markdown with tables and raw markup enabled. Converting a heading
-and paragraph returns HTML for one part of a page; converting another part does
-not disturb the first. The same source is reused from the conversion cache. A
-document containing the excerpt separator yields an excerpt up to that marker.
-The verbatim dialect returns HTML unchanged. An unknown dialect is refused.
+**Principle.** Ada declares an explicit Markdown profile with tables, footnotes,
+strikethrough, autolinks, raw HTML, and an excerpt separator. Each option changes
+only its advertised syntax. Converting two parts of one subject keeps both
+results. Repeating an unchanged conversion reuses it. A separator creates an
+excerpt even when it occurs at the beginning; no separator means no excerpt. A
+verbatim profile returns its source exactly. Replacing a profile revokes its old
+identity and conversions, and an unknown profile is refused.
 
 Actions:
 
-- `convert (dialect, part, source, subject)` — may refuse `CONVERSION_FAILED`, `DIALECT_NOT_FOUND`
-- `declare (extensions, name, raw, separator)`
-- `release (subject)`
+- `convert (part, profile, source, subject)` — may refuse `CONVERSION_FAILED`, `INVALID_CONVERSION_INPUT`, `PROFILE_NOT_FOUND`
+- `declare (…)` — may refuse `INCOMPATIBLE_PROFILE`, `INVALID_PROFILE`, `UNSUPPORTED_EXTENSION`, `UNSUPPORTED_PROFILE_KIND`
+- `release (subject)` — may refuse `INVALID_SUBJECT`
 
 Queries (standing questions the state answers):
 
-- `_conversion (conversion)` — promises exactly one row
-- `_dialect (name)` — promises at most one row
+- `_conversion (conversion)` — promises at most one row
+- `_excerpt (part, subject)` — promises at most one row
 - `_for (part, subject)` — promises at most one row
+- `_profile (name)` — promises at most one row
 
 ### Depending
 
-**Purpose.** Record what each result used, so a changed input invalidates precisely its
-dependents and each stale result can explain why it must be recomputed.
+**Purpose.** Remember what each piece of work used, so a change marks only the work that must
+be done again and can explain why.
 
-**Principle.** Ada begins a page result, records its source, layout, and a collection, then
-settles it. Touching the layout makes the page stale and names the layout as the
-reason. An unrelated input changes nothing. A second result that uses the page
-is made stale transitively. Beginning the page again clears its old uses.
+**Principle.** Ada starts a result, notes the things she uses, and finishes it. It is now up to
+date. When one of those things changes, the result needs doing again and
+remembers what changed; unrelated results stay up to date. Anything that used
+that result needs doing again too, however many results the change passes
+through. An unfinished result is marked as well, so it can be retried. Starting
+again replaces the old list of things used, and after it finishes it still
+remembers why it was redone. An input can be noted only while its result is being
+worked on.
 
 Actions:
 
-- `begin (subject)`
-- `drop (subject)`
-- `settle (subject)` — may refuse `NOT_BUILDING`
-- `touch (input)`
-- `use (input, subject)` — may refuse `NOT_BUILDING`
+- `begin (subject)` — may refuse `INVALID_TEXT`
+- `drop (subject)` — may refuse `INVALID_TEXT`
+- `settle (subject)` — may refuse `INVALID_TEXT`, `NOT_BUILDING`
+- `touch (input)` — may refuse `INVALID_TEXT`
+- `use (input, subject)` — may refuse `INVALID_TEXT`, `NOT_BUILDING`
 
 Queries (standing questions the state answers):
 
@@ -136,24 +145,23 @@ Queries (standing questions the state answers):
 
 ### Diagnosing
 
-**Purpose.** Collect the problems that independent checks find, so one run reports all of
-them together and a later run can retract the ones that no longer apply.
+**Purpose.** Keep the problems found during a task together, so people can see everything
+that needs attention and know when no errors remain.
 
-**Principle.** Three problems are reported: an error in one file, a warning in another, and a
-second error in the first file at a later line. Reading them answers errors
-before warnings and, within one severity, orders them by source and then by
-position. A related location is attached to the first error and comes back with
-it. The run is not clean while an error stands; a run holding only the warning
-is clean. Retracting everything attached to the first file leaves the warning,
-and the run is then clean. Reporting the same code at the same place twice
-records one.
+**Principle.** Ada checks two records. She reports an error in one, a warning in the other, and
+another error later in the first. Reading the list gives both errors before the
+warning, with problems at the same severity ordered by source, position, and
+code. One error names a related place to inspect. Reporting that error and its
+related place again makes no copies. While either error remains the check is not
+clean. Retracting the first record's problems leaves the warning and makes the
+check clean; clearing leaves no problems at all.
 
 Actions:
 
 - `clear (…)`
-- `relate (column, diagnostic, line, note, source)` — may refuse `DIAGNOSTIC_NOT_FOUND`
-- `report (code, column, line, message, severity, source)` — may refuse `UNKNOWN_SEVERITY`
-- `retract (source)`
+- `relate (column, diagnostic, line, note, source)` — may refuse `DIAGNOSTIC_NOT_FOUND`, `INVALID_LOCATION`, `INVALID_TEXT`
+- `report (code, column, line, message, severity, source)` — may refuse `INVALID_LOCATION`, `INVALID_TEXT`, `UNKNOWN_SEVERITY`
+- `retract (source)` — may refuse `INVALID_TEXT`
 
 Queries (standing questions the state answers):
 
@@ -165,15 +173,16 @@ Queries (standing questions the state answers):
 
 ### Documenting
 
-**Purpose.** Keep a document's front-matter attributes beside its authored body, so prose
-and metadata travel in one ordinary file while each remains independently
-readable.
+**Purpose.** Separate a document's YAML details from the body they describe, so both can be
+kept in one ordinary text and read independently.
 
-**Principle.** Ada parses a document that opens with YAML front matter. Its attributes contain
-`title`, its body is the prose after the closing fence, and the body start line
-is retained. A document without front matter has empty attributes. Malformed or
-unclosed front matter is refused and records no document. Parsing a subject
-again replaces its document, and forgetting it removes it.
+**Principle.** Ada writes a note with a `---` header containing a title, followed by prose.
+Parsing it returns the title as an attribute and the exact prose as the body,
+and remembers which line starts that body. A note without a header is all body
+and has no attributes. Parsing a valid revision for the same subject replaces
+the old values but keeps the document identity. A malformed or unclosed revision
+is refused and leaves the previous valid document unchanged. Forgetting removes
+the document.
 
 Actions:
 
@@ -187,50 +196,60 @@ Queries (standing questions the state answers):
 
 ### Embedding
 
-**Purpose.** Present one resource through the best rendition a reader's viewer can accept,
-without asking the author to choose.
+**Purpose.** Build one safe HTML `picture` element from a required original image and any
+derived versions, so a browser can choose a suitable format and width.
 
-**Principle.** Ada declares an embedding with alternative text, intrinsic dimensions, and the
-number of rendition addresses it expects. Its markup is absent until all expected
-offers arrive. Offers arriving out of order are grouped by their format order,
-with widths ascending within each group; the final group becomes the `img`
-fallback and carries the alternative text, dimensions, lazy loading, and async
-decoding. Re-offering an address leaves the completed markup unchanged. An
-embedding expecting no offers has markup immediately.
+**Principle.** Ada publishes an image by giving its original address, format, size, alternative
+text, and how many optimized versions will follow. The original is always the
+fallback. If no optimized versions are promised, usable markup is ready at once.
+Otherwise markup appears only when exactly the promised number of distinct
+versions has arrived. Versions may arrive in any order: formats follow their
+stated order, widths rise within each format, and the original format is always
+last on the `img`. Repeating an identical version reports no change and never
+announces completion twice. A correction may replace that address before
+completion; after completion, corrections and extra versions are refused, so
+published markup cannot change silently. Repeating the same declaration keeps
+its versions, while changing the declaration starts it again. Withdrawing it
+removes the declaration and every version.
 
 Actions:
 
-- `declare (alternative, expects, height, subject, width)`
-- `offer (address, embedding, format, order, width)` — may refuse `EMBEDDING_NOT_FOUND`
-- `withdraw (subject)`
+- `declare (alternative, attributes, expects, height, original, originalFormat, subject, width)` — may refuse `INVALID_ADDRESS`, `INVALID_ATTRIBUTES`, `INVALID_COUNT`, `INVALID_DIMENSION`, `INVALID_FORMAT`, `INVALID_TEXT`
+- `offer (address, embedding, format, order, width)` — may refuse `EMBEDDING_COMPLETE`, `EMBEDDING_NOT_FOUND`, `INVALID_ADDRESS`, `INVALID_FORMAT`, `INVALID_ORDER`, `INVALID_TEXT`, `INVALID_WIDTH`, `OFFER_CONFLICT`
+- `withdraw (subject)` — may refuse `EMBEDDING_NOT_FOUND`, `INVALID_TEXT`
 
 Queries (standing questions the state answers):
 
-- `_embedding (embedding)` — promises exactly one row
+- `_embedding (embedding)` — promises at most one row
 - `_for (subject)` — promises at most one row
 - `_markup (embedding)` — promises at most one row
 - `_offers (embedding)` — promises any number of rows
 
 ### Emitting
 
-**Purpose.** Make a destination hold exactly the artifacts intended: write new bytes, replace
-changed bytes, keep current bytes, and remove files no producer still intends.
+**Purpose.** Keep a destination holding exactly the intended files, without letting two
+producers put different artifacts at one path or an unfinished replacement
+disturb what is current.
 
-**Principle.** Ada directs a destination containing an old file. One producer begins an
-attempt and intends two files while another intends a third. Reconciliation
-writes the intended files and removes the old one. A second producer may share
-an intended path with identical bytes, but different bytes are refused. A later
-attempt keeps the previous attempt's untouched intents until it commits, then
-drops them. Retracting a producer removes every one of its intents.
+**Principle.** Ada points Emitting at a folder containing an old file. A producer opens an
+attempt and stages two files. Nothing in the folder changes until the attempt
+finishes; reconciling after it finishes writes both files and removes the old
+one. A later attempt stages replacements and is abandoned; both earlier files
+stay in place and its reserved paths become available immediately. A successful
+attempt that names only one replaces that producer's complete set and lets the
+other be removed. Two producers may share one path when their bytes agree, but
+different bytes or a file-versus-directory overlap are refused. Retracting a
+producer gives up all of its paths.
 
 Actions:
 
-- `begin (producer)`
-- `commit (producer)` — may refuse `NOT_BEGUN`
-- `direct (destination)`
-- `intend (content, medium, path, producer)` — may refuse `PATH_CONTESTED`, `PATH_LEAVES_DESTINATION`
-- `reconcile (…)`
-- `retract (producer)`
+- `abort (producer)` — may refuse `INVALID_PRODUCER`, `NOT_BEGUN`
+- `begin (producer)` — may refuse `ATTEMPT_EXHAUSTED`, `INVALID_PRODUCER`
+- `commit (producer)` — may refuse `INVALID_PRODUCER`, `NOT_BEGUN`
+- `direct (destination)` — may refuse `DESTINATION_UNAVAILABLE`, `INVALID_DESTINATION`
+- `intend (content, medium, path, producer)` — may refuse `INVALID_CONTENT`, `INVALID_MEDIUM`, `INVALID_PATH`, `INVALID_PRODUCER`, `PATH_CONTESTED`, `PATH_LEAVES_DESTINATION`
+- `reconcile (…)` — may refuse `DESTINATION_NOT_DIRECTED`, `RECONCILIATION_FAILED`
+- `retract (producer)` — may refuse `INVALID_PRODUCER`
 
 Queries (standing questions the state answers):
 
@@ -246,12 +265,13 @@ Queries (standing questions the state answers):
 **Purpose.** Keep files in named trees and say whether saving a file changed its contents.
 
 **Principle.** Ada opens a tree called notes and saves a page and a picture in it. Reading the
-page gives back the exact bytes she saved and a stable fingerprint. Saving the
-same bytes reports no change; saving different bytes keeps the same file
-identity and reports a change. Listings have one predictable path order. The
-page can find the picture from a link such as `./picture.png`, but a link cannot
-climb outside the tree. Removing the page makes later lookups miss it, and
-removing it again is refused. A second named tree remains separate.
+page gives back the exact bytes she saved, the same text when those bytes are
+UTF-8, and a stable fingerprint. Saving the same bytes reports no change;
+saving different bytes keeps the same file identity and reports a change.
+Listings have one predictable path order. The page can find the picture from a
+link such as `./picture.png`, but a link cannot climb outside the tree. Removing
+the page makes later lookups miss it, and removing it again is refused. A second
+named tree remains separate.
 
 Actions:
 
@@ -270,33 +290,34 @@ Queries (standing questions the state answers):
 - `_resolution (address, file)` — promises exactly one row
 - `_resolve (address, file)` — promises at most one row
 - `_root (root)` — promises at most one row
+- `_text (file)` — promises at most one row
 - `_under (prefix, root)` — promises any number of rows
 
 ### Layering
 
-**Purpose.** Resolve one record from ranked contributions, so values can be defaulted,
-overridden, and explained afterwards.
+**Purpose.** Combine several ranked versions of a record, so broad values can be refined and
+the source of each resulting value can be found later.
 
-**Principle.** Ada contributes a broad default at rank 0, a narrower default at rank 1, and a
-page's attributes at rank 1000000. Resolution retains the page title, takes the
-narrower template, and merges nested mappings. Sequences and scalars replace.
-The template's origin identifies rank 1. Withdrawing that rank restores the
-broad template; a duplicate rank and an absent withdrawal are refused.
+**Principle.** Ada starts with a basic profile and adds a higher-ranked correction. The
+correction changes the display name, adds one nested address detail, and replaces
+a list, while untouched details remain. The result is the same whichever layer
+arrived first. Each value says which layer supplied it. Removing the correction
+restores the earlier profile. Two layers cannot use the same rank.
 
 Actions:
 
 - `clear (subject)`
-- `contribute (rank, subject, values)` — may refuse `RANK_TAKEN`
-- `withdraw (rank, subject)` — may refuse `NO_SUCH_LAYER`
+- `contribute (rank, subject, values)` — may refuse `INVALID_RANK`, `INVALID_VALUES`, `RANK_TAKEN`
+- `withdraw (rank, subject)` — may refuse `INVALID_RANK`, `NO_SUCH_LAYER`
 
 Queries (standing questions the state answers):
 
-- `_flag (key, otherwise, subject)` — promises exactly one row
-- `_holds (key, subject, value)` — promises exactly one row
+- `_equal (path, subject, value)` — promises exactly one row
+- `_flag (otherwise, path, subject)` — promises exactly one row
 - `_layers (subject)` — promises any number of rows
-- `_origin (key, subject)` — promises at most one row
+- `_origin (path, subject)` — promises at most one row
 - `_resolved (subject)` — promises exactly one row
-- `_value (key, subject)` — promises at most one row
+- `_value (path, subject)` — promises at most one row
 
 ### Matching
 
@@ -320,55 +341,52 @@ Queries (standing questions the state answers):
 
 ### Phasing
 
-**Purpose.** Carry one job through a declared sequence of phases, so that work in a later
-phase can assume the work of every earlier phase is complete.
+**Purpose.** Move a job through a named list of steps in order, so each step starts only
+after the earlier steps are done.
 
-**Principle.** A sequence is declared over ready, settings, read, route, excerpt, collect,
-render, and emit. Declaring it again with the same phases reports no change. A
-job is started on it in `once` mode and begins at ready, where nothing is
-declared to happen. Advancing announces settings, then read, then route, and so
-on. Advancing past emit finishes the job, and advancing a finished job is
-refused. A second job started on the same sequence proceeds independently.
-Abandoning a running job leaves it failed with a reason, and it announces no
-further phase.
+**Principle.** Ada declares a sequence containing draft, review, and publish. Declaring the
+same sequence again reports no change. Two jobs start at draft and can move
+independently. One advances to review and then publish; advancing once more
+finishes it without announcing publish again, and another advance is refused.
+Ada abandons the other job with a reason, leaving it failed and unable to move.
 
 Actions:
 
-- `abandon (job, reason)` — may refuse `JOB_NOT_RUNNING`
+- `abandon (job, reason)` — may refuse `INVALID_TEXT`, `JOB_NOT_RUNNING`
 - `advance (job)` — may refuse `JOB_NOT_RUNNING`
-- `declare (name, phases)` — may refuse `NO_PHASES`
-- `start (mode, sequence)` — may refuse `SEQUENCE_NOT_FOUND`
+- `declare (name, phases)` — may refuse `INVALID_PHASES`, `INVALID_TEXT`, `NO_PHASES`, `PHASE_REPEATED`
+- `start (mode, sequence)` — may refuse `SEQUENCE_NOT_FOUND`, `UNKNOWN_MODE`
 
 Queries (standing questions the state answers):
 
-- `_job (job)` — promises exactly one row
+- `_job (job)` — promises at most one row
 - `_outcome (job)` — promises at most one row
 - `_running (…)` — promises any number of rows
 
 ### Referencing
 
-**Purpose.** Record every outward reference a piece of text makes, so each can be answered or
-reported as broken, and the text can be rewritten once all of them are answered.
+**Purpose.** Find supported references in generated HTML and safely rewrite them after their
+replacements are known.
 
-**Principle.** Ada scans a body that names an internal page, an image, and a download. Each
-reference keeps its kind, label, source position, and enclosing-element span.
-Until every reference is answered, finished text is absent. Address answers
-replace only targets; a markup answer replaces its whole element. Scanning the
-same subject and part replaces the previous references, and text with no
-references is finished immediately. Answering an old reference is refused.
+**Principle.** Ada scans generated HTML containing links, images, and embedded resources. Each
+found address says which element and attribute owns it, where it appears in the
+HTML, and which other addresses share that element or attribute. Ada can replace
+an address safely or trust supplied markup to replace one whole element. The HTML
+is finished only after every found address has an answer. Scanning again forgets
+the old answers, and removing the scan makes its old reference identities invalid.
 
 Actions:
 
-- `answer (form, reference, value)` — may refuse `REFERENCE_NOT_FOUND`
-- `drop (part, subject)`
-- `scan (part, subject, text)`
+- `answer (form, reference, value)` — may refuse `INVALID_FORM`, `INVALID_TEXT`, `OVERLAPPING_MARKUP`, `REFERENCE_NOT_FOUND`, `UNREPRESENTABLE_ADDRESS`
+- `drop (part, subject)` — may refuse `INVALID_TEXT`
+- `scan (part, subject, text)` — may refuse `INVALID_TEXT`
 
 Queries (standing questions the state answers):
 
 - `_finished (part, subject)` — promises at most one row
-- `_reference (reference)` — promises exactly one row
+- `_reference (reference)` — promises at most one row
 - `_references (source)` — promises any number of rows
-- `_source (source)` — promises exactly one row
+- `_source (source)` — promises at most one row
 - `_unanswered (source)` — promises any number of rows
 
 ### RequestBoundary
@@ -384,56 +402,64 @@ Actions:
 
 ### Routing
 
-**Purpose.** Give each owner one address in a shared space and refuse conflicting claims, so
-every published address has one unambiguous owner.
+**Purpose.** Give each thing one dependable address in a shared space, and prevent two things
+from using the same address.
 
-**Principle.** Ada derives `/posts/compiler-design/` from
-`posts/compiler-design/index.md` and claims it for a page. A second page cannot
-claim it. A page may instead claim `/404.html`. The route maps to its output
-file, and rebasing from `/` to `/notes/` changes URLs without changing claims.
-Malformed bases and addresses are refused.
+**Principle.** Ada gives one note the address `/notes/design/`. Giving another note that address
+is refused, so the first note keeps it. Giving the first note the same address
+again changes nothing, while moving it to a free address keeps the note's claim
+identity. The address points to `notes/design/index.html`; `/404.html` points to
+`404.html`. Changing the public base from `/` to `/library/` changes the URLs
+people use but not who owns either address. Releasing an address makes it free
+for someone else. Retargeting `./design.md?print=1#section` to
+`/notes/design/` gives `/notes/design/?print=1#section`. Malformed requests leave
+every existing claim untouched.
 
 Actions:
 
-- `claim (address, owner)` — may refuse `ADDRESS_TAKEN`, `INVALID_ADDRESS`
+- `claim (address, owner)` — may refuse `ADDRESS_TAKEN`, `INVALID_ADDRESS`, `INVALID_OWNER`
 - `rebase (base)` — may refuse `INVALID_BASE`
-- `release (owner)` — may refuse `NOT_CLAIMED`
+- `release (owner)` — may refuse `INVALID_OWNER`, `NOT_CLAIMED`
 
 Queries (standing questions the state answers):
 
 - `_address (owner)` — promises at most one row
 - `_claims (…)` — promises any number of rows
-- `_classify (target)` — promises exactly one row
-- `_derive (path)` — promises exactly one row
-- `_file (address)` — promises exactly one row
-- `_locate (path)` — promises exactly one row
+- `_classify (target)` — promises at most one row
+- `_derive (path)` — promises at most one row
+- `_file (address)` — promises at most one row
+- `_locate (path)` — promises at most one row
 - `_owner (address)` — promises at most one row
-- `_url (target)` — promises exactly one row
+- `_retarget (original, replacement)` — promises at most one row
+- `_url (target)` — promises at most one row
 
 ### Templating
 
-**Purpose.** Fill stored templates from supplied contexts, letting templates reuse smaller
-templates, so a layout is written once and used many times.
+**Purpose.** Fill a reusable Liquid pattern with supplied values, so one layout and its named
+fragments can produce HTML for many subjects.
 
-**Principle.** Ada defines `page.html`, `header.html`, and `footer.html`. `page.html` renders
-the other two, so its direct uses and full tree name them. She fills unnamed
-text that renders the header for one subject without adding that text to the
-named templates. Rendering the layout for two subjects keeps both outputs. Its
-ordinary values are HTML-escaped while the supplied raw `page.content` is not.
-Defining the same source reports no change. A missing partial, recursive
-template tree, malformed source, and failed evaluation are refused.
+**Principle.** Mina makes event pages. She saves a frame and a masthead, and the frame renders
+the masthead by its fixed name. Text such as `Ada & Bob` becomes safe HTML, while
+the already-produced page body is inserted as HTML only because Mina's
+application explicitly trusts the path `["page", "content"]`. A missing optional
+subtitle is harmless in a condition, but printing an undefined value is an
+error. Asking about the frame reports both the fragments and context paths it
+can reach. Reusing the same source changes nothing; replacing it keeps the same
+template identity. A missing fragment, recursive tree, unsupported dependency,
+or Liquid error reports its location and leaves the last successful output
+untouched.
 
 Actions:
 
-- `define (name, source)` — may refuse `TEMPLATE_SYNTAX`
-- `fill (context, raw, source, subject)` — may refuse `TEMPLATE_FAILED`, `TEMPLATE_SYNTAX`, `USED_TEMPLATE_NOT_FOUND`
+- `define (name, source)` — may refuse `TEMPLATE_SYNTAX`, `UNSUPPORTED_TEMPLATE`
+- `fill (context, source, subject, trusted)` — may refuse `INVALID_TRUSTED_PATH`, `INVALID_TRUSTED_VALUE`, `RECURSIVE_TEMPLATE`, `TEMPLATE_FAILED`, `TEMPLATE_SYNTAX`, `UNDEFINED_VARIABLE`, `UNSUPPORTED_TEMPLATE`, `USED_TEMPLATE_NOT_FOUND`
 - `forget (name)` — may refuse `TEMPLATE_NOT_FOUND`
-- `render (context, raw, subject, template)` — may refuse `RECURSIVE_TEMPLATE`, `TEMPLATE_FAILED`, `TEMPLATE_NOT_FOUND`, `USED_TEMPLATE_NOT_FOUND`
+- `render (context, subject, template, trusted)` — may refuse `INVALID_TRUSTED_PATH`, `INVALID_TRUSTED_VALUE`, `RECURSIVE_TEMPLATE`, `TEMPLATE_FAILED`, `TEMPLATE_NOT_FOUND`, `UNDEFINED_VARIABLE`, `USED_TEMPLATE_NOT_FOUND`
 
 Queries (standing questions the state answers):
 
 - `_filling (subject)` — promises at most one row
-- `_of (rendering)` — promises exactly one row
+- `_of (rendering)` — promises at most one row
 - `_reads (owner)` — promises any number of rows
 - `_rendering (subject, template)` — promises at most one row
 - `_template (name)` — promises at most one row
@@ -443,27 +469,30 @@ Queries (standing questions the state answers):
 
 ### Transcoding
 
-**Purpose.** Derive alternative sizes and encodings of one source image, so a reader receives
-a rendition their viewer can accept at a size their screen needs.
+**Purpose.** Make smaller copies of a raster image in common formats without changing its
+shape or losing its motion.
 
-**Principle.** Ada admits a PNG for a subject and receives its format, intrinsic dimensions, and
-animation state. Admitting the same bytes again returns the same image without a
-change. Rendering AVIF and the original format at 480, 960, and 1440 produces
-stable, content-addressed renditions in declared format order, skipping 1440
-when the source is 960 wide. Rendering the same settings again does not change
-the rendition set. An animated GIF is admitted, but a rendition format that
-would discard its animation is skipped. Unreadable bytes are refused.
+**Principle.** Ada admits a readable image and receives the size a person sees, including its
+EXIF orientation. She asks for several widths and formats. Invalid settings are
+refused, larger widths are not upscaled, duplicate widths are removed, and the
+remaining widths are ordered from smallest to largest. Formats stay in their
+declared order, except that the source format is always last and always includes
+an exact copy of the source as a fallback. Animated output is made only in a
+format that preserves every frame, delay, and loop. Each result reports its
+actual dimensions, format, media type, extension, a stable suggested filename,
+whether it is the exact source fallback, exact bytes, and a SHA-256 digest of
+those bytes. Repeating the request changes nothing.
 
 Actions:
 
-- `admit (content, subject)` — may refuse `UNREADABLE_IMAGE`
-- `release (subject)`
-- `render (formats, original, widths)` — may refuse `ORIGINAL_NOT_FOUND`
+- `admit (content, subject)` — may refuse `INVALID_SUBJECT`, `UNREADABLE_IMAGE`, `UNSUPPORTED_SOURCE_FORMAT`
+- `release (subject)` — may refuse `INVALID_SUBJECT`
+- `render (formats, original, widths)` — may refuse `INVALID_WIDTHS`, `ORIGINAL_NOT_FOUND`, `RENDITION_FAILED`, `UNSUPPORTED_FORMAT`
 
 Queries (standing questions the state answers):
 
 - `_original (subject)` — promises at most one row
-- `_rendition (rendition)` — promises exactly one row
+- `_rendition (rendition)` — promises at most one row
 - `_renditions (original)` — promises any number of rows
 
 ## Reactions

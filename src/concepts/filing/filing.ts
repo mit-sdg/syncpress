@@ -21,6 +21,7 @@ type PathStatus = "canonical" | "outside" | "invalid";
 type Resolution = { status: ResolutionStatus; path?: string; target?: string };
 
 const encoder = new TextEncoder();
+const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const scheme = /^[a-z][a-z\d+.-]*:/i;
 const forbiddenSegmentCharacter = /[\\\u0000-\u001f\u007f]/u;
 
@@ -178,6 +179,16 @@ export class FilingConcept {
     return record === undefined
       ? []
       : [{ root: record.root, path: record.path, name: record.name, content: copyBytes(record.content), digest: record.digest }];
+  }
+
+  _text({ file }: { file: string }): { text: string }[] {
+    const record = this.#filesByID.get(file);
+    if (record === undefined) return [];
+    try {
+      return [{ text: decoder.decode(record.content) }];
+    } catch {
+      return [];
+    }
   }
 
   _at({ root, path }: { root: string; path: string }): { file: string; digest: string }[] {

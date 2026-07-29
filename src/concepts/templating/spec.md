@@ -55,10 +55,10 @@ compound expression, or otherwise evaluating it refuses `UNDEFINED_VARIABLE`.
 ## Values, Paths, And Trust
 
 Contexts are JSON-like Values assembled elsewhere. A path is a nonempty,
-ordinary dense array of literal string segments, using the same representation
-as `Composing`: `["page", "content"]`, not a dotted string. Empty segments, dots,
-and names such as `__proto__` have no special meaning. Read paths use strings for
-literal numeric indexes too.
+ordinary dense array of literal string segments with the standard array
+prototype and no extra properties: `["page", "content"]`, not a dotted string.
+Empty segments, dots, and names such as `__proto__` have no special meaning.
+Read paths use strings for literal numeric indexes too.
 
 All values written by Liquid output are HTML-escaped, replacing `&`, `<`, `>`,
 `"`, and `'`. Authored literal template text is not escaped. The only exemption

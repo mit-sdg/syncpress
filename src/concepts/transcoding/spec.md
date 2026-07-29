@@ -14,8 +14,9 @@ remaining widths are ordered from smallest to largest. Formats stay in their
 declared order, except that the source format is always last and always includes
 an exact copy of the source as a fallback. Animated output is made only in a
 format that preserves every frame, delay, and loop. Each result reports its
-actual dimensions, format, media type, extension, exact bytes, and a SHA-256
-digest of those bytes. Repeating the request changes nothing.
+actual dimensions, format, media type, extension, a stable suggested filename,
+whether it is the exact source fallback, exact bytes, and a SHA-256 digest of
+those bytes. Repeating the request changes nothing.
 
 ## Image Contract
 
@@ -77,8 +78,11 @@ refused.
 
 An extension is the canonical suffix without a dot: `avif`, `gif`, `jpg`, `png`,
 or `webp`. Its media type is respectively `image/avif`, `image/gif`, `image/jpeg`,
-`image/png`, or `image/webp`. These are image-format facts, not publication
-names. Transcoding does not create a filename, path, URL, or presentation.
+`image/png`, or `image/webp`. A rendition's `name` is its content digest, a dot,
+and that extension. It is a stable, collision-resistant suggested filename
+derived only from intrinsic rendition facts. Equal names therefore imply equal
+content digests and canonical extensions, absent a SHA-256 collision. The name
+is not a path, address, claim, or publication decision.
 
 ## State
 
@@ -102,7 +106,9 @@ a set of Renditions with
   a content Bytes
   a digest Digest
   an extension Extension
+  a name Name
   a mediaType MediaType
+  a fallback Flag
 ```
 
 At most one original exists per subject and one rendition per original, width,
@@ -130,7 +136,7 @@ admit (subject: Subject, content: Bytes) : return (original: Original, digest: D
     add an original with copied content, its digest, displayed dimensions, format, and animation facts
     return it with changed true
 
-render (original: Original, widths: Widths, formats: Formats) : return (original: Original, count: Number, changed: Flag)
+render (original: Original, widths: Widths, formats: Formats) : return (original: Original, count: Number, derived: Number, changed: Flag)
   where original is absent
   then
     refuse ORIGINAL_NOT_FOUND "There is no such image."
@@ -142,7 +148,7 @@ render (original: Original, widths: Widths, formats: Formats) : return (original
     refuse UNSUPPORTED_FORMAT "A rendition format is unsupported or unavailable."
   where its renditions already equal the normalized requested set and exact original fallback
   then
-    return original, the final rendition count, and changed false
+    return original, the final rendition count, the non-fallback rendition count, and changed false
   where producing or verifying any planned rendition fails
   then
     leave every existing rendition unchanged
@@ -150,7 +156,7 @@ render (original: Original, widths: Widths, formats: Formats) : return (original
   where the planned rendition set differs and every rendition succeeds
   then
     atomically replace its renditions in normalized format and width order, with the original format last
-    return original, the final rendition count, and changed true
+    return original, the final rendition count, the non-fallback rendition count, and changed true
 
 release (subject: Subject) : return (subject: Subject, count: Number)
   where subject is not well-formed text
@@ -166,15 +172,18 @@ order, with aliases and duplicates merged. Their non-upscaled widths are
 ascending. The source-format group comes last, contains every non-upscaled width
 that can preserve animation, and ends with the exact original fallback. `order`
 numbers the resulting renditions from zero. `count` is the final set size.
+`derived` is the number whose `fallback` flag is false, so it excludes the one
+exact original without requiring a caller to subtract.
 
 ## Queries
 
 ```queries
 _original (subject: Subject) : optional (original: Original, digest: Digest, format: Format, width: Number, height: Number, animated: Flag)
-_renditions (original: Original) : many (rendition: Rendition, width: Number, height: Number, format: Format, animated: Flag, order: Number, digest: Digest, extension: Extension, mediaType: MediaType, content: Bytes)
-_rendition (rendition: Rendition) : optional (original: Original, width: Number, height: Number, format: Format, animated: Flag, order: Number, digest: Digest, extension: Extension, mediaType: MediaType)
+_renditions (original: Original) : many (rendition: Rendition, width: Number, height: Number, format: Format, animated: Flag, order: Number, digest: Digest, extension: Extension, name: Name, mediaType: MediaType, fallback: Flag, content: Bytes)
+_rendition (rendition: Rendition) : optional (original: Original, width: Number, height: Number, format: Format, animated: Flag, order: Number, digest: Digest, extension: Extension, name: Name, mediaType: MediaType, fallback: Flag)
 ```
 
 Transcoding owns image validation, orientation, resizing, encoding, and intrinsic
-rendition facts. It does not decide whether, where, or under what name an image
-is published, or how it is presented.
+rendition facts. Its suggested name may be ignored; it does not decide whether
+or where an image is published, what address it receives, or how it is
+presented.

@@ -181,6 +181,129 @@ test("treats dots, empty segments, and prototype names as safe literal keys", ()
   expect(({} as { safe?: boolean }).safe).toBeUndefined();
 });
 
+test("reads configured dotted fields through safe own-property traversal", () => {
+  const composing = new ComposingConcept();
+  const data = Object.create(null) as ComposedRecord;
+  data.date = "2026-07-29";
+  Object.defineProperty(data, "__proto__", {
+    value: { safe: true },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  Object.defineProperty(data, "constructor", {
+    value: { prototype: "literal" },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  composing.set({ subject: "s", part: "card", path: ["data"], value: data });
+  composing.set({ subject: "s", part: "card", path: ["literal.with.dot"], value: "literal" });
+
+  expect(composing._field({ subject: "s", part: "card", field: "data.date" })).toEqual([
+    { value: "2026-07-29" },
+  ]);
+  expect(composing._field({ subject: "s", part: "card", field: "data.__proto__.safe" })).toEqual([
+    { value: true },
+  ]);
+  expect(composing._field({ subject: "s", part: "card", field: "data.constructor.prototype" })).toEqual([
+    { value: "literal" },
+  ]);
+  expect(composing._field({ subject: "s", part: "card", field: "constructor" })).toEqual([]);
+  expect(composing._field({ subject: "s", part: "card", field: "literal.with.dot" })).toEqual([]);
+  expect(composing._value({ subject: "s", part: "card", path: ["literal.with.dot"] })).toEqual([
+    { value: "literal" },
+  ]);
+  expect(({} as { safe?: boolean }).safe).toBeUndefined();
+});
+
+test("tests presence, structural equality, list membership, and text containment", () => {
+  const composing = new ComposingConcept();
+  const reverse = Object.create(null) as ComposedRecord;
+  reverse.second = 2;
+  reverse.first = 1;
+  composing.set({
+    subject: "s",
+    part: "card",
+    path: ["data"],
+    value: {
+      title: "Compiler Design",
+      topics: ["compilers", { name: "semantics", details: [1, true] }],
+      metadata: { first: 1, second: 2 },
+      empty: null,
+    },
+  });
+
+  expect(composing._holds({ subject: "s", part: "card", field: "data.empty", value: null })).toEqual({
+    present: true,
+    equal: true,
+    contains: false,
+  });
+  expect(composing._holds({ subject: "s", part: "card", field: "data.metadata", value: reverse })).toEqual({
+    present: true,
+    equal: true,
+    contains: false,
+  });
+  expect(composing._holds({ subject: "s", part: "card", field: "data.topics", value: "compilers" })).toEqual({
+    present: true,
+    equal: false,
+    contains: true,
+  });
+  expect(composing._holds({
+    subject: "s",
+    part: "card",
+    field: "data.topics",
+    value: { details: [1, true], name: "semantics" },
+  })).toEqual({ present: true, equal: false, contains: true });
+  expect(composing._holds({ subject: "s", part: "card", field: "data.title", value: "Design" })).toEqual({
+    present: true,
+    equal: false,
+    contains: true,
+  });
+  expect(composing._holds({ subject: "s", part: "card", field: "data.missing", value: null })).toEqual({
+    present: false,
+    equal: false,
+    contains: false,
+  });
+});
+
+test("dotted-field queries make malformed fields and invalid comparison values total", () => {
+  const composing = new ComposingConcept();
+  composing.set({ subject: "s", part: "p", path: ["data"], value: { value: [1, 2] } });
+
+  for (const field of ["", ".data", "data.", "data..value", "data value", "data/value", "café", 1]) {
+    expect(composing._field({ subject: "s", part: "p", field })).toEqual([]);
+    expect(composing._holds({ subject: "s", part: "p", field, value: 1 })).toEqual({
+      present: false,
+      equal: false,
+      contains: false,
+    });
+  }
+
+  const sparse = new Array(2);
+  sparse[0] = 1;
+  const accessor = Object.defineProperty({}, "value", { enumerable: true, get: () => 1 });
+  const throwing = new Proxy({ value: 1 }, {
+    ownKeys() {
+      throw new Error("must not escape");
+    },
+  });
+  const revoked = Proxy.revocable({ value: 1 }, {});
+  revoked.revoke();
+  for (const value of [undefined, Number.NaN, sparse, accessor, throwing, revoked.proxy]) {
+    expect(() => composing._holds({ subject: "s", part: "p", field: "data.value", value })).not.toThrow();
+    expect(composing._holds({ subject: "s", part: "p", field: "data.value", value })).toEqual({
+      present: true,
+      equal: false,
+      contains: false,
+    });
+  }
+
+  const observed = composing._field({ subject: "s", part: "p", field: "data" })[0]!.value as ComposedRecord;
+  (observed.value as ComposedValue[]).push(3);
+  expect(composing._field({ subject: "s", part: "p", field: "data.value" })).toEqual([{ value: [1, 2] }]);
+});
+
 test("accepts only finite acyclic plain JSON-like values and leaves replacements atomic", () => {
   const composing = new ComposingConcept();
   composing.set({ subject: "s", part: "p", path: ["kept"], value: "original" });

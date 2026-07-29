@@ -27,6 +27,9 @@ export type ComposedValue = null | boolean | number | string | ComposedValue[] |
 export type ComposedRecord = { [key: string]: ComposedValue };
 
 type Entry = { path: string[]; value: ComposedValue };
+type ReadResult = { present: true; value: ComposedValue } | { present: false };
+
+const fieldPattern = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -74,6 +77,25 @@ function copyPath(path: readonly string[]): string[] | undefined {
 
 function isStrictPrefix(prefix: readonly string[], path: readonly string[]): boolean {
   return prefix.length < path.length && prefix.every((segment, index) => segment === path[index]);
+}
+
+function fieldPath(field: unknown): string[] | undefined {
+  return typeof field === "string" && fieldPattern.test(field) ? field.split(".") : undefined;
+}
+
+function isRecord(value: ComposedValue): value is ComposedRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function readAt(values: ComposedRecord, path: readonly string[]): ReadResult {
+  let current: ComposedValue = values;
+  for (const segment of path) {
+    if (!isRecord(current) || !Object.hasOwn(current, segment)) return { present: false };
+    current = current[segment]!;
+  }
+  return { present: true, value: current };
 }
 
 function defineValue(record: ComposedRecord, key: string, value: ComposedValue): void {
@@ -136,6 +158,23 @@ function cloneValue(value: unknown, ancestors = new Set<object>()): ComposedValu
   }
 }
 
+function equalValue(left: ComposedValue, right: ComposedValue): boolean {
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return left === right;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => equalValue(value, right[index]!));
+  }
+  const leftKeys = Object.keys(left).sort(compareText);
+  const rightKeys = Object.keys(right).sort(compareText);
+  return leftKeys.length === rightKeys.length &&
+    leftKeys.every((key, index) => key === rightKeys[index] && equalValue(left[key]!, right[key]!));
+}
+
+function containsValue(container: ComposedValue, value: ComposedValue): boolean {
+  if (Array.isArray(container)) return container.some((member) => equalValue(member, value));
+  return typeof container === "string" && typeof value === "string" && container.includes(value);
+}
+
 function ordered(entries: Map<string, Entry> | undefined): Entry[] {
   return [...(entries?.values() ?? [])].sort((left, right) => comparePaths(left.path, right.path));
 }
@@ -189,6 +228,40 @@ export class ComposingConcept {
     if (validPath === undefined) return [];
     const entry = this.#subjects.get(subject)?.get(part)?.get(JSON.stringify(validPath));
     return entry === undefined ? [] : [{ value: cloneValue(entry.value) }];
+  }
+
+  _field({ subject, part, field }: { subject: string; part: string; field: unknown }): { value: ComposedValue }[] {
+    const path = fieldPath(field);
+    if (path === undefined) return [];
+    const read = readAt(this._record({ subject, part }).values, path);
+    return read.present ? [{ value: cloneValue(read.value) }] : [];
+  }
+
+  _holds({
+    subject,
+    part,
+    field,
+    value,
+  }: {
+    subject: string;
+    part: string;
+    field: unknown;
+    value: unknown;
+  }): { present: boolean; equal: boolean; contains: boolean } {
+    const path = fieldPath(field);
+    if (path === undefined) return { present: false, equal: false, contains: false };
+    const read = readAt(this._record({ subject, part }).values, path);
+    if (!read.present) return { present: false, equal: false, contains: false };
+    try {
+      const comparison = cloneValue(value);
+      return {
+        present: true,
+        equal: equalValue(read.value, comparison),
+        contains: containsValue(read.value, comparison),
+      };
+    } catch {
+      return { present: true, equal: false, contains: false };
+    }
   }
 
   _keys({ subject, part }: { subject: string; part: string }): { path: string[] }[] {

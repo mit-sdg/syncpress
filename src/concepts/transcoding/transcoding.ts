@@ -86,7 +86,9 @@ type Rendition = {
   content: Uint8Array;
   digest: string;
   extension: string;
+  name: string;
   mediaType: string;
+  fallback: boolean;
 };
 type Plan = Pick<Rendition, "width" | "format" | "order"> & { exactOriginal: boolean };
 
@@ -216,7 +218,7 @@ function sameNumbers(left: number[], right: readonly number[] | undefined): bool
   return right !== undefined && left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-/** Derive factual, content-addressed image renditions without choosing publication names or locations. */
+/** Derive factual, content-addressed image renditions without choosing publication locations. */
 export class TranscodingConcept {
   readonly #originalsBySubject = new Map<string, Original>();
   readonly #originalsByID = new Map<string, Original>();
@@ -280,7 +282,7 @@ export class TranscodingConcept {
     if (needsSourceEncoder && !encoderAvailable(source.format)) throw new UnsupportedFormat();
     const plan = this.#plan(source, normalizedWidthList, normalizedFormatList);
     const current = this.#renditionsByOriginal.get(original) ?? [];
-    if (this.#matches(current, plan)) return { original, count: current.length, changed: false };
+    if (this.#matches(current, plan)) return this.#renderResult(original, current, false);
 
     const renditions: Rendition[] = [];
     for (const item of plan) renditions.push(await this.#derive(source, item));
@@ -288,7 +290,7 @@ export class TranscodingConcept {
     this.#discardRenditions(original);
     this.#renditionsByOriginal.set(original, renditions);
     for (const rendition of renditions) this.#renditionsByID.set(rendition.rendition, rendition);
-    return { original, count: renditions.length, changed: true };
+    return this.#renderResult(original, renditions, true);
   }
 
   release({ subject }: { subject: string }) {
@@ -358,7 +360,8 @@ export class TranscodingConcept {
   #matches(renditions: Rendition[], plan: Plan[]): boolean {
     return renditions.length === plan.length && renditions.every((rendition, index) => {
       const item = plan[index]!;
-      return rendition.width === item.width && rendition.format === item.format && rendition.order === item.order;
+      return rendition.width === item.width && rendition.format === item.format && rendition.order === item.order &&
+        rendition.fallback === item.exactOriginal;
     });
   }
 
@@ -449,7 +452,9 @@ export class TranscodingConcept {
       content,
       digest: contentDigest,
       extension: facts.extension,
+      name: `${contentDigest}.${facts.extension}`,
       mediaType: facts.mediaType,
+      fallback: item.exactOriginal,
     };
   }
 
@@ -462,7 +467,18 @@ export class TranscodingConcept {
       order: record.order,
       digest: record.digest,
       extension: record.extension,
+      name: record.name,
       mediaType: record.mediaType,
+      fallback: record.fallback,
+    };
+  }
+
+  #renderResult(original: string, renditions: readonly Rendition[], changed: boolean) {
+    return {
+      original,
+      count: renditions.length,
+      derived: renditions.filter(({ fallback }) => !fallback).length,
+      changed,
     };
   }
 

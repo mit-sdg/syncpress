@@ -7,12 +7,13 @@ Keep files in named trees and say whether saving a file changed its contents.
 ## Principle
 
 Ada opens a tree called notes and saves a page and a picture in it. Reading the
-page gives back the exact bytes she saved and a stable fingerprint. Saving the
-same bytes reports no change; saving different bytes keeps the same file
-identity and reports a change. Listings have one predictable path order. The
-page can find the picture from a link such as `./picture.png`, but a link cannot
-climb outside the tree. Removing the page makes later lookups miss it, and
-removing it again is refused. A second named tree remains separate.
+page gives back the exact bytes she saved, the same text when those bytes are
+UTF-8, and a stable fingerprint. Saving the same bytes reports no change;
+saving different bytes keeps the same file identity and reports a change.
+Listings have one predictable path order. The page can find the picture from a
+link such as `./picture.png`, but a link cannot climb outside the tree. Removing
+the page makes later lookups miss it, and removing it again is refused. A second
+named tree remains separate.
 
 ## State
 
@@ -36,6 +37,14 @@ Content is always bytes. Filing copies bytes on input and output. A digest is
 the lowercase, 64-character hexadecimal SHA-256 digest of those exact bytes.
 The `changed` flag compares the bytes themselves rather than trusting digest
 equality.
+
+`_text` decodes the complete content of a present file as strict UTF-8. It
+answers no row if any byte sequence is malformed, incomplete, encodes a
+surrogate, or lies outside the Unicode scalar range. A leading UTF-8 byte-order
+mark is preserved as U+FEFF rather than consumed, so the result represents every
+decoded scalar in the stored bytes. Empty content decodes to empty text. The
+query does not mutate the stored bytes and answers no row for an unknown,
+malformed, or stale file identity.
 
 A path is a platform-neutral logical path, not a native filesystem path. It is
 one or more NFC-normalized Unicode segments separated by `/`. Every segment is
@@ -110,6 +119,7 @@ such as `a/../b`, refuses with `INVALID_PATH` rather than being normalized.
 _root (root: Root) : optional (name: Name)
 _named (name: Name) : optional (root: Root)
 _file (file: File) : optional (root: Root, path: Path, name: Name, content: Bytes, digest: Digest)
+_text (file: File) : optional (text: Text)
 _at (root: Root, path: Path) : optional (file: File, digest: Digest)
 _under (root: Root, prefix: Directory) : many (file: File, path: Path, digest: Digest)
 _resolve (file: File, address: Address) : optional (target: File, path: Path)
@@ -119,7 +129,7 @@ _directory (path: Path) : optional (prefix: Directory)
 _name (path: Path) : optional (name: Name)
 ```
 
-Filing owns named byte trees, their logical path syntax, and relative lookup
-within a tree. It does not decode text, infer media types, interpret a file's
-meaning, decide whether to publish it, or decide how a resolution status should
-be reported to a person.
+Filing owns named byte trees, their strict UTF-8 view, their logical path
+syntax, and relative lookup within a tree. It does not choose which files are
+text, infer media types, interpret a file's meaning, decide whether to publish
+it, or decide how a resolution status should be reported to a person.

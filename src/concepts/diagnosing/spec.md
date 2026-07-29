@@ -2,25 +2,68 @@
 
 ## Purpose
 
-Collect the problems that independent checks find, so one run reports all of
-them together and a later run can retract the ones that no longer apply.
+Keep the problems found during a task together, so people can see everything
+that needs attention and know when no errors remain.
 
 ## Principle
 
-Three problems are reported: an error in one file, a warning in another, and a
-second error in the first file at a later line. Reading them answers errors
-before warnings and, within one severity, orders them by source and then by
-position. A related location is attached to the first error and comes back with
-it. The run is not clean while an error stands; a run holding only the warning
-is clean. Retracting everything attached to the first file leaves the warning,
-and the run is then clean. Reporting the same code at the same place twice
-records one.
+Ada checks two records. She reports an error in one, a warning in the other, and
+another error later in the first. Reading the list gives both errors before the
+warning, with problems at the same severity ordered by source, position, and
+code. One error names a related place to inspect. Reporting that error and its
+related place again makes no copies. While either error remains the check is not
+clean. Retracting the first record's problems leaves the warning and makes the
+check clean; clearing leaves no problems at all.
+
+## Text And Locations
+
+Text is a well-formed Unicode string. Codes, messages, sources, diagnostic
+identities, and relation notes must be Text. Empty Text and control characters
+are valid; Diagnosing stores and compares these values but does not interpret
+their vocabulary. Actions refuse malformed Text before changing state. Lookup
+queries given malformed Text answer no row.
+
+A diagnostic source is optional. Omission and explicit undefined both mean that
+the problem has no source. A line is optional and requires a source. A column is
+optional and requires a line. Present lines and columns are one-based positive
+safe integers. A related location always has a source and has the same optional
+line and column rules.
+
+Query rows always have own `source`, `line`, and `column` properties when those
+fields are declared. A missing value is returned as undefined. This lets a row
+remain visible while a caller chooses whether to display each location detail.
+
+## Identity And Lifecycle
+
+A diagnostic is keyed by its severity, code, optional source, optional line, and
+optional column. Its opaque identity is a deterministic, collision-safe encoding
+of that tuple, so punctuation and control characters cannot make two keys
+collide. The identity is stable across concept instances, source retraction, and
+later reporting of the same key.
+
+Reporting an existing key returns its identity without changing its first
+message or its related locations. To replace what a check previously reported,
+a caller first retracts that source and reports the current problems. Retracting
+a missing source does the same for diagnostics with no source. Repeated
+retraction is an idempotent no-op.
+
+A related location is keyed by its diagnostic, source, optional line, optional
+column, and note. Repeating it returns the same stable identity; another note or
+location remains a separate relation. Removing a diagnostic also removes all of
+its relations. A relation's source does not make its diagnostic belong to that
+source: source retraction uses only each diagnostic's own optional source.
+
+`clear` removes every diagnostic and relation and counts diagnostics, not
+relations. Reporting a cleared key reuses its stable identity but stores the new
+first message and starts with no relations. These rules support both a fresh
+task that clears once and repeated work that retracts only the source being
+checked again.
 
 ## State
 
 ```state
 a set of Diagnostics with
-  a severity Severity   -- error or warning
+  a severity Severity                 -- error or warning
   a code Code
   a message Text
   an optional source Source
@@ -35,45 +78,86 @@ a set of Relations with
   a note Text
 ```
 
-At most one diagnostic exists per severity, code, source, line, and column.
-`_all` answers errors before warnings, then by source in ascending byte order,
-then by line and column, then by code.
+At most one diagnostic exists per severity, code, source, line, and column. At
+most one relation exists per diagnostic, source, line, column, and note. No
+relation exists without its diagnostic.
 
 ## Actions
 
 ```actions
-report (severity: Severity, code: Code, message: Text, source: Source, line: Number, column: Number) : return (diagnostic: Diagnostic)
+report (severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber) : return (diagnostic: Diagnostic)
   where severity is neither error nor warning
   then
     refuse UNKNOWN_SEVERITY "A diagnostic is an error or a warning."
-  where severity is error or warning
+  where code, message, or a present source is not Text
   then
-    add a diagnostic if none matches severity, code, source, line, and column
-    return diagnostic
+    refuse INVALID_TEXT "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."
+  where a position is not a positive safe integer, has no source, or has a column without a line
+  then
+    refuse INVALID_LOCATION "A location needs a source; line and column must be positive safe integers, and a column needs a line."
+  where a diagnostic already has severity, code, source, line, and column
+  then
+    retain its first message and relations and return that diagnostic
+  where no diagnostic has that key
+  then
+    add it and return its stable identity
 
-relate (diagnostic: Diagnostic, source: Source, line: Number, column: Number, note: Text) : return (relation: Relation)
+relate (diagnostic: Diagnostic, source: Source, line: OptionalNumber, column: OptionalNumber, note: Text) : return (relation: Relation)
+  where diagnostic, source, or note is not Text
+  then
+    refuse INVALID_TEXT "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."
   where diagnostic not in diagnostics
   then
     refuse DIAGNOSTIC_NOT_FOUND "There is no such diagnostic."
-  where diagnostic in diagnostics
+  where a position is not a positive safe integer or has a column without a line
   then
-    add a relation with diagnostic, source, line, column, and note
-    return relation
+    refuse INVALID_LOCATION "A location needs a source; line and column must be positive safe integers, and a column needs a line."
+  where that exact relation exists
+  then
+    return it without adding a copy
+  where that exact relation does not exist
+  then
+    add it and return its stable identity
 
-retract (source: Source) : return (source: Source, count: Number)
+retract (source: OptionalSource) : return (source: OptionalSource, count: Number)
+  where a present source is not Text
+  then
+    refuse INVALID_TEXT "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."
+  where source is Text or missing
+  then
+    remove every diagnostic with that optional source and all of its relations
+    return source and how many diagnostics were removed
+
 clear () : return (count: Number)
+  then
+    remove every diagnostic and relation
+    return how many diagnostics were removed
 ```
 
 ## Queries
 
 ```queries
-_all () : many (diagnostic: Diagnostic, severity: Severity, code: Code, message: Text, source: Source, line: Number, column: Number)
-_errors () : many (diagnostic: Diagnostic, code: Code, message: Text, source: Source, line: Number, column: Number)
-_for (source: Source) : many (diagnostic: Diagnostic, severity: Severity, code: Code, message: Text, line: Number, column: Number)
-_related (diagnostic: Diagnostic) : many (source: Source, line: Number, column: Number, note: Text)
+_all () : many (diagnostic: Diagnostic, severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
+_errors () : many (diagnostic: Diagnostic, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
+_for (source: OptionalSource) : many (diagnostic: Diagnostic, severity: Severity, code: Code, message: Text, line: OptionalNumber, column: OptionalNumber)
+_related (diagnostic: Diagnostic) : many (source: Source, line: OptionalNumber, column: OptionalNumber, note: Text)
 _clean () : one (clean: Flag)
 ```
 
-Accumulation is the default and refusal is not: a check that finds a problem
-reports it and the run continues. `retract` by source removes the diagnostics a
-rebuild will replace.
+## Ordering And Cleanliness
+
+`_all` orders errors before warnings. Within one severity, a missing source comes
+before a present source; present sources use ascending UTF-8 byte order. Within
+one source, a missing line comes before a present line and lines rise
+numerically. Within one line, a missing column comes before a present column and
+columns rise numerically. Codes finally use ascending UTF-8 byte order. Because
+the complete ordering key is also the diagnostic uniqueness key, this is a total
+order independent of reporting order.
+
+`_errors` and `_for` preserve the corresponding order from `_all`. `_related`
+orders by source in ascending UTF-8 byte order, then line, column, and note, with
+missing positions first. Its uniqueness key makes that order total too.
+
+`_clean` always returns exactly one row. It is true when no error stands, even if
+warnings stand, and false otherwise. A caller may use that level as a gate, but
+Diagnosing does not decide what a clean or unclean task is allowed to do.

@@ -32,6 +32,13 @@ subclass or replacement prototype. Every segment is literal. Dots, empty
 strings, and names such as `__proto__`, `constructor`, and `prototype` have no
 special meaning and are safe record keys.
 
+A Field is a small dotted shorthand for a path selected by text at runtime. It
+contains one or more segments separated by single dots. Each segment contains
+one or more ASCII letters, digits, `_`, or `-`; there are no escapes, empty
+segments, whitespace, or leading or trailing dots. Thus `data.date` means
+`["data", "date"]`, while a literal key containing a dot or an empty string is
+available only through the unambiguous path-array queries.
+
 If JavaScript cannot safely inspect a path or Value, including because a proxy's
 reflective operation throws, the path or Value is invalid. Validation completes
 before retained state changes.
@@ -47,6 +54,22 @@ string code units and then path length. `_keys` uses that order, and `_record`
 constructs members in that order. Paths and Values are copied when stored and
 whenever returned, so callers cannot change retained state through an input or a
 query result.
+
+Field traversal starts at the assembled record, follows only own record
+properties, and never follows prototypes or indexes into sequences. `_field`
+answers no row for a malformed field, a missing segment, or traversal through a
+non-record.
+
+`_holds` applies the complete generic test vocabulary to a Field. `present` says
+that traversal found a value, including explicit null. `equal` uses structural
+Value equality: sequences compare by length, order, and recursively equal
+members; records compare by their own key sets and recursively equal values,
+ignoring key order and ordinary-versus-null prototype. `contains` means
+structural membership when the field value is a sequence and exact,
+case-sensitive substring containment when both values are text. It is false for
+other value kinds. A malformed field returns all three flags false. A comparison
+value outside the Value domain leaves `present` accurate but makes `equal` and
+`contains` false; queries never retain or mutate the comparison value.
 
 Composing creates no identity of its own. An entry is addressed by its supplied
 subject, part, and exact path. Subjects and parts are independent even when their
@@ -92,13 +115,16 @@ clear (subject: Subject, part: Part) : return (subject: Subject, part: Part, cou
 ```queries
 _record (subject: Subject, part: Part) : one (values: Values)
 _value (subject: Subject, part: Part, path: Keys) : optional (value: Value)
+_field (subject: Subject, part: Part, field: Field) : optional (value: Value)
+_holds (subject: Subject, part: Part, field: Field, value: Value) : one (present: Flag, equal: Flag, contains: Flag)
 _keys (subject: Subject, part: Part) : many (path: Keys)
 ```
 
 `_record` returns an empty record and `_keys` returns no rows for an unknown or
 cleared subject and part. `_value` is absent for an unknown, cleared, missing, or
-invalid path. Parts exist only through their entries; clearing one part never
-changes another.
+invalid literal path. `_field` and `_holds` are the corresponding convenience
+reads for a configured Field; they do not change the literal path grammar. Parts
+exist only through their entries; clearing one part never changes another.
 
 Composing knows how to construct a record, not where its pieces came from or how
 the record will be used.

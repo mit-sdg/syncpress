@@ -82,6 +82,48 @@ test("places copied bytes, reports exact changes, and preserves address identity
   expect(replaced).toEqual({ file: first.file, digest: changed.digest, changed: true });
 });
 
+test("reads strict UTF-8 text without consuming a BOM or exposing mutable bytes", () => {
+  const filing = new FilingConcept();
+  const { root } = filing.open({ name: "content" });
+  const supplied = Uint8Array.from([0xef, 0xbb, 0xbf, ...bytes("Ada — café")]);
+  const page = filing.place({ root, path: "page.md", content: supplied });
+
+  supplied.fill(0);
+  expect(filing._text({ file: page.file })).toEqual([{ text: "\uFEFFAda — café" }]);
+
+  const observed = filing._file({ file: page.file })[0]!.content;
+  observed.fill(0);
+  expect(filing._text({ file: page.file })).toEqual([{ text: "\uFEFFAda — café" }]);
+
+  const empty = filing.place({ root, path: "empty.txt", content: new Uint8Array() });
+  expect(filing._text({ file: empty.file })).toEqual([{ text: "" }]);
+
+  filing.discard({ file: page.file });
+  expect(filing._text({ file: page.file })).toEqual([]);
+  expect(filing._text({ file: "file:missing" })).toEqual([]);
+  expect(filing._text({ file: "\ud800" })).toEqual([]);
+  expect(filing._text({ file: 1 as unknown as string })).toEqual([]);
+});
+
+test("strict UTF-8 text reads reject every malformed sequence without changing bytes", () => {
+  const filing = new FilingConcept();
+  const { root } = filing.open({ name: "content" });
+  const malformed = [
+    [0x80],
+    [0xc0, 0x80],
+    [0xe2, 0x82],
+    [0xed, 0xa0, 0x80],
+    [0xf4, 0x90, 0x80, 0x80],
+  ];
+
+  for (const [index, sequence] of malformed.entries()) {
+    const content = Uint8Array.from(sequence);
+    const placed = filing.place({ root, path: `bad-${index}.txt`, content });
+    expect(filing._text({ file: placed.file })).toEqual([]);
+    expect(filing._file({ file: placed.file })[0]!.content).toEqual(content);
+  }
+});
+
 test("refuses unknown roots, escaping paths, noncanonical paths, and non-byte content", () => {
   const filing = new FilingConcept();
   const { root } = filing.open({ name: "content" });

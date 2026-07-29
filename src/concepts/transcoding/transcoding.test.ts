@@ -96,6 +96,7 @@ test("uses displayed EXIF dimensions and physically orients generated pixels", a
   expect(await transcoding.render({ original: admitted.original, widths: [20, 10], formats: ["webp", "original"] })).toEqual({
     original: admitted.original,
     count: 4,
+    derived: 3,
     changed: true,
   });
   const renditions = transcoding._renditions({ original: admitted.original });
@@ -114,6 +115,9 @@ test("uses displayed EXIF dimensions and physically orients generated pixels", a
   const fallback = renditions.at(-1)!;
   expect(fallback.content).toEqual(content);
   expect(fallback.digest).toBe(admitted.digest);
+  expect(fallback.fallback).toBe(true);
+  expect(fallback.name).toBe(`${admitted.digest}.jpg`);
+  expect(renditions.slice(0, -1).every(({ fallback }) => !fallback)).toBe(true);
   expect(await sharp(fallback.content).metadata()).toMatchObject({ width: 40, height: 20, orientation: 6 });
 });
 
@@ -125,26 +129,27 @@ test("normalizes ordering and aliases, prevents upscale, and always ends with an
     widths: [60, 30, 60, 120],
     formats: ["jpg", "avif", "jpeg", "original", "avif"],
   });
-  expect(first).toEqual({ original: admitted.original, count: 7, changed: true });
-  expect(transcoding._renditions({ original: admitted.original }).map(({ width, format, order }) => ({ width, format, order }))).toEqual([
-    { width: 30, format: "jpeg", order: 0 },
-    { width: 60, format: "jpeg", order: 1 },
-    { width: 30, format: "avif", order: 2 },
-    { width: 60, format: "avif", order: 3 },
-    { width: 30, format: "png", order: 4 },
-    { width: 60, format: "png", order: 5 },
-    { width: 90, format: "png", order: 6 },
+  expect(first).toEqual({ original: admitted.original, count: 7, derived: 6, changed: true });
+  expect(transcoding._renditions({ original: admitted.original }).map(({ width, format, order, fallback }) => ({ width, format, order, fallback }))).toEqual([
+    { width: 30, format: "jpeg", order: 0, fallback: false },
+    { width: 60, format: "jpeg", order: 1, fallback: false },
+    { width: 30, format: "avif", order: 2, fallback: false },
+    { width: 60, format: "avif", order: 3, fallback: false },
+    { width: 30, format: "png", order: 4, fallback: false },
+    { width: 60, format: "png", order: 5, fallback: false },
+    { width: 90, format: "png", order: 6, fallback: true },
   ]);
   expect(await transcoding.render({
     original: admitted.original,
     widths: [120, 30, 60],
     formats: ["jpeg", "avif", "original"],
-  })).toEqual({ original: admitted.original, count: 7, changed: false });
+  })).toEqual({ original: admitted.original, count: 7, derived: 6, changed: false });
 
   const removed = transcoding._renditions({ original: admitted.original })[1]!.rendition;
   expect(await transcoding.render({ original: admitted.original, widths: [45], formats: ["avif"] })).toEqual({
     original: admitted.original,
     count: 3,
+    derived: 2,
     changed: true,
   });
   expect(transcoding._rendition({ rendition: removed })).toEqual([]);
@@ -154,25 +159,29 @@ test("normalizes ordering and aliases, prevents upscale, and always ends with an
   expect(await small.render({ original: smallOriginal.original, widths: [480, 960], formats: ["avif", "webp"] })).toEqual({
     original: smallOriginal.original,
     count: 1,
+    derived: 0,
     changed: true,
   });
   expect(small._renditions({ original: smallOriginal.original })).toMatchObject([
-    { width: 20, height: 10, format: "png", order: 0, digest: smallOriginal.digest },
+    { width: 20, height: 10, format: "png", order: 0, digest: smallOriginal.digest, fallback: true },
   ]);
   expect(await small.render({ original: smallOriginal.original, widths: [], formats: [] })).toEqual({
     original: smallOriginal.original,
     count: 1,
+    derived: 0,
     changed: false,
   });
 });
 
-test("reports actual format facts and output digests without inventing publication names", async () => {
+test("reports stable intrinsic rendition facts and collision-resistant suggested names", async () => {
   const content = await still("png", 12, 8);
   const first = new TranscodingConcept();
   const admitted = await first.admit({ subject: "facts", content });
   await first.render({ original: admitted.original, widths: [6], formats: ["avif", "gif", "jpg", "png", "webp"] });
   const renditions = first._renditions({ original: admitted.original });
   expect(renditions.map(({ format }) => format)).toEqual(["avif", "gif", "jpeg", "webp", "png", "png"]);
+  expect(new Set(renditions.map(({ name }) => name)).size).toBe(renditions.length);
+  expect(renditions.filter(({ fallback }) => fallback)).toEqual([renditions.at(-1)!]);
 
   const expectedFacts = {
     avif: ["avif", "image/avif"],
@@ -189,7 +198,7 @@ test("reports actual format facts and output digests without inventing publicati
     expect([rendition.extension, rendition.mediaType]).toEqual([...expectedFacts[rendition.format]]);
     expect(rendition.digest).toBe(sha256(rendition.content));
     expect(rendition.digest).toMatch(/^[0-9a-f]{64}$/);
-    expect("name" in rendition).toBe(false);
+    expect(rendition.name).toBe(`${rendition.digest}.${rendition.extension}`);
     expect(first._rendition({ rendition: rendition.rendition })).toEqual([{
       original: admitted.original,
       width: rendition.width,
@@ -199,7 +208,9 @@ test("reports actual format facts and output digests without inventing publicati
       order: rendition.order,
       digest: rendition.digest,
       extension: rendition.extension,
+      name: rendition.name,
       mediaType: rendition.mediaType,
+      fallback: rendition.fallback,
     }]);
   }
   expect(renditions.at(-1)!.content).toEqual(content);
@@ -208,6 +219,12 @@ test("reports actual format facts and output digests without inventing publicati
   const equivalent = await second.admit({ subject: "facts", content });
   await second.render({ original: equivalent.original, widths: [6], formats: ["avif", "gif", "jpg", "png", "webp"] });
   expect(second._renditions({ original: equivalent.original })).toEqual(renditions);
+
+  const otherSubject = await second.admit({ subject: "same-bytes", content });
+  await second.render({ original: otherSubject.original, widths: [6], formats: ["avif", "gif", "jpg", "png", "webp"] });
+  expect(second._renditions({ original: otherSubject.original }).map(({ name }) => name)).toEqual(
+    renditions.map(({ name }) => name),
+  );
 });
 
 test("copies source and rendition bytes at every boundary", async () => {
@@ -251,7 +268,7 @@ test("preserves animated GIF frames, timing, and loop while skipping static form
     original: admitted.original,
     widths: [8, 4, 20],
     formats: ["avif", "png", "webp", "gif", "original"],
-  })).toEqual({ original: admitted.original, count: 4, changed: true });
+  })).toEqual({ original: admitted.original, count: 4, derived: 3, changed: true });
   const renditions = transcoding._renditions({ original: admitted.original });
   expect(renditions.map(({ width, height, format, animated, order }) => ({ width, height, format, animated, order }))).toEqual([
     { width: 4, height: 3, format: "webp", animated: true, order: 0 },
@@ -268,11 +285,12 @@ test("preserves animated GIF frames, timing, and loop while skipping static form
     });
   }
   expect(renditions.at(-1)!.content).toEqual(content);
+  expect(renditions.map(({ fallback }) => fallback)).toEqual([false, false, false, true]);
   expect(await transcoding.render({
     original: admitted.original,
     widths: [4, 8],
     formats: ["avif", "png", "webp", "original"],
-  })).toEqual({ original: admitted.original, count: 4, changed: false });
+  })).toEqual({ original: admitted.original, count: 4, derived: 3, changed: false });
 });
 
 test("failed rendering is atomic and refuses consistently", async () => {
