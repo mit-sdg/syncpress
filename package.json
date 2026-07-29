@@ -7,6 +7,7 @@
     "generate": "sync-engine artifacts pin",
     "typecheck": "tsc --noEmit",
     "principle": "bun test src/concepts",
+    "site": "bun src/edge.ts",
     "test": "bun test"
   },
   "dependencies": {

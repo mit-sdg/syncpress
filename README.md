@@ -18,6 +18,21 @@ compares parsed action and query declarations with the class source, checks both
 generated files, runs application diagnostics, and typechecks the project.
 `principle` runs every concept's direct Principle test without an assembly.
 
+## Initial CLI
+
+The first runnable composition builds Markdown files with YAML front matter into
+HTML using one fixed page layout. It is deliberately narrow while the rest of
+the SSG composition is built out: no configuration file, assets, collections,
+or watch mode yet.
+
+```sh
+bun run site --help
+bun run site build ./content ./dist
+```
+
+`index.md` becomes `dist/index.html`; `about.md` becomes
+`dist/about/index.html`. The composition is in `src/compositions/minimal-site.ts`.
+
 A concept's State section is optional uninterpreted human notation. It is not a
 schema, is not compared with class fields or storage, and does not enter
 generated artifacts or endpoint validators. Establish its properties in
@@ -36,7 +51,7 @@ bunx sync-engine artifacts check
 1. Add `src/concepts/<name>/spec.md`, its class, a principle test, and a
    `registry.ts` mapping every declared refusal code to an `Error` class.
 2. Add the registration to `src/concept-set.ts`.
-3. Connect the concept in `src/composition.ts` with reactions, views, formers,
+3. Connect the concept in `src/compositions/` with reactions, views, formers,
    or endpoints.
 4. Run `bun run generate`, review both generated files, and run
    `bun run check`.
