@@ -2,42 +2,43 @@ import picomatch from "picomatch";
 
 export class MalformedPattern extends Error {}
 
-function hasBalancedGroups(text: string): boolean {
-  const closes: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
-  const stack: string[] = [];
-  let escaped = false;
-  for (const character of text) {
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (character in closes) {
-      stack.push(closes[character]!);
-      continue;
-    }
-    if (stack.at(-1) === character) stack.pop();
-    else if (["]", "}", ")"].includes(character)) return false;
-  }
-  return !escaped && stack.length === 0;
-}
+const matchOptions = {
+  basename: false,
+  contains: false,
+  debug: true,
+  dot: true,
+  fastpaths: false,
+  keepQuotes: false,
+  nobrace: false,
+  nobracket: false,
+  nocase: false,
+  noextglob: false,
+  noglobstar: false,
+  nonegate: true,
+  posix: true,
+  strictBrackets: true,
+  strictSlashes: true,
+  windows: false,
+} as const;
 
-/** Compile named glob patterns once and answer their matches deterministically. */
+/** Compile portable path patterns once and answer their matches deterministically. */
 export class MatchingConcept {
   readonly #patterns = new Map<string, (path: string) => boolean>();
 
   compile({ text }: { text: string }) {
-    if (!hasBalancedGroups(text)) throw new MalformedPattern();
+    if (this.#patterns.has(text)) return { pattern: text };
+
+    let matcher: (path: string) => boolean;
     try {
-      const matcher = picomatch(text, { dot: true, nonegate: true });
-      this.#patterns.set(text, matcher);
-      return { pattern: text };
+      const compiled = picomatch(text, matchOptions, true);
+      if (compiled.state.quotes !== 0) throw new SyntaxError("Unterminated quoted run");
+      matcher = compiled;
     } catch {
       throw new MalformedPattern();
     }
+
+    this.#patterns.set(text, matcher);
+    return { pattern: text };
   }
 
   _matches({ pattern, path }: { pattern: string; path: string }) {
