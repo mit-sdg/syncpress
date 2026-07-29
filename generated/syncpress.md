@@ -59,15 +59,13 @@ Queries (standing questions the state answers):
 
 ### Configuring
 
-**Purpose.** Turn one declarative configuration document into an addressable settings tree,
-so later behavior reads settings without depending on the notation that wrote
-them.
+**Purpose.** Keep the settings from one written document in a tree, so they can be looked up
+without knowing how the document was written.
 
-**Principle.** Ada loads a YAML document. Its `site.title` value is available by dotted key,
-and the rules under `defaults` retain their written order and source locations.
-Loading the same source reports no change and preserves the active tree.
-Loading different source replaces the active configuration. Malformed YAML and
-unsupported notation are refused without replacing the configuration.
+**Principle.** Ada loads a settings document. She can read its named values and ordered lists,
+and each value remembers where it was written. Loading unchanged text keeps the
+same tree. Loading new valid text makes a new tree current, while bad text leaves
+the previous settings in place.
 
 Actions:
 
@@ -77,13 +75,14 @@ Actions:
 Queries (standing questions the state answers):
 
 - `_active (…)` — promises at most one row
+- `_at (node, path)` — promises at most one row
 - `_child (key, node)` — promises at most one row
 - `_entries (node)` — promises any number of rows
 - `_items (node)` — promises any number of rows
-- `_record (node)` — promises exactly one row
-- `_scalar (key, node, otherwise)` — promises exactly one row
-- `_values (key, node, otherwise)` — promises exactly one row
-- `_where (node)` — promises exactly one row
+- `_record (node)` — promises at most one row
+- `_scalar (node, otherwise, path)` — promises at most one row
+- `_values (node, otherwise, path)` — promises at most one row
+- `_where (node)` — promises at most one row
 
 ### Converting
 
@@ -244,31 +243,31 @@ Queries (standing questions the state answers):
 
 ### Filing
 
-**Purpose.** Hold named trees of files and report precisely when their contents change, so
-the rest of the generator can address ordinary project files without owning a
-filesystem.
+**Purpose.** Keep files in named trees and say whether saving a file changed its contents.
 
-**Principle.** Ada opens a content root and places `posts/compiler-design/index.md` in it.
-Reading it returns its bytes and digest. Placing those bytes again reports no
-change; replacing them reports a change. Listing `posts/` returns the page in
-path order, and resolving `./pipeline.png` finds its sibling when it exists.
-Paths that leave the root are refused. Discarding the page removes it, and
-discarding it again is refused.
+**Principle.** Ada opens a tree called notes and saves a page and a picture in it. Reading the
+page gives back the exact bytes she saved and a stable fingerprint. Saving the
+same bytes reports no change; saving different bytes keeps the same file
+identity and reports a change. Listings have one predictable path order. The
+page can find the picture from a link such as `./picture.png`, but a link cannot
+climb outside the tree. Removing the page makes later lookups miss it, and
+removing it again is refused. A second named tree remains separate.
 
 Actions:
 
 - `discard (file)` — may refuse `FILE_NOT_FOUND`
 - `open (name)`
-- `place (content, path, root)` — may refuse `PATH_LEAVES_ROOT`
+- `place (content, path, root)` — may refuse `INVALID_PATH`, `PATH_LEAVES_ROOT`, `ROOT_NOT_FOUND`
 
 Queries (standing questions the state answers):
 
 - `_at (path, root)` — promises at most one row
-- `_directory (path)` — promises exactly one row
+- `_directory (path)` — promises at most one row
 - `_file (file)` — promises at most one row
-- `_join (name, prefix)` — promises exactly one row
-- `_medium (path)` — promises exactly one row
+- `_join (name, prefix)` — promises at most one row
+- `_name (path)` — promises at most one row
 - `_named (name)` — promises at most one row
+- `_resolution (address, file)` — promises exactly one row
 - `_resolve (address, file)` — promises at most one row
 - `_root (root)` — promises at most one row
 - `_under (prefix, root)` — promises any number of rows
@@ -301,14 +300,14 @@ Queries (standing questions the state answers):
 
 ### Matching
 
-**Purpose.** Compile a selection pattern and test paths against it, so the same rule can be
-declared once and applied everywhere.
+**Purpose.** Save a pattern that selects paths and answer whether a path fits it, so the
+same selection rule can be reused.
 
-**Principle.** Ada compiles `posts/**/*.md`. It matches
+**Principle.** Ada saves `posts/**/*.md`, where `**` means any folders. The pattern selects
 `posts/compiler-design/index.md`, but not `about/index.md` or
-`posts/notes.txt`. Compiling it again returns the same pattern. Compiling the
-malformed pattern `posts/**{` is refused, and an uncompiled pattern matches
-nothing.
+`posts/notes.txt`. Saving the exact text again returns the same pattern without
+adding another one. Saving the broken pattern `posts/**{` is refused and adds
+nothing. A pattern that was never saved selects no path.
 
 Actions:
 
