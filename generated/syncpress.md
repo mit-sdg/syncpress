@@ -85,6 +85,29 @@ Queries (standing questions the state answers):
 - `_values (key, node, otherwise)` — promises exactly one row
 - `_where (node)` — promises exactly one row
 
+### Converting
+
+**Purpose.** Turn lightweight markup into HTML, so authors write prose while the rendering
+pipeline receives the markup browsers read.
+
+**Principle.** Ada declares Markdown with tables and raw markup enabled. Converting a heading
+and paragraph returns HTML for one part of a page; converting another part does
+not disturb the first. The same source is reused from the conversion cache. A
+document containing the excerpt separator yields an excerpt up to that marker.
+The verbatim dialect returns HTML unchanged. An unknown dialect is refused.
+
+Actions:
+
+- `convert (dialect, part, source, subject)` — may refuse `CONVERSION_FAILED`, `DIALECT_NOT_FOUND`
+- `declare (extensions, name, raw, separator)`
+- `release (subject)`
+
+Queries (standing questions the state answers):
+
+- `_conversion (conversion)` — promises exactly one row
+- `_dialect (name)` — promises at most one row
+- `_for (part, subject)` — promises at most one row
+
 ### Depending
 
 **Purpose.** Record what each result used, so a changed input invalidates precisely its
@@ -162,6 +185,32 @@ Queries (standing questions the state answers):
 
 - `_all (…)` — promises any number of rows
 - `_document (subject)` — promises at most one row
+
+### Embedding
+
+**Purpose.** Present one resource through the best rendition a reader's viewer can accept,
+without asking the author to choose.
+
+**Principle.** Ada declares an embedding with alternative text, intrinsic dimensions, and the
+number of rendition addresses it expects. Its markup is absent until all expected
+offers arrive. Offers arriving out of order are grouped by their format order,
+with widths ascending within each group; the final group becomes the `img`
+fallback and carries the alternative text, dimensions, lazy loading, and async
+decoding. Re-offering an address leaves the completed markup unchanged. An
+embedding expecting no offers has markup immediately.
+
+Actions:
+
+- `declare (alternative, expects, height, subject, width)`
+- `offer (address, embedding, format, order, width)` — may refuse `EMBEDDING_NOT_FOUND`
+- `withdraw (subject)`
+
+Queries (standing questions the state answers):
+
+- `_embedding (embedding)` — promises exactly one row
+- `_for (subject)` — promises at most one row
+- `_markup (embedding)` — promises at most one row
+- `_offers (embedding)` — promises any number of rows
 
 ### Emitting
 
@@ -297,6 +346,32 @@ Queries (standing questions the state answers):
 - `_outcome (job)` — promises at most one row
 - `_running (…)` — promises any number of rows
 
+### Referencing
+
+**Purpose.** Record every outward reference a piece of text makes, so each can be answered or
+reported as broken, and the text can be rewritten once all of them are answered.
+
+**Principle.** Ada scans a body that names an internal page, an image, and a download. Each
+reference keeps its kind, label, source position, and enclosing-element span.
+Until every reference is answered, finished text is absent. Address answers
+replace only targets; a markup answer replaces its whole element. Scanning the
+same subject and part replaces the previous references, and text with no
+references is finished immediately. Answering an old reference is refused.
+
+Actions:
+
+- `answer (form, reference, value)` — may refuse `REFERENCE_NOT_FOUND`
+- `drop (part, subject)`
+- `scan (part, subject, text)`
+
+Queries (standing questions the state answers):
+
+- `_finished (part, subject)` — promises at most one row
+- `_reference (reference)` — promises exactly one row
+- `_references (source)` — promises any number of rows
+- `_source (source)` — promises exactly one row
+- `_unanswered (source)` — promises any number of rows
+
 ### RequestBoundary
 
 **Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
@@ -335,6 +410,62 @@ Queries (standing questions the state answers):
 - `_locate (path)` — promises exactly one row
 - `_owner (address)` — promises at most one row
 - `_url (target)` — promises exactly one row
+
+### Templating
+
+**Purpose.** Fill stored templates from supplied contexts, letting templates reuse smaller
+templates, so a layout is written once and used many times.
+
+**Principle.** Ada defines `page.html`, `header.html`, and `footer.html`. `page.html` renders
+the other two, so its direct uses and full tree name them. She fills unnamed
+text that renders the header for one subject without adding that text to the
+named templates. Rendering the layout for two subjects keeps both outputs. Its
+ordinary values are HTML-escaped while the supplied raw `page.content` is not.
+Defining the same source reports no change. A missing partial, recursive
+template tree, malformed source, and failed evaluation are refused.
+
+Actions:
+
+- `define (name, source)` — may refuse `TEMPLATE_SYNTAX`
+- `fill (context, raw, source, subject)` — may refuse `TEMPLATE_FAILED`, `TEMPLATE_SYNTAX`, `USED_TEMPLATE_NOT_FOUND`
+- `forget (name)` — may refuse `TEMPLATE_NOT_FOUND`
+- `render (context, raw, subject, template)` — may refuse `RECURSIVE_TEMPLATE`, `TEMPLATE_FAILED`, `TEMPLATE_NOT_FOUND`, `USED_TEMPLATE_NOT_FOUND`
+
+Queries (standing questions the state answers):
+
+- `_filling (subject)` — promises at most one row
+- `_of (rendering)` — promises exactly one row
+- `_reads (owner)` — promises any number of rows
+- `_rendering (subject, template)` — promises at most one row
+- `_template (name)` — promises at most one row
+- `_tree (owner)` — promises any number of rows
+- `_usedBy (name)` — promises any number of rows
+- `_uses (owner)` — promises any number of rows
+
+### Transcoding
+
+**Purpose.** Derive alternative sizes and encodings of one source image, so a reader receives
+a rendition their viewer can accept at a size their screen needs.
+
+**Principle.** Ada admits a PNG for a subject and receives its format, intrinsic dimensions, and
+animation state. Admitting the same bytes again returns the same image without a
+change. Rendering AVIF and the original format at 480, 960, and 1440 produces
+stable, content-addressed renditions in declared format order, skipping 1440
+when the source is 960 wide. Rendering the same settings again does not change
+the rendition set. An animated GIF is admitted, but a rendition format that
+would discard its animation is skipped. Unreadable bytes are refused.
+
+Actions:
+
+- `admit (content, subject)` — may refuse `UNREADABLE_IMAGE`
+- `release (subject)`
+- `render (formats, original, widths)` — may refuse `ORIGINAL_NOT_FOUND`
+
+Queries (standing questions the state answers):
+
+- `_original (subject)` — promises at most one row
+- `_rendition (rendition)` — promises exactly one row
+- `_renditions (original)` — promises any number of rows
 
 ## Reactions
 
