@@ -1,9 +1,26 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { OriginalNotFound, TranscodingConcept, UnreadableImage } from "./transcoding.ts";
+import {
+  InvalidSubject,
+  InvalidWidths,
+  OriginalNotFound,
+  RenditionFailed,
+  TranscodingConcept,
+  UnreadableImage,
+  UnsupportedFormat,
+  UnsupportedSourceFormat,
+} from "./transcoding.ts";
 import spec from "./spec.md" with { type: "text" };
 
 export const transcoding = registerConcept({
   class: TranscodingConcept,
   spec,
-  refusals: { ORIGINAL_NOT_FOUND: OriginalNotFound, UNREADABLE_IMAGE: UnreadableImage },
+  refusals: {
+    INVALID_SUBJECT: InvalidSubject,
+    UNREADABLE_IMAGE: UnreadableImage,
+    UNSUPPORTED_SOURCE_FORMAT: UnsupportedSourceFormat,
+    ORIGINAL_NOT_FOUND: OriginalNotFound,
+    INVALID_WIDTHS: InvalidWidths,
+    UNSUPPORTED_FORMAT: UnsupportedFormat,
+    RENDITION_FAILED: RenditionFailed,
+  },
 });
