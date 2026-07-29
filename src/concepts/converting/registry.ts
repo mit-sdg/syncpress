@@ -1,9 +1,28 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { ConversionFailed, ConvertingConcept, DialectNotFound } from "./converting.ts";
+import {
+  ConversionFailed,
+  ConvertingConcept,
+  IncompatibleProfile,
+  InvalidConversionInput,
+  InvalidProfile,
+  InvalidSubject,
+  ProfileNotFound,
+  UnsupportedExtension,
+  UnsupportedProfileKind,
+} from "./converting.ts";
 import spec from "./spec.md" with { type: "text" };
 
 export const converting = registerConcept({
   class: ConvertingConcept,
   spec,
-  refusals: { CONVERSION_FAILED: ConversionFailed, DIALECT_NOT_FOUND: DialectNotFound },
+  refusals: {
+    INVALID_PROFILE: InvalidProfile,
+    UNSUPPORTED_PROFILE_KIND: UnsupportedProfileKind,
+    UNSUPPORTED_EXTENSION: UnsupportedExtension,
+    INCOMPATIBLE_PROFILE: IncompatibleProfile,
+    PROFILE_NOT_FOUND: ProfileNotFound,
+    INVALID_CONVERSION_INPUT: InvalidConversionInput,
+    INVALID_SUBJECT: InvalidSubject,
+    CONVERSION_FAILED: ConversionFailed,
+  },
 });
