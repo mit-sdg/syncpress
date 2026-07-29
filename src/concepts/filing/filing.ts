@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 
+export class RootNotFound extends Error {}
 export class PathLeavesRoot extends Error {}
+export class InvalidPath extends Error {}
 export class FileNotFound extends Error {}
+
+export type ResolutionStatus = "found" | "missing" | "outside" | "nonlocal" | "invalid" | "unknown-file";
 
 type RootRecord = { root: string; name: string };
 type FileRecord = {
@@ -13,37 +17,82 @@ type FileRecord = {
   digest: string;
 };
 
-const mediaByExtension: Record<string, string> = {
-  avif: "image/avif",
-  css: "text/css",
-  gif: "image/gif",
-  html: "text/html",
-  ico: "image/x-icon",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  js: "text/javascript",
-  json: "application/json",
-  md: "text/markdown",
-  png: "image/png",
-  svg: "image/svg+xml",
-  txt: "text/plain",
-  webp: "image/webp",
-  xml: "application/xml",
-  zip: "application/zip",
-};
+type PathStatus = "canonical" | "outside" | "invalid";
+type Resolution = { status: ResolutionStatus; path?: string; target?: string };
+
+const encoder = new TextEncoder();
+const scheme = /^[a-z][a-z\d+.-]*:/i;
+const forbiddenSegmentCharacter = /[\\\u0000-\u001f\u007f]/u;
 
 function digest(content: Uint8Array): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-function hasSafeSegments(path: string, allowEmpty: boolean): boolean {
-  if (path === "") return allowEmpty;
-  return !path.startsWith("/") && path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+function copyBytes(content: Uint8Array): Uint8Array {
+  if (!(content instanceof Uint8Array)) throw new TypeError("File content must be bytes.");
+  return Uint8Array.from(content);
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function isScalarText(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = text.charCodeAt(index + 1);
+      if (next < 0xdc00 || next > 0xdfff) return false;
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+  }
+  return true;
+}
+
+function isSegment(segment: string): boolean {
+  return (
+    segment !== "" &&
+    segment !== "." &&
+    segment !== ".." &&
+    isScalarText(segment) &&
+    segment.normalize("NFC") === segment &&
+    !segment.includes("/") &&
+    !forbiddenSegmentCharacter.test(segment)
+  );
+}
+
+function pathStatus(path: string): PathStatus {
+  if (typeof path !== "string" || path === "") return "invalid";
+  if (path.startsWith("/")) return "outside";
+
+  let depth = 0;
+  let canonical = true;
+  for (const segment of path.split("/")) {
+    if (segment === "..") {
+      if (depth === 0) return "outside";
+      depth -= 1;
+      canonical = false;
+    } else if (segment === ".") {
+      canonical = false;
+    } else {
+      if (!isSegment(segment)) return "invalid";
+      depth += 1;
+    }
+  }
+  return canonical ? "canonical" : "invalid";
+}
+
+function isDirectory(prefix: string): boolean {
+  return prefix === "" || pathStatus(prefix) === "canonical";
 }
 
 function comparePaths(left: string, right: string): number {
-  const leftBytes = new TextEncoder().encode(left);
-  const rightBytes = new TextEncoder().encode(right);
+  const leftBytes = encoder.encode(left);
+  const rightBytes = encoder.encode(right);
   const length = Math.min(leftBytes.length, rightBytes.length);
   for (let index = 0; index < length; index += 1) {
     const difference = leftBytes[index]! - rightBytes[index]!;
@@ -52,62 +101,57 @@ function comparePaths(left: string, right: string): number {
   return leftBytes.length - rightBytes.length;
 }
 
-function resolvePath(origin: string, address: string): string | undefined {
-  if (address.startsWith("/") || address.startsWith("#") || /^[a-z][a-z\d+.-]*:/i.test(address)) return undefined;
-  const target = address.split(/[?#]/, 1)[0];
-  if (target === undefined || target === "") return undefined;
-
-  const segments = origin.split("/").slice(0, -1);
-  for (const segment of target.split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
-      if (segments.length === 0) return undefined;
-      segments.pop();
-      continue;
-    }
-    if (segment.includes("\\")) return undefined;
-    segments.push(segment);
-  }
-  return segments.join("/");
+function rootIdentity(name: string): string {
+  return `root:${JSON.stringify(name)}`;
 }
 
-/** Keep named, in-memory file trees with content-addressed change detection. */
+function fileIdentity(root: string, path: string): string {
+  return `file:${JSON.stringify([root, path])}`;
+}
+
+/** Keep independent, named byte trees with stable identities and exact change detection. */
 export class FilingConcept {
   readonly #rootsByName = new Map<string, RootRecord>();
   readonly #rootsByID = new Map<string, RootRecord>();
   readonly #filesByID = new Map<string, FileRecord>();
-  readonly #fileIDsByAddress = new Map<string, string>();
+  readonly #fileIDsByRoot = new Map<string, Map<string, string>>();
 
   open({ name }: { name: string }) {
+    if (typeof name !== "string") throw new TypeError("A root name must be text.");
     const existing = this.#rootsByName.get(name);
     if (existing !== undefined) return { root: existing.root };
 
-    const root = `root:${name}`;
+    const root = rootIdentity(name);
     const record = { root, name };
     this.#rootsByName.set(name, record);
     this.#rootsByID.set(root, record);
+    this.#fileIDsByRoot.set(root, new Map());
     return { root };
   }
 
   place({ root, path, content }: { root: string; path: string; content: Uint8Array }) {
-    if (!this.#rootsByID.has(root) || !hasSafeSegments(path, false)) throw new PathLeavesRoot();
+    if (!this.#rootsByID.has(root)) throw new RootNotFound();
+    const status = pathStatus(path);
+    if (status === "outside") throw new PathLeavesRoot();
+    if (status === "invalid") throw new InvalidPath();
 
-    const address = `${root}\u0000${path}`;
-    const previousID = this.#fileIDsByAddress.get(address);
-    const nextDigest = digest(content);
+    const nextContent = copyBytes(content);
+    const nextDigest = digest(nextContent);
+    const filesAtRoot = this.#fileIDsByRoot.get(root)!;
+    const previousID = filesAtRoot.get(path);
     if (previousID !== undefined) {
       const previous = this.#filesByID.get(previousID)!;
-      const changed = previous.digest !== nextDigest;
-      previous.content = content.slice();
+      const changed = !sameBytes(previous.content, nextContent);
+      previous.content = nextContent;
       previous.digest = nextDigest;
       return { file: previous.file, digest: nextDigest, changed };
     }
 
-    const file = `file:${root}:${path}`;
+    const file = fileIdentity(root, path);
     const name = path.slice(path.lastIndexOf("/") + 1);
-    const record = { file, root, path, name, content: content.slice(), digest: nextDigest };
+    const record = { file, root, path, name, content: nextContent, digest: nextDigest };
     this.#filesByID.set(file, record);
-    this.#fileIDsByAddress.set(address, file);
+    filesAtRoot.set(path, file);
     return { file, digest: nextDigest, changed: true };
   }
 
@@ -115,8 +159,8 @@ export class FilingConcept {
     const record = this.#filesByID.get(file);
     if (record === undefined) throw new FileNotFound();
     this.#filesByID.delete(file);
-    this.#fileIDsByAddress.delete(`${record.root}\u0000${record.path}`);
-    return { root: record.root, path: record.path };
+    this.#fileIDsByRoot.get(record.root)!.delete(record.path);
+    return { root: record.root, path: record.path, name: record.name };
   }
 
   _root({ root }: { root: string }): { name: string }[] {
@@ -133,42 +177,100 @@ export class FilingConcept {
     const record = this.#filesByID.get(file);
     return record === undefined
       ? []
-      : [{ root: record.root, path: record.path, name: record.name, content: record.content.slice(), digest: record.digest }];
+      : [{ root: record.root, path: record.path, name: record.name, content: copyBytes(record.content), digest: record.digest }];
   }
 
   _at({ root, path }: { root: string; path: string }): { file: string; digest: string }[] {
-    const file = this.#fileIDsByAddress.get(`${root}\u0000${path}`);
+    if (pathStatus(path) !== "canonical") return [];
+    const file = this.#fileIDsByRoot.get(root)?.get(path);
     const record = file === undefined ? undefined : this.#filesByID.get(file);
     return record === undefined ? [] : [{ file: record.file, digest: record.digest }];
   }
 
   _under({ root, prefix }: { root: string; prefix: string }): { file: string; path: string; digest: string }[] {
-    return [...this.#filesByID.values()]
-      .filter((record) => record.root === root && (prefix === "" || record.path.startsWith(prefix)))
+    if (!isDirectory(prefix)) return [];
+    const filesAtRoot = this.#fileIDsByRoot.get(root);
+    if (filesAtRoot === undefined) return [];
+    const beginning = prefix === "" ? "" : `${prefix}/`;
+    return [...filesAtRoot.values()]
+      .map((file) => this.#filesByID.get(file)!)
+      .filter((record) => beginning === "" || record.path.startsWith(beginning))
       .sort((left, right) => comparePaths(left.path, right.path))
       .map(({ file, path, digest: fileDigest }) => ({ file, path, digest: fileDigest }));
   }
 
   _resolve({ file, address }: { file: string; address: string }): { target: string; path: string }[] {
-    const source = this.#filesByID.get(file);
-    if (source === undefined) return [];
-    const path = resolvePath(source.path, address);
-    if (path === undefined) return [];
-    const target = this.#fileIDsByAddress.get(`${source.root}\u0000${path}`);
-    return target === undefined ? [] : [{ target, path }];
+    const resolution = this.#resolution(file, address);
+    return resolution.status === "found" ? [{ target: resolution.target!, path: resolution.path! }] : [];
   }
 
-  _join({ prefix, name }: { prefix: string; name: string }) {
-    return { path: prefix === "" ? name : `${prefix}/${name}` };
+  _resolution({ file, address }: { file: string; address: string }): { status: ResolutionStatus } {
+    return { status: this.#resolution(file, address).status };
   }
 
-  _directory({ path }: { path: string }) {
+  _join({ prefix, name }: { prefix: string; name: string }): { path: string }[] {
+    if (!isDirectory(prefix) || !isSegment(name)) return [];
+    return [{ path: prefix === "" ? name : `${prefix}/${name}` }];
+  }
+
+  _directory({ path }: { path: string }): { prefix: string }[] {
+    if (pathStatus(path) !== "canonical") return [];
     const separator = path.lastIndexOf("/");
-    return { prefix: separator === -1 ? "" : path.slice(0, separator) };
+    return [{ prefix: separator === -1 ? "" : path.slice(0, separator) }];
   }
 
-  _medium({ path }: { path: string }) {
-    const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
-    return { medium: mediaByExtension[extension] ?? "application/octet-stream" };
+  _name({ path }: { path: string }): { name: string }[] {
+    if (pathStatus(path) !== "canonical") return [];
+    return [{ name: path.slice(path.lastIndexOf("/") + 1) }];
+  }
+
+  #resolution(file: string, address: string): Resolution {
+    const source = this.#filesByID.get(file);
+    if (source === undefined) return { status: "unknown-file" };
+    if (typeof address !== "string" || !isScalarText(address)) return { status: "invalid" };
+    if (address.startsWith("/") || scheme.test(address)) return { status: "nonlocal" };
+
+    const query = address.indexOf("?");
+    const fragment = address.indexOf("#");
+    const end = Math.min(query === -1 ? address.length : query, fragment === -1 ? address.length : fragment);
+    const referencePath = address.slice(0, end);
+    if (referencePath === "") return { status: "found", path: source.path, target: source.file };
+    if (referencePath.endsWith("/")) return { status: "invalid" };
+
+    const targetSegments = source.path.split("/").slice(0, -1);
+    const rawSegments = referencePath.split("/");
+    let endsAtDirectory = false;
+    for (let index = 0; index < rawSegments.length; index += 1) {
+      const raw = rawSegments[index]!;
+      if (raw === "") return { status: "invalid" };
+
+      let segment: string;
+      try {
+        segment = decodeURIComponent(raw);
+      } catch {
+        return { status: "invalid" };
+      }
+      if (segment.includes("/") || !isScalarText(segment) || segment.normalize("NFC") !== segment) {
+        return { status: "invalid" };
+      }
+      if (segment === ".") {
+        endsAtDirectory = index === rawSegments.length - 1;
+        continue;
+      }
+      if (segment === "..") {
+        if (targetSegments.length === 0) return { status: "outside" };
+        targetSegments.pop();
+        endsAtDirectory = index === rawSegments.length - 1;
+        continue;
+      }
+      if (!isSegment(segment)) return { status: "invalid" };
+      targetSegments.push(segment);
+      endsAtDirectory = false;
+    }
+    if (endsAtDirectory || targetSegments.length === 0) return { status: "invalid" };
+
+    const path = targetSegments.join("/");
+    const target = this.#fileIDsByRoot.get(source.root)?.get(path);
+    return target === undefined ? { status: "missing", path } : { status: "found", path, target };
   }
 }
