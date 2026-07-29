@@ -85,6 +85,62 @@ Queries (standing questions the state answers):
 - `_values (key, node, otherwise)` — promises exactly one row
 - `_where (node)` — promises exactly one row
 
+### Depending
+
+**Purpose.** Record what each result used, so a changed input invalidates precisely its
+dependents and each stale result can explain why it must be recomputed.
+
+**Principle.** Ada begins a page result, records its source, layout, and a collection, then
+settles it. Touching the layout makes the page stale and names the layout as the
+reason. An unrelated input changes nothing. A second result that uses the page
+is made stale transitively. Beginning the page again clears its old uses.
+
+Actions:
+
+- `begin (subject)`
+- `drop (subject)`
+- `settle (subject)` — may refuse `NOT_BUILDING`
+- `touch (input)`
+- `use (input, subject)` — may refuse `NOT_BUILDING`
+
+Queries (standing questions the state answers):
+
+- `_current (subject)` — promises at most one row
+- `_dependents (input)` — promises any number of rows
+- `_reason (subject)` — promises at most one row
+- `_stale (…)` — promises any number of rows
+- `_state (subject)` — promises exactly one row
+- `_uses (subject)` — promises any number of rows
+
+### Diagnosing
+
+**Purpose.** Collect the problems that independent checks find, so one run reports all of
+them together and a later run can retract the ones that no longer apply.
+
+**Principle.** Three problems are reported: an error in one file, a warning in another, and a
+second error in the first file at a later line. Reading them answers errors
+before warnings and, within one severity, orders them by source and then by
+position. A related location is attached to the first error and comes back with
+it. The run is not clean while an error stands; a run holding only the warning
+is clean. Retracting everything attached to the first file leaves the warning,
+and the run is then clean. Reporting the same code at the same place twice
+records one.
+
+Actions:
+
+- `clear (…)`
+- `relate (column, diagnostic, line, note, source)` — may refuse `DIAGNOSTIC_NOT_FOUND`
+- `report (code, column, line, message, severity, source)` — may refuse `UNKNOWN_SEVERITY`
+- `retract (source)`
+
+Queries (standing questions the state answers):
+
+- `_all (…)` — promises any number of rows
+- `_clean (…)` — promises exactly one row
+- `_errors (…)` — promises any number of rows
+- `_for (source)` — promises any number of rows
+- `_related (diagnostic)` — promises any number of rows
+
 ### Documenting
 
 **Purpose.** Keep a document's front-matter attributes beside its authored body, so prose
@@ -106,6 +162,36 @@ Queries (standing questions the state answers):
 
 - `_all (…)` — promises any number of rows
 - `_document (subject)` — promises at most one row
+
+### Emitting
+
+**Purpose.** Make a destination hold exactly the artifacts intended: write new bytes, replace
+changed bytes, keep current bytes, and remove files no producer still intends.
+
+**Principle.** Ada directs a destination containing an old file. One producer begins an
+attempt and intends two files while another intends a third. Reconciliation
+writes the intended files and removes the old one. A second producer may share
+an intended path with identical bytes, but different bytes are refused. A later
+attempt keeps the previous attempt's untouched intents until it commits, then
+drops them. Retracting a producer removes every one of its intents.
+
+Actions:
+
+- `begin (producer)`
+- `commit (producer)` — may refuse `NOT_BEGUN`
+- `direct (destination)`
+- `intend (content, medium, path, producer)` — may refuse `PATH_CONTESTED`, `PATH_LEAVES_DESTINATION`
+- `reconcile (…)`
+- `retract (producer)`
+
+Queries (standing questions the state answers):
+
+- `_attempt (producer)` — promises at most one row
+- `_byProducer (producer)` — promises any number of rows
+- `_intent (path)` — promises at most one row
+- `_orphans (…)` — promises any number of rows
+- `_pending (…)` — promises any number of rows
+- `_producers (path)` — promises any number of rows
 
 ### Filing
 
@@ -184,6 +270,33 @@ Queries (standing questions the state answers):
 - `_compiled (text)` — promises at most one row
 - `_matches (path, pattern)` — promises exactly one row
 
+### Phasing
+
+**Purpose.** Carry one job through a declared sequence of phases, so that work in a later
+phase can assume the work of every earlier phase is complete.
+
+**Principle.** A sequence is declared over ready, settings, read, route, excerpt, collect,
+render, and emit. Declaring it again with the same phases reports no change. A
+job is started on it in `once` mode and begins at ready, where nothing is
+declared to happen. Advancing announces settings, then read, then route, and so
+on. Advancing past emit finishes the job, and advancing a finished job is
+refused. A second job started on the same sequence proceeds independently.
+Abandoning a running job leaves it failed with a reason, and it announces no
+further phase.
+
+Actions:
+
+- `abandon (job, reason)` — may refuse `JOB_NOT_RUNNING`
+- `advance (job)` — may refuse `JOB_NOT_RUNNING`
+- `declare (name, phases)` — may refuse `NO_PHASES`
+- `start (mode, sequence)` — may refuse `SEQUENCE_NOT_FOUND`
+
+Queries (standing questions the state answers):
+
+- `_job (job)` — promises exactly one row
+- `_outcome (job)` — promises at most one row
+- `_running (…)` — promises any number of rows
+
 ### RequestBoundary
 
 **Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
@@ -194,6 +307,34 @@ Actions:
 
 - `request (…)`
 - `respond (…)` — may refuse `NOT_PENDING`
+
+### Routing
+
+**Purpose.** Give each owner one address in a shared space and refuse conflicting claims, so
+every published address has one unambiguous owner.
+
+**Principle.** Ada derives `/posts/compiler-design/` from
+`posts/compiler-design/index.md` and claims it for a page. A second page cannot
+claim it. A page may instead claim `/404.html`. The route maps to its output
+file, and rebasing from `/` to `/notes/` changes URLs without changing claims.
+Malformed bases and addresses are refused.
+
+Actions:
+
+- `claim (address, owner)` — may refuse `ADDRESS_TAKEN`, `INVALID_ADDRESS`
+- `rebase (base)` — may refuse `INVALID_BASE`
+- `release (owner)` — may refuse `NOT_CLAIMED`
+
+Queries (standing questions the state answers):
+
+- `_address (owner)` — promises at most one row
+- `_claims (…)` — promises any number of rows
+- `_classify (target)` — promises exactly one row
+- `_derive (path)` — promises exactly one row
+- `_file (address)` — promises exactly one row
+- `_locate (path)` — promises exactly one row
+- `_owner (address)` — promises at most one row
+- `_url (target)` — promises exactly one row
 
 ## Reactions
 
