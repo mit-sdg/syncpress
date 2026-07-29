@@ -1,9 +1,24 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { CollectingConcept, CollectionNotFound, NotIncluded } from "./collecting.ts";
+import {
+  CollectingConcept,
+  CollectionNotFound,
+  InvalidCard,
+  InvalidDirection,
+  InvalidSortKey,
+  InvalidText,
+  NotIncluded,
+} from "./collecting.ts";
 import spec from "./spec.md" with { type: "text" };
 
 export const collecting = registerConcept({
   class: CollectingConcept,
   spec,
-  refusals: { COLLECTION_NOT_FOUND: CollectionNotFound, NOT_INCLUDED: NotIncluded },
+  refusals: {
+    INVALID_TEXT: InvalidText,
+    INVALID_DIRECTION: InvalidDirection,
+    COLLECTION_NOT_FOUND: CollectionNotFound,
+    INVALID_SORT_KEY: InvalidSortKey,
+    INVALID_CARD: InvalidCard,
+    NOT_INCLUDED: NotIncluded,
+  },
 });
