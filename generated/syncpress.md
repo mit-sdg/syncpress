@@ -7,22 +7,6 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
-### Noting
-
-**Purpose.** Keep short notes so a thought outlives the moment it arrived in.
-
-**Principle.** Ada writes "buy milk" and receives a note. She reads it back by its identity.
-Discarding it removes it; discarding it again is refused because it is gone.
-
-Actions:
-
-- `discard (note)` — may refuse `NOTE_NOT_FOUND`
-- `write (text)`
-
-Queries (standing questions the state answers):
-
-- `_get (note)` — promises at most one row
-
 ### RequestBoundary
 
 **Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
@@ -33,19 +17,6 @@ Actions:
 
 - `request (…)`
 - `respond (…)` — may refuse `NOT_PENDING`
-
-## Formers
-
-_Formers name result shapes evaluated when asked. The source former owns_
-_the authored explanation; this section records the generated shape._
-
-```former
-Former "the note (note)" — inputs (note); bindings (text); promises exactly one record — forms:
-  a record of
-    where Noting._get (note) has (text)
-    note
-    text
-```
 
 ## Reactions
 
@@ -69,50 +40,3 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### GetNote:found
-
-```reaction
-when RequestBoundary.request (note, path: "/notes/get", requestId)
-where
-  Noting._get (note)
-then
-  RequestBoundary.respond (page: former "the note (note)" with (note), requestId)
-```
-
-### GetNote:missing
-
-```reaction
-when RequestBoundary.request (note, path: "/notes/get", requestId)
-where
-  no Noting._get (note)
-then
-  RequestBoundary.respond (error: "NOTE_NOT_FOUND", requestId)
-```
-
-### WriteNote
-
-```reaction
-when RequestBoundary.request (path: "/notes/write", requestId, text)
-then
-  Noting.write (text)
-```
-
-### WriteNote#2
-
-```reaction
-when Noting.write (text, note), asked by WriteNote
-where
-  earlier, RequestBoundary.request (path: "/notes/write", requestId, text)
-then
-  RequestBoundary.respond (note, requestId)
-```
-
-## Endpoint input contracts
-
-Before recording an action ask, the boundary rejects a body that is not an
-object or lacks a required key. The response uses `INVALID_INPUT` and names
-the path or missing key. A declared default fills an absent key. Endpoints
-not listed here have no explicit input contract.
-
-- `/notes/get` — requires `note`
-- `/notes/write` — requires `text`

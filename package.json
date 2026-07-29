@@ -6,13 +6,22 @@
     "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check --config generated.config.ts && tsc --noEmit",
     "generate": "sync-engine artifacts pin",
     "typecheck": "tsc --noEmit",
-    "principle": "bun src/concepts/noting/noting.test.ts",
-    "start": "bun src/scenario.ts"
+    "principle": "bun test src/concepts",
+    "test": "bun test"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "file:../sync-engine"
+    "@mit-sdg/sync-engine": "file:../sync-engine",
+    "liquidjs": "^10.27.2",
+    "marked": "^18.0.7",
+    "parse5": "^8.0.1",
+    "picomatch": "^4.0.5",
+    "sharp": "^0.35.3",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/node": "^26.1.2",
+    "@types/picomatch": "^4.0.3",
     "typescript": ">=6 <7"
   },
   "engines": {

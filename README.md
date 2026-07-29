@@ -1,8 +1,8 @@
 # Syncpress
 
-This project contains one complete sync-engine application: the Noting concept,
-two endpoints, an assembly, a local-gateway scenario, and generated contracts.
-Its runtime and toolchain requirements are declared in `package.json`.
+Syncpress is a deterministic static publishing generator built as independently
+specified sync-engine concepts and phased composition reactions. The product and
+architecture are specified in [the design document](docs/static-publishing-generator.md).
 
 ## Install and run
 
@@ -11,14 +11,12 @@ bun install
 bun run generate
 bun run check
 bun run principle
-bun run start
 ```
 
 `generate` writes `generated/syncpress.md` and `generated/wire.ts`. `check`
 compares parsed action and query declarations with the class source, checks both
 generated files, runs application diagnostics, and typechecks the project.
-`principle` tests Noting without an assembly. `start` writes and reads a note,
-then observes the explicit `NOTE_NOT_FOUND` result through the standard gateway.
+`principle` runs every concept's direct Principle test without an assembly.
 
 A concept's State section is optional uninterpreted human notation. It is not a
 schema, is not compared with class fields or storage, and does not enter

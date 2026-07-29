@@ -13,25 +13,4 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type AppWideError = never;
 
 export type SyncpressWire = {
-  "/notes/get": {
-    input: {
-      "note": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Noting"]["_get"]>[0], ["note"]>>;
-    };
-    output: {
-      "page": {
-        "note": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Noting"]["_get"]>[0], ["note"]>>;
-        "text": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Noting"]["_get"]>>>, ["text"]>>;
-      };
-    };
-    error: { error: AppWideError | "INVALID_INPUT" | "NOTE_NOT_FOUND" };
-  };
-  "/notes/write": {
-    input: {
-      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Noting"]["write"]>[0], ["text"]>>;
-    };
-    output: {
-      "note": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Noting"]["write"]>>, ["note"]>>;
-    };
-    error: { error: AppWideError | "INVALID_INPUT" };
-  };
 };
