@@ -111,8 +111,9 @@ export const CollectionDeclarationSetting = view(
 
 export const PageRenderContext = former(
   "the originated render context of page (page)",
-  ({ page }, { configuration, site, collections, data, address, canonicalUrl, path }) =>
+  ({ rendering }, { page, configuration, site, collections, data, address, canonicalUrl, path }) =>
     where(
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
@@ -129,8 +130,9 @@ export const PageRenderContext = former(
 
 export const UnoriginatedPageRenderContext = former(
   "the unoriginated render context of page (page)",
-  ({ page }, { configuration, site, collections, data, address, path }) =>
+  ({ rendering }, { page, configuration, site, collections, data, address, path }) =>
     where(
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
@@ -147,8 +149,9 @@ export const UnoriginatedPageRenderContext = former(
 
 export const CompletedPageRenderContext = former(
   "the originated completed render context of page (page)",
-  ({ page }, { configuration, site, collections, data, address, canonicalUrl, path, content }) =>
+  ({ rendering }, { page, configuration, site, collections, data, address, canonicalUrl, path, content }) =>
     where(
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
@@ -156,7 +159,7 @@ export const CompletedPageRenderContext = former(
       Routing._address({ owner: page }).is({ address }),
       Routing._absolute({ address }).is({ url: canonicalUrl }),
       Filing._file({ file: page }).is({ path }),
-      Referencing._finished({ subject: page, part: PARTS.body }).is({ text: content }),
+      Referencing._finished({ subject: rendering, part: PARTS.body }).is({ text: content }),
     ).form({
       collections,
       page: form({ canonicalUrl, content, data, source: form({ path }), url: address }),
@@ -166,8 +169,9 @@ export const CompletedPageRenderContext = former(
 
 export const CompletedUnoriginatedPageRenderContext = former(
   "the unoriginated completed render context of page (page)",
-  ({ page }, { configuration, site, collections, data, address, path, content }) =>
+  ({ rendering }, { page, configuration, site, collections, data, address, path, content }) =>
     where(
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
@@ -175,7 +179,7 @@ export const CompletedUnoriginatedPageRenderContext = former(
       Routing._address({ owner: page }).is({ address }),
       no(Routing._absolute({ address })),
       Filing._file({ file: page }).is({ path }),
-      Referencing._finished({ subject: page, part: PARTS.body }).is({ text: content }),
+      Referencing._finished({ subject: rendering, part: PARTS.body }).is({ text: content }),
     ).form({
       collections,
       page: form({ content, data, source: form({ path }), url: address }),

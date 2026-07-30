@@ -145,20 +145,19 @@ Target identity use:
 
 Planned work:
 
-- [ ] Change body `Templating.fill` subjects from page to rendering attempt.
-- [ ] Change body `Converting.convert` subjects from page to rendering attempt.
-- [ ] Decide whether excerpt conversion belongs to the rendering attempt; if so,
-  update collection-card reads to follow `Rendering._attempt` back to the page.
-- [ ] Change body and layout `Referencing.scan` subjects from page to rendering
+- [x] Change body `Templating.fill` subjects from page to rendering attempt.
+- [x] Change body `Converting.convert` subjects from page to rendering attempt.
+- [x] Keep excerpt conversion keyed by page because it creates durable collection-card data.
+- [x] Change body and layout `Referencing.scan` subjects from page to rendering
   attempt.
-- [ ] Change layout `Templating.render` subjects from page to rendering attempt.
-- [ ] Update context formers to accept a rendering identity and recover the page
+- [x] Change layout `Templating.render` subjects from page to rendering attempt.
+- [x] Update context formers to accept a rendering identity and recover the page
   through `Rendering._attempt`.
-- [ ] Update template-tree dependency tracking to recover the page once from the
+- [x] Update template-tree dependency tracking to recover the page once from the
   exact attempt.
-- [ ] Update failure reactions to correlate through `_attempt`, removing
+- [x] Update failure reactions to correlate through `_attempt`, removing
   `_latest` and phase-history joins where they only reconstruct identity.
-- [ ] Keep `Depending` and `Emitting` keyed by page unless explicit replacement
+- [x] Keep `Depending` and `Emitting` keyed by page unless explicit replacement
   and retry semantics justify changing ownership.
 - [ ] Add a test where a superseded attempt finishes late and prove that it
   cannot settle, emit, or diagnose the newer attempt.

@@ -669,24 +669,25 @@ matching catalog of page (page) — inputs (page); outputs (catalog, path); bind
 ```
 
 ```view
-relative body reference of source (source) — inputs (source); outputs (page, reference, raw, role); bindings () — answers any number of (page, reference, raw, role)
+relative body reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, role); bindings () — answers any number of (rendering, page, reference, raw, role)
   where
-    Referencing._source (source) has (part: "body", subject: page)
+    Referencing._source (source) has (part: "body", subject: rendering)
+    Rendering._attempt (rendering) has (subject: page)
     Referencing._references (source) has (raw, reference, role)
     Routing._classify (target: raw) has (kind: "relative")
 ```
 
 ```view
-resolved local body reference of source (source) — inputs (source); outputs (page, reference, raw, role, target); bindings () — answers any number of (page, reference, raw, role, target)
+resolved local body reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, role, target); bindings () — answers any number of (rendering, page, reference, raw, role, target)
   where
-    view "relative body reference of source (source)" with (source) has (page, raw, reference, role)
+    view "relative body reference of source (source)" with (source) has (page, raw, reference, rendering, role)
     Filing._resolve (address: raw, file: page) has (target)
 ```
 
 ```view
-unrouted content body asset of source (source) — inputs (source); outputs (page, reference, raw, role, asset, root, sourcePath, name, content); bindings () — answers any number of (page, reference, raw, role, asset, root, sourcePath, name, content)
+unrouted content body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, role, asset, root, sourcePath, name, content); bindings () — answers any number of (rendering, page, reference, raw, role, asset, root, sourcePath, name, content)
   where
-    view "resolved local body reference of source (source)" with (source) has (page, raw, reference, role, target: asset)
+    view "resolved local body reference of source (source)" with (source) has (page, raw, reference, rendering, role, target: asset)
     no Routing._address (owner: asset)
     no Documenting._document (subject: asset)
     Filing._file (file: asset) has (content, name, path: sourcePath, root)
@@ -694,19 +695,20 @@ unrouted content body asset of source (source) — inputs (source); outputs (pag
 ```
 
 ```view
-primary raster body asset reference of source (source) — inputs (source); outputs (page, reference, raw, image, root, imagePath, name, content); bindings (pattern) — answers any number of (page, reference, raw, image, root, imagePath, name, content)
+primary raster body asset reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, image, root, imagePath, name, content); bindings (pattern) — answers any number of (rendering, page, reference, raw, image, root, imagePath, name, content)
   where
-    view "unrouted content body asset of source (source)" with (source) has (asset: image, content, name, page, raw, reference, role: "image", root, sourcePath: imagePath)
+    view "unrouted content body asset of source (source)" with (source) has (asset: image, content, name, page, raw, reference, rendering, role: "image", root, sourcePath: imagePath)
     Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
     Matching._matches (path: imagePath, pattern) has (matched: true)
 ```
 
 ```view
-responsive body image embedding (embedding) — inputs (embedding); outputs (page, reference, original); bindings (source, raw, image) — answers at most one (page, reference, original)
+responsive body image embedding (embedding) — inputs (embedding); outputs (rendering, page, reference, original); bindings (source, raw, image) — answers at most one (rendering, page, reference, original)
   where
     Embedding._embedding (embedding) has (subject: reference)
     Referencing._reference (reference) has (raw, role: "image", source)
-    Referencing._source (source) has (part: "body", subject: page)
+    Referencing._source (source) has (part: "body", subject: rendering)
+    Rendering._attempt (rendering) has (subject: page)
     Routing._classify (target: raw) has (kind: "relative")
     Filing._resolve (address: raw, file: page) has (target: image)
     Transcoding._original (subject: image) has (original)
@@ -796,8 +798,9 @@ Former "the operational inspection of page (owner)" — inputs (owner); bindings
 ```
 
 ```former
-Former "the originated completed render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, canonicalUrl, path, content); promises exactly one record — forms:
+Former "the originated completed render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, canonicalUrl, path, content); promises exactly one record — forms:
   a record of
+    where Rendering._attempt (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -805,7 +808,7 @@ Former "the originated completed render context of page (page)" — inputs (page
     where Routing._address (owner: page) has (address)
     where Routing._absolute (address) has (url: canonicalUrl)
     where Filing._file (file: page) has (path)
-    where Referencing._finished (part: "body", subject: page) has (text: content)
+    where Referencing._finished (part: "body", subject: rendering) has (text: content)
     collections
     page: a record of
       canonicalUrl
@@ -818,8 +821,9 @@ Former "the originated completed render context of page (page)" — inputs (page
 ```
 
 ```former
-Former "the originated render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, canonicalUrl, path); promises exactly one record — forms:
+Former "the originated render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, canonicalUrl, path); promises exactly one record — forms:
   a record of
+    where Rendering._attempt (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -860,8 +864,9 @@ Former "the sitemap urls" — inputs (); bindings (owner, address, url); promise
 ```
 
 ```former
-Former "the unoriginated completed render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, path, content); promises exactly one record — forms:
+Former "the unoriginated completed render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, path, content); promises exactly one record — forms:
   a record of
+    where Rendering._attempt (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -869,7 +874,7 @@ Former "the unoriginated completed render context of page (page)" — inputs (pa
     where Routing._address (owner: page) has (address)
     where no Routing._absolute (address)
     where Filing._file (file: page) has (path)
-    where Referencing._finished (part: "body", subject: page) has (text: content)
+    where Referencing._finished (part: "body", subject: rendering) has (text: content)
     collections
     page: a record of
       content
@@ -881,8 +886,9 @@ Former "the unoriginated completed render context of page (page)" — inputs (pa
 ```
 
 ```former
-Former "the unoriginated render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, path); promises exactly one record — forms:
+Former "the unoriginated render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, path); promises exactly one record — forms:
   a record of
+    where Rendering._attempt (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -1027,9 +1033,10 @@ then
 ### fullSite.BodyConversionFailuresDiagnose
 
 ```reaction
-when refused Converting.convert (part: "body", subject: page, detail, error)
+when refused Converting.convert (part: "body", subject: rendering, detail, error)
 where
   earlier, Phasing.advance (phase: "render")
+  Rendering._attempt (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: path)
@@ -1038,11 +1045,12 @@ then
 ### fullSite.BodyTemplateFailuresDiagnose
 
 ```reaction
-when refused Templating.fill (subject: page, detail, error)
+when refused Templating.fill (subject: rendering, detail, error)
 where
   earlier, Phasing.advance (phase: "render")
+  Rendering._attempt (rendering) has (subject: page)
   Filing._file (file: page) has (path)
-  Templating._failureLocation (fallbackSource: path, subject: page) has (column, line, source)
+  Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
 then
   Diagnosing.report (code: error, column, line, message: detail, severity: "error", source)
 ```
@@ -1243,9 +1251,9 @@ then
 ### fullSite.ConvertedBodiesScan
 
 ```reaction
-when Converting.convert (part: "body", subject: page, output)
+when Converting.convert (part: "body", subject: rendering, output)
 then
-  Referencing.scan (part: "body", subject: page, text: output)
+  Referencing.scan (part: "body", subject: rendering, text: output)
 ```
 
 ### fullSite.CopiedNonRasterPrimaryImagesAnswer
@@ -1253,8 +1261,8 @@ then
 ```reaction
 when Emitting.intend (path, producer: page)
 where
-  earlier, Referencing.scan (part: "body", subject: page, source)
-  view "unrouted content body asset of source (source)" with (source) has (name, page, raw, reference, role: "image", sourcePath)
+  earlier, Referencing.scan (part: "body", subject: rendering, source)
+  view "unrouted content body asset of source (source)" with (source) has (name, page, raw, reference, rendering, role: "image", sourcePath)
   Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
   Matching._matches (path: sourcePath, pattern) has (matched: false)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
@@ -1269,8 +1277,8 @@ then
 ```reaction
 when Emitting.intend (path, producer: page)
 where
-  earlier, Referencing.scan (part: "body", subject: page, source)
-  view "unrouted content body asset of source (source)" with (source) has (name, page, raw, reference) and not (role: "image")
+  earlier, Referencing.scan (part: "body", subject: rendering, source)
+  view "unrouted content body asset of source (source)" with (source) has (name, page, raw, reference, rendering) and not (role: "image")
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
   Routing._locate (path) has (address)
   Routing._retarget (original: raw, replacement: address) has (target: value)
@@ -1458,10 +1466,9 @@ then
 ### fullSite.EmptyBodyScansSettleRendering
 
 ```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
+when Referencing.scan (part: "body", subject: rendering, completed: true)
 where
   earlier, Phasing.advance (phase: "render")
-  Rendering._latest (subject: page) has (rendering)
 then
   Rendering.settleBody (rendering)
 ```
@@ -1469,9 +1476,7 @@ then
 ### fullSite.EmptyLayoutScansSettleRendering
 
 ```reaction
-when Referencing.scan (part: "layout", subject: page, completed: true)
-where
-  Rendering._latest (subject: page) has (rendering)
+when Referencing.scan (part: "layout", subject: rendering, completed: true)
 then
   Rendering.settleLayout (rendering)
 ```
@@ -1558,19 +1563,20 @@ then
 ### fullSite.FilledBodiesConvert
 
 ```reaction
-when Templating.fill (subject: page, output)
+when Templating.fill (subject: rendering, output)
 where
-  Rendering._latest (subject: page) has (profile: name)
+  Rendering._attempt (rendering) has (profile: name)
   Converting._profile (name) has (profile)
 then
-  Converting.convert (part: "body", profile, source: output, subject: page)
+  Converting.convert (part: "body", profile, source: output, subject: rendering)
 ```
 
 ### fullSite.FilledBodiesTrackTemplates
 
 ```reaction
-when Templating.fill (subject: page, filling)
+when Templating.fill (subject: rendering, filling)
 where
+  Rendering._attempt (rendering) has (subject: page)
   Templating._tree (owner: filling) has (used)
   Templating._template (name: used) has (template)
 then
@@ -1580,10 +1586,9 @@ then
 ### fullSite.FinishedBodyAnswersSettleRendering
 
 ```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
+when Referencing.answer (completed: true, part: "body", subject: rendering)
 where
   earlier, Phasing.advance (phase: "render")
-  Rendering._latest (subject: page) has (rendering)
 then
   Rendering.settleBody (rendering)
 ```
@@ -1591,9 +1596,7 @@ then
 ### fullSite.FinishedLayoutAnswersSettleRendering
 
 ```reaction
-when Referencing.answer (completed: true, part: "layout", subject: page)
-where
-  Rendering._latest (subject: page) has (rendering)
+when Referencing.answer (completed: true, part: "layout", subject: rendering)
 then
   Rendering.settleLayout (rendering)
 ```
@@ -1841,11 +1844,12 @@ then
 ### fullSite.LayoutTemplateFailuresDiagnose
 
 ```reaction
-when refused Templating.render (subject: page, detail, error)
+when refused Templating.render (subject: rendering, detail, error)
 where
   earlier, Phasing.advance (phase: "render")
+  Rendering._attempt (rendering) has (subject: page)
   Filing._file (file: page) has (path)
-  Templating._failureLocation (fallbackSource: path, subject: page) has (column, line, source)
+  Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
 then
   Diagnosing.report (code: error, column, line, message: detail, severity: "error", source)
 ```
@@ -2191,7 +2195,8 @@ then
 when refused Embedding.declare (subject: reference, detail, error)
 where
   Referencing._reference (reference) has (source)
-  Referencing._source (source) has (part: "body", subject: page)
+  Referencing._source (source) has (part: "body", subject: rendering)
+  Rendering._attempt (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: path)
@@ -2203,8 +2208,8 @@ then
 when Emitting.intend (path, producer: page)
 where
   earlier, Transcoding.render (original, derived)
-  earlier, Referencing.scan (part: "body", subject: page, source)
-  view "primary raster body asset reference of source (source)" with (source) has (image, name, page, raw, reference)
+  earlier, Referencing.scan (part: "body", subject: rendering, source)
+  view "primary raster body asset reference of source (source)" with (source) has (image, name, page, raw, reference, rendering)
   Referencing._reference (reference) has (attributes, label)
   Transcoding._original (subject: image) has (original)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
@@ -2236,7 +2241,8 @@ when refused Embedding.offer (embedding, detail, error)
 where
   Embedding._embedding (embedding) has (subject: reference)
   Referencing._reference (reference) has (source)
-  Referencing._source (source) has (part: "body", subject: page)
+  Referencing._source (source) has (part: "body", subject: rendering)
+  Rendering._attempt (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: path)
@@ -2393,7 +2399,8 @@ then
 ```reaction
 when Referencing.scan (part: "layout", source)
 where
-  Referencing._source (source) has (subject: page)
+  Referencing._source (source) has (subject: rendering)
+  Rendering._attempt (rendering) has (subject: page)
   Referencing._references (source) has (raw)
   Routing._classify (target: raw) has (kind: "relative")
   Filing._file (file: page) has (path)
@@ -2404,18 +2411,17 @@ then
 ### fullSite.RenderedLayoutsScan
 
 ```reaction
-when Templating.render (subject: page, output)
-where
-  Filing._file (file: page)
+when Templating.render (subject: rendering, output)
 then
-  Referencing.scan (part: "layout", subject: page, text: output)
+  Referencing.scan (part: "layout", subject: rendering, text: output)
 ```
 
 ### fullSite.RenderedLayoutsTrackTemplates
 
 ```reaction
-when Templating.render (subject: page, rendering)
+when Templating.render (subject: attempt, rendering)
 where
+  Rendering._attempt (rendering: attempt) has (subject: page)
   Templating._tree (owner: rendering) has (used)
   Templating._template (name: used) has (template)
 then
@@ -2448,12 +2454,13 @@ then
 when Diagnosing.retract (source: path)
 where
   earlier, Emitting.begin (producer: page)
+  Rendering._latest (subject: page) has (rendering)
   Documenting._document (subject: page) has (body, bodyLine)
   Filing._file (file: page) has (path)
   Routing._address (owner: page) has (address)
   Routing._absolute (address)
 then
-  Templating.fill (context: former "the originated render context of page (page)" with (page), source: body, sourceLine: bodyLine, sourceName: path, subject: page, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.fill (context: former "the originated render context of page (page)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.RenderingAttemptsFillAuthoredBodies:unoriginated
@@ -2462,12 +2469,13 @@ then
 when Diagnosing.retract (source: path)
 where
   earlier, Emitting.begin (producer: page)
+  Rendering._latest (subject: page) has (rendering)
   Documenting._document (subject: page) has (body, bodyLine)
   Filing._file (file: page) has (path)
   Routing._address (owner: page) has (address)
   no Routing._absolute (address)
 then
-  Templating.fill (context: former "the unoriginated render context of page (page)" with (page), source: body, sourceLine: bodyLine, sourceName: path, subject: page, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.fill (context: former "the unoriginated render context of page (page)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.RenderingAttemptsOpenEmission
@@ -2775,7 +2783,7 @@ where
   Rendering._attempt (rendering) has (template: name)
   Templating._template (name) has (template)
 then
-  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.render (context: former "the originated completed render context of page (page)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.SettledBodiesRenderUnoriginatedPages
@@ -2788,7 +2796,7 @@ where
   Rendering._attempt (rendering) has (template: name)
   Templating._template (name) has (template)
 then
-  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.render (context: former "the unoriginated completed render context of page (page)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.SettledLayoutsEmit
@@ -2796,7 +2804,7 @@ then
 ```reaction
 when Rendering.settleLayout (rendering, subject: page, transitioned: true)
 where
-  Referencing._finished (part: "layout", subject: page) has (text)
+  Referencing._finished (part: "layout", subject: rendering) has (text)
   Routing._address (owner: page) has (address)
   Routing._file (address) has (path)
 then

@@ -2,15 +2,16 @@ import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/l
 import { concepts } from "../concept-set.ts";
 import { PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
-const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Routing } = concepts;
+const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Rendering, Routing } = concepts;
 
 const ASSET_MEDIUM = "application/octet-stream";
 
 export const RelativeBodyReference = view(
   "relative body reference of source (source)",
-  ({ source }, { page, reference, raw, role }, _bindings) =>
+  ({ source }, { rendering, page, reference, raw, role }, _bindings) =>
     where(
-      Referencing._source({ source }).is({ subject: page, part: PARTS.body }),
+      Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ reference, raw, role }),
       Routing._classify({ target: raw }).is({ kind: "relative" }),
     ),
@@ -18,18 +19,18 @@ export const RelativeBodyReference = view(
 
 export const ResolvedLocalBodyReference = view(
   "resolved local body reference of source (source)",
-  ({ source }, { page, reference, raw, role, target }, _bindings) =>
+  ({ source }, { rendering, page, reference, raw, role, target }, _bindings) =>
     where(
-      RelativeBodyReference({ source }).is({ page, reference, raw, role }),
+      RelativeBodyReference({ source }).is({ rendering, page, reference, raw, role }),
       Filing._resolve({ file: page, address: raw }).is({ target }),
     ),
 ).many();
 
 export const UnroutedContentBodyAsset = view(
   "unrouted content body asset of source (source)",
-  ({ source }, { page, reference, raw, role, asset, root, sourcePath, name, content }, _bindings) =>
+  ({ source }, { rendering, page, reference, raw, role, asset, root, sourcePath, name, content }, _bindings) =>
     where(
-      ResolvedLocalBodyReference({ source }).is({ page, reference, raw, role, target: asset }),
+      ResolvedLocalBodyReference({ source }).is({ rendering, page, reference, raw, role, target: asset }),
       no(Routing._address({ owner: asset })),
       no(Documenting._document({ subject: asset })),
       Filing._file({ file: asset }).is({ root, path: sourcePath, name, content }),
@@ -80,11 +81,11 @@ export const OrdinaryBodyAssetsCopy = reaction(
 
 /** Answer an ordinary asset only after its bytes are staged in the page attempt. */
 export const CopiedOrdinaryBodyAssetsAnswer = reaction(
-  ({ page, path, source, reference, raw, name, address, value }) =>
+  ({ page, rendering, path, source, reference, raw, name, address, value }) =>
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
-        earlier(Referencing.scan, { subject: page, part: PARTS.body }, { source }),
-        UnroutedContentBodyAsset({ source }).is({ page, reference, raw, name }).is.not({ role: "image" }),
+        earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
+        UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, name }).is.not({ role: "image" }),
         BesidePageOutput({ page, name }).is({ path }),
         Routing._locate({ path }).is({ address }),
         Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
@@ -115,11 +116,11 @@ export const NonRasterPrimaryImagesCopy = reaction(
 
 /** Keep primary SVG and other non-raster image references behind their staged bytes. */
 export const CopiedNonRasterPrimaryImagesAnswer = reaction(
-  ({ page, path, source, reference, raw, sourcePath, name, pattern, address, value }) =>
+  ({ page, rendering, path, source, reference, raw, sourcePath, name, pattern, address, value }) =>
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
-        earlier(Referencing.scan, { subject: page, part: PARTS.body }, { source }),
-        UnroutedContentBodyAsset({ source }).is({ page, reference, raw, role: "image", sourcePath, name }),
+        earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
+        UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", sourcePath, name }),
         Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
         Matching._matches({ pattern, path: sourcePath }).is({ matched: false }),
         BesidePageOutput({ page, name }).is({ path }),
@@ -323,10 +324,11 @@ export const FragmentLayoutReferencesHold = reaction(({ source, reference, raw }
 );
 
 /** Layouts have no content-directory source path for relative references. */
-export const RelativeLayoutReferencesDiagnose = reaction(({ source, page, raw, path }) =>
+export const RelativeLayoutReferencesDiagnose = reaction(({ source, rendering, page, raw, path }) =>
   when(Referencing.scan({ part: PARTS.layout }).responds({ source }))
     .where(
-      Referencing._source({ source }).is({ subject: page }),
+      Referencing._source({ source }).is({ subject: rendering }),
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ raw }),
       Routing._classify({ target: raw }).is({ kind: "relative" }),
       Filing._file({ file: page }).is({ path }),

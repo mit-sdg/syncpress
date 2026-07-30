@@ -15,15 +15,17 @@ const {
   Filing,
   Matching,
   Referencing,
+  Rendering,
   Routing,
   Transcoding,
 } = concepts;
 
 export const RasterBodyAssetReference = view(
   "primary raster body asset reference of source (source)",
-  ({ source }, { page, reference, raw, image, root, imagePath, name, content }, { pattern }) =>
+  ({ source }, { rendering, page, reference, raw, image, root, imagePath, name, content }, { pattern }) =>
     where(
       UnroutedContentBodyAsset({ source }).is({
+        rendering,
         page,
         reference,
         raw,
@@ -41,11 +43,12 @@ export const RasterBodyAssetReference = view(
 
 export const ResponsiveBodyImageEmbedding = view(
   "responsive body image embedding (embedding)",
-  ({ embedding }, { page, reference, original }, { source, raw, image }) =>
+  ({ embedding }, { rendering, page, reference, original }, { source, raw, image }) =>
     where(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source, raw, role: "image" }),
-      Referencing._source({ source }).is({ subject: page, part: PARTS.body }),
+      Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Routing._classify({ target: raw }).is({ kind: "relative" }),
       Filing._resolve({ file: page, address: raw }).is({ target: image }),
       Transcoding._original({ subject: image }).is({ original }),
@@ -88,6 +91,7 @@ export const RasterFallbacksStage = reaction(
     image,
     source,
     page,
+    rendering,
     name,
     path,
     content,
@@ -112,6 +116,7 @@ export const RasterFallbacksStage = reaction(
 export const RasterFallbacksDeclare = reaction(
   ({
     page,
+    rendering,
     path,
     original,
     derived,
@@ -131,8 +136,8 @@ export const RasterFallbacksDeclare = reaction(
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
         earlier(Transcoding.render, { original }, { derived }),
-        earlier(Referencing.scan, { subject: page, part: PARTS.body }, { source }),
-        RasterBodyAssetReference({ source }).is({ page, reference, raw, image, name }),
+        earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
+        RasterBodyAssetReference({ source }).is({ rendering, page, reference, raw, image, name }),
         Referencing._reference({ reference }).is({ label, attributes }),
         Transcoding._original({ subject: image }).is({ original }),
         BesidePageOutput({ page, name }).is({ path }),
@@ -272,22 +277,24 @@ export const RasterRendersDiagnose = reaction(({ original, error, detail, source
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
 );
 
-export const RasterEmbeddingDeclarationsDiagnose = reaction(({ reference, error, detail, source, page, path }) =>
+export const RasterEmbeddingDeclarationsDiagnose = reaction(({ reference, error, detail, source, rendering, page, path }) =>
   when(Embedding.declare({ subject: reference }).refuses({ error, detail }))
     .where(
       Referencing._reference({ reference }).is({ source }),
-      Referencing._source({ source }).is({ subject: page, part: PARTS.body }),
+      Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
 );
 
-export const RasterOffersDiagnose = reaction(({ embedding, error, detail, reference, source, page, path }) =>
+export const RasterOffersDiagnose = reaction(({ embedding, error, detail, reference, source, rendering, page, path }) =>
   when(Embedding.offer({ embedding }).refuses({ error, detail }))
     .where(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source }),
-      Referencing._source({ source }).is({ subject: page, part: PARTS.body }),
+      Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
+      Rendering._attempt({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
