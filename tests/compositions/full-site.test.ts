@@ -355,6 +355,9 @@ test("inspect reports route ownership, template provenance, collection membershi
     },
   });
   expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 1 }));
+  expect(report.renderings).toEqual([
+    expect.objectContaining({ attempt: report.rendering?.attempt, stage: "completed" }),
+  ]);
   expect(report.dependencies.inputs).toContainEqual(expect.objectContaining({ input: expect.stringContaining("posts/first.md") }));
   expect(report.outputs).toContainEqual(expect.objectContaining({ path: "posts/first/index.html" }));
 

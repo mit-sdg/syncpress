@@ -35,6 +35,7 @@ type OperationalInspection = {
     body: { source: string } | null;
     layout: { source: string } | null;
   };
+  renderings: Array<{ attempt: string; path: string; profile: string; template: string; stage: string }>;
   memberships: Array<{ collection: string; name: string; index: number }>;
   dependencies: {
     state: string;
@@ -578,6 +579,7 @@ export async function inspectSite(projectDirectory: string, target: string) {
             body: operational.rendering.body ?? undefined,
             layout: operational.rendering.layout ?? undefined,
           },
+      renderings: operational.renderings,
       memberships: operational.memberships,
       dependencies: {
         state: [{ state: operational.dependencies.state }],

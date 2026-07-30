@@ -741,6 +741,13 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
+Former "the completed body render facts of rendering (rendering)" — inputs (rendering); bindings (content); promises exactly one record — forms:
+  a record of
+    where Referencing._finished (part: "body", subject: rendering) has (text: content)
+    content
+```
+
+```former
 Former "the deployment entries of catalog (catalog)" — inputs (catalog); bindings (item, card); promises exactly one record — forms:
   each Cataloging._entries (catalog) has (card, item)
     form a record of
@@ -749,7 +756,7 @@ Former "the deployment entries of catalog (catalog)" — inputs (catalog); bindi
 ```
 
 ```former
-Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, rendering, renderingPath, renderingProfile, renderingTemplate, renderingStage, bodySource, layoutSource, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
+Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, rendering, renderingPath, renderingProfile, renderingTemplate, renderingStage, bodySource, layoutSource, historicalRendering, historicalPath, historicalProfile, historicalTemplate, historicalStage, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
   a record of
     claims: each Routing._claims () has (address, owner: claimOwner)
       form a record of
@@ -802,50 +809,64 @@ Former "the operational inspection of page (owner)" — inputs (owner); bindings
       profile: renderingProfile
       stage: renderingStage
       template: renderingTemplate
+    renderings: each Rendering._all () has (path: historicalPath, profile: historicalProfile, rendering: historicalRendering, stage: historicalStage, subject: owner, template: historicalTemplate)
+      form a record of
+        attempt: historicalRendering
+        path: historicalPath
+        profile: historicalProfile
+        stage: historicalStage
+        template: historicalTemplate
 ```
 
 ```former
-Former "the originated completed render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, canonicalUrl, path, content); promises exactly one record — forms:
+Former "the originated page render facts of rendering (rendering)" — inputs (rendering); bindings (page, address, canonicalUrl); promises exactly one record — forms:
   a record of
     where Rendering._active (rendering) has (subject: page)
+    where Routing._address (owner: page) has (address)
+    where Routing._absolute (address) has (url: canonicalUrl)
+    canonicalUrl
+```
+
+```former
+Former "the page render facts of rendering (rendering)" — inputs (rendering); bindings (page, data, address, path); promises exactly one record — forms:
+  a record of
+    where Rendering._active (rendering) has (subject: page)
+    where Layering._resolved (subject: page) has (values: data)
+    where Routing._address (owner: page) has (address)
+    where Filing._file (file: page) has (path)
+    data
+    source: a record of
+      path
+    url: address
+```
+
+```former
+Former "the site render facts" — inputs (); bindings (configuration, site, collections); promises exactly one record — forms:
+  a record of
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
-    where Layering._resolved (subject: page) has (values: data)
-    where Routing._address (owner: page) has (address)
-    where Routing._absolute (address) has (url: canonicalUrl)
-    where Filing._file (file: page) has (path)
-    where Referencing._finished (part: "body", subject: rendering) has (text: content)
     collections
-    page: a record of
-      canonicalUrl
-      content
-      data
-      source: a record of
-        path
-      url: address
     site
 ```
 
 ```former
-Former "the originated render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, canonicalUrl, path); promises exactly one record — forms:
+Former "the originated completed render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
   a record of
-    where Rendering._active (rendering) has (subject: page)
-    where Configuring._active () has (root: configuration)
-    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
-    where Cataloging._record () has (catalogs: collections)
-    where Layering._resolved (subject: page) has (values: data)
-    where Routing._address (owner: page) has (address)
-    where Routing._absolute (address) has (url: canonicalUrl)
-    where Filing._file (file: page) has (path)
-    collections
     page: a record of
-      canonicalUrl
-      data
-      source: a record of
-        path
-      url: address
-    site
+      … former "the page render facts of rendering (rendering)" with (rendering)
+      … former "the originated page render facts of rendering (rendering)" with (rendering)
+      … former "the completed body render facts of rendering (rendering)" with (rendering)
+    … former "the site render facts"
+```
+
+```former
+Former "the originated render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
+  a record of
+    page: a record of
+      … former "the page render facts of rendering (rendering)" with (rendering)
+      … former "the originated page render facts of rendering (rendering)" with (rendering)
+    … former "the site render facts"
 ```
 
 ```former
@@ -871,45 +892,30 @@ Former "the sitemap urls" — inputs (); bindings (owner, address, url); promise
 ```
 
 ```former
-Former "the unoriginated completed render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, path, content); promises exactly one record — forms:
+Former "the unoriginated page render facts of rendering (rendering)" — inputs (rendering); bindings (page, address); promises exactly one record — forms:
   a record of
     where Rendering._active (rendering) has (subject: page)
-    where Configuring._active () has (root: configuration)
-    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
-    where Cataloging._record () has (catalogs: collections)
-    where Layering._resolved (subject: page) has (values: data)
     where Routing._address (owner: page) has (address)
     where no Routing._absolute (address)
-    where Filing._file (file: page) has (path)
-    where Referencing._finished (part: "body", subject: rendering) has (text: content)
-    collections
-    page: a record of
-      content
-      data
-      source: a record of
-        path
-      url: address
-    site
 ```
 
 ```former
-Former "the unoriginated render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, path); promises exactly one record — forms:
+Former "the unoriginated completed render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
   a record of
-    where Rendering._active (rendering) has (subject: page)
-    where Configuring._active () has (root: configuration)
-    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
-    where Cataloging._record () has (catalogs: collections)
-    where Layering._resolved (subject: page) has (values: data)
-    where Routing._address (owner: page) has (address)
-    where no Routing._absolute (address)
-    where Filing._file (file: page) has (path)
-    collections
     page: a record of
-      data
-      source: a record of
-        path
-      url: address
-    site
+      … former "the page render facts of rendering (rendering)" with (rendering)
+      … former "the unoriginated page render facts of rendering (rendering)" with (rendering)
+      … former "the completed body render facts of rendering (rendering)" with (rendering)
+    … former "the site render facts"
+```
+
+```former
+Former "the unoriginated render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
+  a record of
+    page: a record of
+      … former "the page render facts of rendering (rendering)" with (rendering)
+      … former "the unoriginated page render facts of rendering (rendering)" with (rendering)
+    … former "the site render facts"
 ```
 
 ## Reactions

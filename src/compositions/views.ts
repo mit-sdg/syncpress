@@ -109,82 +109,81 @@ export const CollectionDeclarationSetting = view(
     ),
 ).many();
 
-export const PageRenderContext = former(
-  "the originated render context of page (page)",
-  ({ rendering }, { page, configuration, site, collections, data, address, canonicalUrl, path }) =>
+const SiteRenderFacts = former(
+  "the site render facts",
+  (_inputs, { configuration, site, collections }) =>
     where(
-      Rendering._active({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
+    ).form({ collections, site }),
+);
+
+const PageRenderFacts = former(
+  "the page render facts of rendering (rendering)",
+  ({ rendering }, { page, data, address, path }) =>
+    where(
+      Rendering._active({ rendering }).is({ subject: page }),
       Layering._resolved({ subject: page }).is({ values: data }),
+      Routing._address({ owner: page }).is({ address }),
+      Filing._file({ file: page }).is({ path }),
+    ).form({ data, source: form({ path }), url: address }),
+);
+
+const OriginatedPageRenderFacts = former(
+  "the originated page render facts of rendering (rendering)",
+  ({ rendering }, { page, address, canonicalUrl }) =>
+    where(
+      Rendering._active({ rendering }).is({ subject: page }),
       Routing._address({ owner: page }).is({ address }),
       Routing._absolute({ address }).is({ url: canonicalUrl }),
-      Filing._file({ file: page }).is({ path }),
-    ).form({
-      collections,
-      page: form({ canonicalUrl, data, source: form({ path }), url: address }),
-      site,
-    }),
+    ).form({ canonicalUrl }),
 );
 
-export const UnoriginatedPageRenderContext = former(
-  "the unoriginated render context of page (page)",
-  ({ rendering }, { page, configuration, site, collections, data, address, path }) =>
+const UnoriginatedPageRenderFacts = former(
+  "the unoriginated page render facts of rendering (rendering)",
+  ({ rendering }, { page, address }) =>
     where(
       Rendering._active({ rendering }).is({ subject: page }),
-      Configuring._active({}).is({ root: configuration }),
-      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
-      Cataloging._record({}).is({ catalogs: collections }),
-      Layering._resolved({ subject: page }).is({ values: data }),
       Routing._address({ owner: page }).is({ address }),
       no(Routing._absolute({ address })),
-      Filing._file({ file: page }).is({ path }),
-    ).form({
-      collections,
-      page: form({ data, source: form({ path }), url: address }),
-      site,
-    }),
+    ).form({}),
 );
 
-export const CompletedPageRenderContext = former(
-  "the originated completed render context of page (page)",
-  ({ rendering }, { page, configuration, site, collections, data, address, canonicalUrl, path, content }) =>
-    where(
-      Rendering._active({ rendering }).is({ subject: page }),
-      Configuring._active({}).is({ root: configuration }),
-      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
-      Cataloging._record({}).is({ catalogs: collections }),
-      Layering._resolved({ subject: page }).is({ values: data }),
-      Routing._address({ owner: page }).is({ address }),
-      Routing._absolute({ address }).is({ url: canonicalUrl }),
-      Filing._file({ file: page }).is({ path }),
-      Referencing._finished({ subject: rendering, part: PARTS.body }).is({ text: content }),
-    ).form({
-      collections,
-      page: form({ canonicalUrl, content, data, source: form({ path }), url: address }),
-      site,
-    }),
+const CompletedBodyRenderFacts = former(
+  "the completed body render facts of rendering (rendering)",
+  ({ rendering }, { content }) =>
+    where(Referencing._finished({ subject: rendering, part: PARTS.body }).is({ text: content })).form({ content }),
 );
 
-export const CompletedUnoriginatedPageRenderContext = former(
-  "the unoriginated completed render context of page (page)",
-  ({ rendering }, { page, configuration, site, collections, data, address, path, content }) =>
-    where(
-      Rendering._active({ rendering }).is({ subject: page }),
-      Configuring._active({}).is({ root: configuration }),
-      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
-      Cataloging._record({}).is({ catalogs: collections }),
-      Layering._resolved({ subject: page }).is({ values: data }),
-      Routing._address({ owner: page }).is({ address }),
-      no(Routing._absolute({ address })),
-      Filing._file({ file: page }).is({ path }),
-      Referencing._finished({ subject: rendering, part: PARTS.body }).is({ text: content }),
-    ).form({
-      collections,
-      page: form({ content, data, source: form({ path }), url: address }),
-      site,
-    }),
+export const PageRenderContext = former("the originated render context of page (page)", ({ rendering }) =>
+  form({
+    page: form({}).splicing(PageRenderFacts({ rendering })).splicing(OriginatedPageRenderFacts({ rendering })),
+  }).splicing(SiteRenderFacts({})),
+);
+
+export const UnoriginatedPageRenderContext = former("the unoriginated render context of page (page)", ({ rendering }) =>
+  form({
+    page: form({}).splicing(PageRenderFacts({ rendering })).splicing(UnoriginatedPageRenderFacts({ rendering })),
+  }).splicing(SiteRenderFacts({})),
+);
+
+export const CompletedPageRenderContext = former("the originated completed render context of page (page)", ({ rendering }) =>
+  form({
+    page: form({})
+      .splicing(PageRenderFacts({ rendering }))
+      .splicing(OriginatedPageRenderFacts({ rendering }))
+      .splicing(CompletedBodyRenderFacts({ rendering })),
+  }).splicing(SiteRenderFacts({})),
+);
+
+export const CompletedUnoriginatedPageRenderContext = former("the unoriginated completed render context of page (page)", ({ rendering }) =>
+  form({
+    page: form({})
+      .splicing(PageRenderFacts({ rendering }))
+      .splicing(UnoriginatedPageRenderFacts({ rendering }))
+      .splicing(CompletedBodyRenderFacts({ rendering })),
+  }).splicing(SiteRenderFacts({})),
 );
 
 export const PublicationCard = former(
@@ -220,6 +219,11 @@ export const PageOperationalInspection = former(
        renderingStage,
        bodySource,
        layoutSource,
+       historicalRendering,
+       historicalPath,
+       historicalProfile,
+       historicalTemplate,
+       historicalStage,
        state,
       reason,
       input,
@@ -264,6 +268,20 @@ export const PageOperationalInspection = former(
         layout: where(
           whether(Referencing._finished({ subject: rendering, part: PARTS.layout }).is({ source: layoutSource })),
         ).form({ source: layoutSource }),
+      }),
+      renderings: each(Rendering._all({}).is({
+        rendering: historicalRendering,
+        subject: owner,
+        path: historicalPath,
+        profile: historicalProfile,
+        template: historicalTemplate,
+        stage: historicalStage,
+      })).form({
+        attempt: historicalRendering,
+        path: historicalPath,
+        profile: historicalProfile,
+        template: historicalTemplate,
+        stage: historicalStage,
       }),
       memberships: each(Cataloging._membership({ item: owner }).is({ catalog, name }))
         .where(Cataloging._position({ catalog, item: owner }).is({ index }))
