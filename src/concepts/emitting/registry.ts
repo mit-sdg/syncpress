@@ -1,5 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 import {
+  InvalidClaim,
   AttemptExhausted,
   DestinationNotDirected,
   DestinationUnavailable,
@@ -20,6 +21,7 @@ export const emitting = registerConcept({
   class: EmittingConcept,
   spec,
   refusals: {
+    INVALID_CLAIM: InvalidClaim,
     INVALID_DESTINATION: InvalidDestination,
     DESTINATION_UNAVAILABLE: DestinationUnavailable,
     INVALID_PRODUCER: InvalidProducer,

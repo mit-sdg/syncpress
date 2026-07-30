@@ -1,5 +1,6 @@
 const INVALID_OWNER = "An owner must be a well-formed text identity.";
 const INVALID_BASE = "A base must be a canonical directory address.";
+const INVALID_ORIGIN = "An origin must be a canonical HTTP or HTTPS origin.";
 const INVALID_ADDRESS = "An address must be a canonical site-absolute path.";
 const ADDRESS_TAKEN = "Another owner has already claimed this address.";
 const NOT_CLAIMED = "This owner has claimed no address.";
@@ -15,6 +16,13 @@ export class InvalidBase extends Error {
   constructor() {
     super(INVALID_BASE);
     this.name = "InvalidBase";
+  }
+}
+
+export class InvalidOrigin extends Error {
+  constructor() {
+    super(INVALID_ORIGIN);
+    this.name = "InvalidOrigin";
   }
 }
 
@@ -116,6 +124,11 @@ function parseAddress(address: unknown): ParsedAddress | undefined {
   return { address, segments, directory };
 }
 
+/** Test whether text is a canonical address accepted by route claims. */
+export function isCanonicalAddress(address: unknown): address is string {
+  return parseAddress(address) !== undefined;
+}
+
 function stripExtension(name: string): string {
   const dot = name.lastIndexOf(".");
   if (dot <= 0 || dot === name.length - 1) return name;
@@ -153,6 +166,25 @@ function addressForPath(path: unknown): string | undefined {
 function project(base: string, target: unknown): string | undefined {
   if (!isText(target) || !target.startsWith("/") || target.startsWith("//")) return undefined;
   return base === "/" ? target : `${base.slice(0, -1)}${target}`;
+}
+
+function parseOrigin(origin: unknown): string | undefined {
+  if (origin === undefined) return undefined;
+  if (!isText(origin)) throw new InvalidOrigin();
+
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    throw new InvalidOrigin();
+  }
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    parsed.origin !== origin.replace(/\/$/, "")
+  ) {
+    throw new InvalidOrigin();
+  }
+  return parsed.origin;
 }
 
 function classify(target: unknown): AddressKind | undefined {
@@ -230,6 +262,7 @@ function claimIdentity(owner: string): string {
 /** Maintain one canonical hierarchical address space and project it below a base. */
 export class RoutingConcept {
   #base = "/";
+  #origin: string | undefined;
   readonly #claimsByOwner = new Map<string, Claim>();
   readonly #claimsByAddress = new Map<string, Claim>();
 
@@ -239,6 +272,13 @@ export class RoutingConcept {
     const changed = this.#base !== parsed.address;
     this.#base = parsed.address;
     return { base: parsed.address, changed };
+  }
+
+  reorigin({ origin }: { origin?: unknown }) {
+    const next = parseOrigin(origin);
+    const changed = this.#origin !== next;
+    this.#origin = next;
+    return { origin: next, changed };
   }
 
   claim({ owner, address }: { owner: unknown; address: unknown }) {
@@ -307,6 +347,12 @@ export class RoutingConcept {
   _url({ target }: { target: unknown }): { url: string }[] {
     const url = project(this.#base, target);
     return url === undefined ? [] : [{ url }];
+  }
+
+  _absolute({ address }: { address: unknown }): { url: string }[] {
+    const parsed = parseAddress(address);
+    if (this.#origin === undefined || parsed === undefined) return [];
+    return [{ url: `${this.#origin}${project(this.#base, parsed.address)!}` }];
   }
 
   _classify({ target }: { target: unknown }): { kind: AddressKind }[] {

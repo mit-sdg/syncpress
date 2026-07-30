@@ -16,7 +16,9 @@ error. Asking about the frame reports both the fragments and context paths it
 can reach. Reusing the same source changes nothing; replacing it keeps the same
 template identity. A missing fragment, recursive tree, unsupported dependency,
 or Liquid error reports its location and leaves the last successful output
-untouched.
+untouched. That failed fill or render is also available by its subject with its
+normalized refusal code and any available location. A later successful fill or
+render for that subject clears the failure.
 
 ## Liquid And HTML
 
@@ -54,16 +56,38 @@ compound expression, or otherwise evaluating it refuses `UNDEFINED_VARIABLE`.
 
 ## Values, Paths, And Trust
 
-Contexts are JSON-like Values assembled elsewhere. A path is a nonempty,
+Contexts are JSON-like Values assembled elsewhere. An exact path is a nonempty,
 ordinary dense array of literal string segments with the standard array
 prototype and no extra properties: `["page", "content"]`, not a dotted string.
-Empty segments, dots, and names such as `__proto__` have no special meaning.
-Read paths use strings for literal numeric indexes too.
+Empty segments, dots, names such as `__proto__`, and `*` have no special
+meaning in an exact path. Read paths use strings for literal numeric indexes
+too.
+
+Alongside exact paths, `trusted` accepts one tagged structural declaration:
+`{ wildcard: ["collections", "*", "*", "excerpt"] }`. The exported
+`TRUSTED_COLLECTION_EXCERPTS` value is that declaration. It is the only
+wildcard form, and it means `collections/*/*/excerpt`: each collection's dense
+array of cards, then each card's own `excerpt`. An ordinary string array is
+always exact, so `["collections", "*", "*", "excerpt"]` still trusts only
+literal `*` members rather than acting as a wildcard.
+
+A structural declaration is an ordinary plain or null-prototype record with
+exactly its enumerable data `wildcard` member and no other members. Its path
+must be exactly the declaration above; prefixes, suffixes, other roots, and
+other wildcard layouts are invalid paths. For that declaration, the context
+and its `collections` value must be plain or null-prototype records,
+collections must have only enumerable own data members, each collection must
+be a standard dense array without extra members, and each card must be a plain
+or null-prototype record. A card without an own `excerpt` is skipped. A present
+excerpt must be an enumerable own string value. This fixed shape excludes
+inherited values, accessors, proxies, sparse or decorated arrays, and broad
+wildcard expansion.
 
 All values written by Liquid output are HTML-escaped, replacing `&`, `<`, `>`,
 `"`, and `'`. Authored literal template text is not escaped. The only exemption
-is a path in the action's `trusted` input. Every trusted path must resolve to an
-own string value in that action's context. The context is not mutated.
+is an exact path or selected structural excerpt in the action's `trusted`
+input. Every selected value must resolve to an own string value in that action's
+context. The context is not mutated.
 
 Trust belongs to the exact internal value, not to a variable name or text with
 the same contents. It survives an `assign` alias and a named `render` argument.
@@ -109,13 +133,19 @@ template. Successful fill and render replace only the result with the same key.
 
 Every action is failure-atomic. A failed definition retains the previous
 definition. A failed fill or render retains the previous output and dependency
-snapshot. Forgetting a template removes its definition and renderings directly
-of that template. Successful outputs owned by other templates or fillings stay
-as historical results; the composition is responsible for invalidating and
+snapshot and replaces any Failure for its subject. Its code is the normalized
+uppercase refusal code, and its template name, line, and column come from the
+failure location when available. A successful fill or render clears any Failure
+for its subject. Defining or forgetting templates does not clear Failures.
+Forgetting a template removes its definition and renderings directly of that
+template. Successful outputs owned by other templates or fillings stay as
+historical results; the composition is responsible for invalidating and
 rebuilding their subjects.
 
-Locations are one-based Liquid source line and column numbers. A named source
-also identifies its template name. Unsupported syntax points to the construct;
+Locations are one-based Liquid source line and column numbers. `fill` may name
+its authored source and provide its positive original starting line, so a body
+after front matter can report its original document coordinate. A named source also
+identifies its template name. Unsupported syntax points to the construct;
 a missing use points to the render site; a recursive error points to the edge
 that closes the cycle; and evaluation errors retain the location and underlying
 Liquid detail when available.
@@ -144,10 +174,17 @@ a set of Renderings with
   an output Text
   a dependency Tree
   a set of effective Reads
+
+a set of Failures with
+  a subject Subject
+  a code Code
+  an optional template name Name
+  an optional line Number
+  an optional column Number
 ```
 
 At most one template has a name, one filling has a subject, and one rendering
-has a template and subject.
+has a template and subject. At most one Failure has a subject.
 
 ## Actions
 
@@ -176,17 +213,17 @@ forget (name: Name) : return (template: Template)
     delete that template and renderings directly of it
     return template
 
-fill (subject: Subject, source: Text, context: Values, trusted: Paths) : return (filling: Filling, output: Text)
+fill (subject: Subject, source: Text, context: Values, trusted: Paths, sourceName: OptionalName, sourceLine: OptionalNumber) : return (filling: Filling, output: Text)
   where source is not valid Liquid in the supported engine
   then
     refuse TEMPLATE_SYNTAX "This Liquid template cannot be parsed."
   where source uses a Liquid feature excluded above
   then
     refuse UNSUPPORTED_TEMPLATE "This Liquid feature is unsupported because its dependencies or escaping cannot be determined."
-  where a trusted path is not a path as defined above
+  where a trusted entry is not an exact path or structural declaration as defined above
   then
     refuse INVALID_TRUSTED_PATH "A trusted path must contain one or more literal string segments."
-  where a trusted path does not name an own string value
+  where an exact trusted path or selected structural excerpt does not name an own string value
   then
     refuse INVALID_TRUSTED_VALUE "A trusted path must name a string in the supplied context."
   where some literal name in the source's tree is not defined
@@ -210,10 +247,10 @@ render (template: Template, subject: Subject, context: Values, trusted: Paths) :
   where template is not in Templates
   then
     refuse TEMPLATE_NOT_FOUND "There is no such template."
-  where a trusted path is not a path as defined above
+  where a trusted entry is not an exact path or structural declaration as defined above
   then
     refuse INVALID_TRUSTED_PATH "A trusted path must contain one or more literal string segments."
-  where a trusted path does not name an own string value
+  where an exact trusted path or selected structural excerpt does not name an own string value
   then
     refuse INVALID_TRUSTED_VALUE "A trusted path must name a string in the supplied context."
   where some literal name in the template's tree is not defined
@@ -242,6 +279,8 @@ _uses (owner: Owner) : many (used: Name)
 _tree (owner: Owner) : many (used: Name)
 _usedBy (name: Name) : many (owner: Owner)
 _reads (owner: Owner) : many (path: Keys)
+_failure (subject: Subject) : optional (code: Code, templateName: OptionalName, line: OptionalNumber, column: OptionalNumber)
+_failureLocation (subject: Subject, fallbackSource: Source) : optional (source: Source, line: OptionalNumber, column: OptionalNumber)
 _filling (subject: Subject) : optional (filling: Filling, output: Text)
 _rendering (template: Template, subject: Subject) : optional (rendering: Rendering, output: Text)
 _of (rendering: Rendering) : optional (template: Template, subject: Subject, output: Text)
@@ -249,7 +288,13 @@ _of (rendering: Rendering) : optional (template: Template, subject: Subject, out
 
 `_uses` and `_usedBy` accept Templates and Fillings and concern direct uses.
 `_tree` and `_reads` additionally accept Renderings so a composition can record
-the exact dependencies of a successful output.
+the exact dependencies of a successful output. `_failure` is read-only and
+answers the latest failed fill or render for exactly its subject. Its code is one
+of the declared refusal codes. Its `templateName`, `line`, and `column` fields
+are always present in a row and are undefined when the failure has no available
+location. `_failureLocation` resolves a recorded named location to that source,
+or uses its supplied fallback source, so host compositions can report one
+diagnostic without duplicating source-selection policy.
 
 Templating does not decide where sources came from, what a subject means, which
 context paths are trusted, which reads matter to invalidation, or where the HTML

@@ -1,4 +1,4 @@
-import { earlier, reaction, when } from "@mit-sdg/sync-engine/language";
+import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../../concept-set.ts";
 import {
   CONFIGURATION_PATH,
@@ -75,6 +75,43 @@ export const SettingsRebaseFailuresDiagnose = reaction(({ root, base, detail }) 
       Diagnosing.report({
         severity: "error",
         code: "INVALID_BASE",
+        message: detail,
+        source: CONFIGURATION_PATH,
+      }),
+    ),
+);
+
+/** Configure canonical URL projection only when the site declares an origin. */
+export const SettingsReoriginRouting = reaction(({ root, origin }) =>
+  when(Configuring.load({}).responds({ root }))
+    .where(
+      earlier(Phasing.start, {}, { phase: "settings" }),
+      Configuring._at({ node: root, path: PATHS.siteOrigin }).is({ value: origin }),
+    )
+    .then(Routing.reorigin({ origin })),
+);
+
+/** An omitted origin deliberately clears any origin retained by a long-lived application. */
+export const SettingsClearRoutingOrigin = reaction(({ root }) =>
+  when(Configuring.load({}).responds({ root }))
+    .where(
+      earlier(Phasing.start, {}, { phase: "settings" }),
+      no(Configuring._at({ node: root, path: PATHS.siteOrigin })),
+    )
+    .then(Routing.reorigin({})),
+);
+
+export const SettingsReoriginFailuresDiagnose = reaction(({ root, origin, detail }) =>
+  when(Routing.reorigin({ origin }).refuses({ error: "INVALID_ORIGIN", detail }))
+    .where(
+      earlier(Phasing.start, {}, { phase: "settings" }),
+      earlier(Configuring.load, {}, { root }),
+      Configuring._at({ node: root, path: PATHS.siteOrigin }).is({ value: origin }),
+    )
+    .then(
+      Diagnosing.report({
+        severity: "error",
+        code: "INVALID_ORIGIN",
         message: detail,
         source: CONFIGURATION_PATH,
       }),

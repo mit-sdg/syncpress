@@ -7,13 +7,11 @@
   <a class="skip-link" href="#main">Skip to content</a>
   {% render "header.html" %}
   <main id="main" class="site-main">
-    <article class="document">
+    <article class="document guide">
       <header class="document-header">
-        <p class="eyebrow">{{ page.data.section | default: "Field guide" }}</p>
-        <h1>{{ page.data.title | default: site.title }}</h1>
-        {% if page.data.description %}
-          <p class="lede">{{ page.data.description }}</p>
-        {% endif %}
+        <p class="eyebrow">{{ page.data.section }}</p>
+        <h1>{{ page.data.title }}</h1>
+        <p class="lede">{{ page.data.description }}</p>
       </header>
       <div class="prose">
         {{ page.content }}

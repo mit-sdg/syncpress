@@ -10,7 +10,7 @@ function finish(depending: DependingConcept, subject: string, inputs: readonly s
   return { result: begun.result, uses, settled };
 }
 
-test("its principle: only related results become stale and a rebuild replaces its inputs", () => {
+test("its principle: only related results become stale and settlement replaces retained inputs", () => {
   const depending = new DependingConcept();
   const original = finish(depending, "summary", ["notes", "rates"]);
 
@@ -23,16 +23,59 @@ test("its principle: only related results become stale and a rebuild replaces it
   expect(depending._reason({ subject: "summary" })).toEqual([{ reason: "notes" }]);
 
   expect(depending.begin({ subject: "summary" })).toEqual({ result: original.result });
-  expect(depending._uses({ subject: "summary" })).toEqual([]);
+  expect(depending._uses({ subject: "summary" })).toEqual([{ input: "notes" }, { input: "rates" }]);
   expect(depending._reason({ subject: "summary" })).toEqual([{ reason: "notes" }]);
   depending.use({ subject: "summary", input: "revised-notes" });
+  expect(depending._uses({ subject: "summary" })).toEqual([{ input: "notes" }, { input: "rates" }]);
   depending.settle({ subject: "summary" });
 
   expect(depending._current({ subject: "summary" })).toEqual([{ result: original.result }]);
+  expect(depending._uses({ subject: "summary" })).toEqual([{ input: "revised-notes" }]);
   expect(depending._reason({ subject: "summary" })).toEqual([{ reason: "notes" }]);
   expect(depending.touch({ input: "notes" })).toEqual({ input: "notes", count: 0 });
   expect(depending.touch({ input: "revised-notes" })).toEqual({ input: "revised-notes", count: 1 });
   expect(depending._reason({ subject: "summary" })).toEqual([{ reason: "revised-notes" }]);
+});
+
+test("an incomplete replacement retains its last settled dependency graph", () => {
+  const depending = new DependingConcept();
+  finish(depending, "page", ["source", "template"]);
+
+  depending.begin({ subject: "page" });
+  depending.use({ subject: "page", input: "discarded-template" });
+  expect(depending._uses({ subject: "page" })).toEqual([{ input: "source" }, { input: "template" }]);
+  expect(depending._dependents({ input: "source" })).toEqual([{ subject: "page" }]);
+  expect(depending._dependents({ input: "discarded-template" })).toEqual([]);
+
+  expect(depending.touch({ input: "source" })).toEqual({ input: "source", count: 1 });
+  expect(depending._state({ subject: "page" })).toEqual({ state: "stale" });
+  expect(depending._uses({ subject: "page" })).toEqual([{ input: "source" }, { input: "template" }]);
+
+  depending.begin({ subject: "page" });
+  depending.use({ subject: "page", input: "replacement-template" });
+  depending.settle({ subject: "page" });
+  expect(depending._uses({ subject: "page" })).toEqual([{ input: "replacement-template" }]);
+  expect(depending._dependents({ input: "source" })).toEqual([]);
+  expect(depending._dependents({ input: "replacement-template" })).toEqual([{ subject: "page" }]);
+});
+
+test("late uses complete settled first-time and replacement attempts", () => {
+  const depending = new DependingConcept();
+
+  depending.begin({ subject: "page" });
+  depending.settle({ subject: "page" });
+  depending.use({ subject: "page", input: "source" });
+  depending.use({ subject: "page", input: "body-template" });
+  expect(depending._uses({ subject: "page" })).toEqual([{ input: "body-template" }, { input: "source" }]);
+  expect(depending._dependents({ input: "source" })).toEqual([{ subject: "page" }]);
+
+  depending.begin({ subject: "page" });
+  depending.use({ subject: "page", input: "layout-template" });
+  depending.settle({ subject: "page" });
+  depending.use({ subject: "page", input: "source" });
+  expect(depending._uses({ subject: "page" })).toEqual([{ input: "layout-template" }, { input: "source" }]);
+  expect(depending._dependents({ input: "body-template" })).toEqual([]);
+  expect(depending._dependents({ input: "source" })).toEqual([{ subject: "page" }]);
 });
 
 test("touch is deterministic through diamonds, cycles, and already-stale intermediates", () => {
@@ -117,7 +160,7 @@ test("result and use identities are stable, collision-safe, and keyed by their f
   depending.begin({ subject: "a:b" });
   const changedUse = depending.use({ subject: "a:b", input: "different" });
   expect(changedUse.use).not.toBe(firstUse.use);
-  expect(depending._uses({ subject: "a:b" })).toEqual([{ input: "different" }]);
+  expect(depending._uses({ subject: "a:b" })).toEqual([{ input: "c" }]);
   depending.begin({ subject: "a:b" });
   expect(depending.use({ subject: "a:b", input: "c" })).toEqual(firstUse);
   depending.settle({ subject: "a:b" });

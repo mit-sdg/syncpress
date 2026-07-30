@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 const INVALID_DESTINATION = "A destination must name a directory other than the filesystem root.";
 const DESTINATION_UNAVAILABLE = "The destination could not be inspected.";
 const INVALID_PRODUCER = "A producer identity must be well-formed text.";
+const INVALID_CLAIM = "An artifact claim identity must be well-formed text.";
 const ATTEMPT_EXHAUSTED = "This producer has no remaining safe attempt number.";
 const PATH_LEAVES_DESTINATION = "An artifact path must stay inside the destination.";
 const INVALID_PATH = "An artifact path must use the canonical portable form.";
@@ -33,6 +34,13 @@ export class InvalidProducer extends Error {
   constructor() {
     super(INVALID_PRODUCER);
     this.name = "InvalidProducer";
+  }
+}
+
+export class InvalidClaim extends Error {
+  constructor() {
+    super(INVALID_CLAIM);
+    this.name = "InvalidClaim";
   }
 }
 
@@ -103,6 +111,7 @@ type ArtifactContent = Uint8Array | string;
 type Intent = {
   intent: string;
   producer: string;
+  claim: string;
   path: string;
   content: Uint8Array;
   digest: string;
@@ -141,6 +150,10 @@ function isText(value: unknown): value is string {
 
 function requireProducer(producer: unknown): asserts producer is string {
   if (!isText(producer)) throw new InvalidProducer();
+}
+
+function requireClaim(claim: unknown): asserts claim is string {
+  if (!isText(claim)) throw new InvalidClaim();
 }
 
 function requireMedium(medium: unknown): asserts medium is string {
@@ -328,8 +341,10 @@ export class EmittingConcept {
     return { producer, attempt: record.attempt };
   }
 
-  intend({ producer, path, content, medium }: { producer: string; path: string; content: ArtifactContent; medium: string }) {
+  intend({ producer, path, content, medium, claim }: { producer: string; path: string; content: ArtifactContent; medium: string; claim?: string }) {
     requireProducer(producer);
+    const normalizedClaim = claim ?? producer;
+    requireClaim(normalizedClaim);
     const status = pathStatus(path);
     if (status === "outside") throw new PathLeavesDestination();
     if (status === "invalid") throw new InvalidPath();
@@ -338,11 +353,11 @@ export class EmittingConcept {
 
     const current = this.#producers.get(producer);
     const staging = current?.staged !== undefined;
-    this.#assertAvailable(producer, path, bytes, staging);
+    this.#assertAvailable(producer, normalizedClaim, path, bytes, staging);
 
     const record = current ?? this.#producer(producer);
     const intent = intentIdentity(producer, path);
-    const next = { intent, producer, path, content: bytes, digest: digest(bytes), medium, attempt: record.attempt };
+    const next = { intent, producer, claim: normalizedClaim, path, content: bytes, digest: digest(bytes), medium, attempt: record.attempt };
     (record.staged ?? record.active).set(path, next);
     return { intent, path, digest: next.digest };
   }
@@ -495,7 +510,7 @@ export class EmittingConcept {
     return record;
   }
 
-  #assertAvailable(producer: string, path: string, content: Uint8Array, staging: boolean): void {
+  #assertAvailable(producer: string, claim: string, path: string, content: Uint8Array, staging: boolean): void {
     const records = [...this.#producers.values()].sort((left, right) => compareText(left.producer, right.producer));
     for (const record of records) {
       const stores: Map<string, Intent>[] = [];
@@ -510,7 +525,10 @@ export class EmittingConcept {
         const intents = [...store.values()].sort((left, right) => compareText(left.path, right.path));
         for (const incumbent of intents) {
           if (incumbent.path === path) {
-            if (incumbent.producer !== producer && !sameBytes(incumbent.content, content)) {
+            if (
+              !sameBytes(incumbent.content, content) &&
+              (incumbent.producer !== producer || incumbent.claim !== claim)
+            ) {
               throw new PathContested();
             }
           } else if (pathsOverlap(incumbent.path, path)) {

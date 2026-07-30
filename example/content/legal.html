@@ -1,4 +1,16 @@
 ---
-title: Legal notes
+title: Verbatim HTML and escaped values
+description: An HTML source page that keeps authored markup while Liquid still protects interpolated data.
+escapeExample: '<strong>not markup</strong> & "quotes"'
 ---
-<section><p>This authored HTML is rendered for {{ site.title }}.</p></section>
+<section class="html-note">
+  <p class="eyebrow">HTML source</p>
+  <h2 id="escaping">Verbatim does not mean unescaped data</h2>
+  <p>This authored HTML passes through the verbatim profile for {{ site.title }}. Its elements remain markup because they are authored literal text.</p>
+  <div class="escape-example">
+    <p>Liquid values are different. This value is rendered as text, not as a new element:</p>
+    <code>{{ page.data.escapeExample }}</code>
+  </div>
+  <p>The page layout can trust its completed <code>page.content</code>, but authors cannot turn an arbitrary data value into trusted markup with a filter.</p>
+  <p><a class="button" href="./assets/guide.txt?format=text#checklist" download>Download the local content checklist</a></p>
+</section>

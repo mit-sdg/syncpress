@@ -3,6 +3,7 @@ import {
   AddressTaken,
   InvalidAddress,
   InvalidBase,
+  InvalidOrigin,
   InvalidOwner,
   NotClaimed,
   RoutingConcept,
@@ -14,6 +15,7 @@ export const routing = registerConcept({
   spec,
   refusals: {
     INVALID_BASE: InvalidBase,
+    INVALID_ORIGIN: InvalidOrigin,
     INVALID_OWNER: InvalidOwner,
     INVALID_ADDRESS: InvalidAddress,
     ADDRESS_TAKEN: AddressTaken,

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isProxy } from "node:util/types";
 import {
   CycleTag,
   Drop,
@@ -20,6 +21,16 @@ const TEMPLATE_SYNTAX = "This Liquid template cannot be parsed.";
 const UNDEFINED_VARIABLE = "This Liquid template reads a context value that is not defined.";
 const UNSUPPORTED_TEMPLATE = "This Liquid feature is unsupported because its dependencies or escaping cannot be determined.";
 const USED_TEMPLATE_NOT_FOUND = "A rendered template is not defined.";
+
+const COLLECTION_EXCERPT_WILDCARD = ["collections", "*", "*", "excerpt"];
+
+export type TrustedWildcardPath = { readonly wildcard: readonly string[] };
+export type TrustedPath = readonly string[] | TrustedWildcardPath;
+
+/** Trust excerpts on every card in every collection. */
+export const TRUSTED_COLLECTION_EXCERPTS: TrustedWildcardPath = Object.freeze({
+  wildcard: Object.freeze([...COLLECTION_EXCERPT_WILDCARD]),
+});
 
 export type TemplateErrorLocation = {
   templateName?: string;
@@ -110,9 +121,28 @@ export class TemplateFailed extends LocatedTemplateError {
   }
 }
 
+type FailureCode =
+  | "INVALID_TRUSTED_PATH"
+  | "INVALID_TRUSTED_VALUE"
+  | "RECURSIVE_TEMPLATE"
+  | "TEMPLATE_FAILED"
+  | "TEMPLATE_NOT_FOUND"
+  | "TEMPLATE_SYNTAX"
+  | "UNDEFINED_VARIABLE"
+  | "UNSUPPORTED_TEMPLATE"
+  | "USED_TEMPLATE_NOT_FOUND";
+type FailureRecord = {
+  code: FailureCode;
+  templateName: string | undefined;
+  line: number | undefined;
+  column: number | undefined;
+};
 type Read = { path: string[] };
 type SegmentArray = Array<string | number | SegmentArray>;
 type Use = { used: string; location: TemplateErrorLocation };
+type PreparedTrustedPath =
+  | { kind: "exact"; path: string[] }
+  | { kind: "collection-excerpts" };
 type Inspection = { templates: LiquidTemplate[]; uses: Use[]; directReads: Read[] };
 type TemplateRecord = {
   template: string;
@@ -160,6 +190,39 @@ type RenderDetails = {
   hash?: { hash: Record<string, unknown> };
   tokenizer?: { p: number; N: number };
 };
+
+function failureFromError(error: unknown): FailureRecord | undefined {
+  const code =
+    error instanceof InvalidTrustedPath
+      ? "INVALID_TRUSTED_PATH"
+      : error instanceof InvalidTrustedValue
+        ? "INVALID_TRUSTED_VALUE"
+        : error instanceof RecursiveTemplate
+          ? "RECURSIVE_TEMPLATE"
+          : error instanceof TemplateFailed
+            ? "TEMPLATE_FAILED"
+            : error instanceof TemplateNotFound
+              ? "TEMPLATE_NOT_FOUND"
+              : error instanceof TemplateSyntax
+                ? "TEMPLATE_SYNTAX"
+                : error instanceof UndefinedVariable
+                  ? "UNDEFINED_VARIABLE"
+                  : error instanceof UnsupportedTemplate
+                    ? "UNSUPPORTED_TEMPLATE"
+                    : error instanceof UsedTemplateNotFound
+                      ? "USED_TEMPLATE_NOT_FOUND"
+                      : undefined;
+  if (code === undefined) return undefined;
+  if (error instanceof LocatedTemplateError) {
+    return {
+      code,
+      templateName: error.templateName,
+      line: error.line,
+      column: error.column,
+    };
+  }
+  return { code, templateName: undefined, line: undefined, column: undefined };
+}
 
 const htmlEscape = new Liquid({ outputEscape: "escape" }).options.outputEscape!;
 
@@ -231,7 +294,29 @@ function copyPath(path: readonly string[]): string[] | undefined {
   }
 }
 
-function copyTrustedPaths(paths: readonly (readonly string[])[]): string[][] {
+function hasSegments(path: readonly string[], expected: readonly string[]): boolean {
+  return path.length === expected.length && path.every((segment, index) => segment === expected[index]);
+}
+
+function copyTrustedWildcardPath(value: unknown): string[] | undefined {
+  try {
+    if (value === null || typeof value !== "object" || Array.isArray(value) || isProxy(value)) return undefined;
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    const keys = Reflect.ownKeys(value);
+    if (keys.length !== 1 || keys[0] !== "wildcard") return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(value, "wildcard");
+    if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+      return undefined;
+    }
+    if (descriptor.value !== null && typeof descriptor.value === "object" && isProxy(descriptor.value)) return undefined;
+    return copyPath(descriptor.value as readonly string[]);
+  } catch {
+    return undefined;
+  }
+}
+
+function copyTrustedPaths(paths: readonly TrustedPath[]): PreparedTrustedPath[] {
   try {
     if (!Array.isArray(paths) || Object.getPrototypeOf(paths) !== Array.prototype) throw new InvalidTrustedPath(0);
     const lengthDescriptor = Object.getOwnPropertyDescriptor(paths, "length");
@@ -240,13 +325,19 @@ function copyTrustedPaths(paths: readonly (readonly string[])[]): string[][] {
     const keys = Reflect.ownKeys(paths);
     if (keys.length !== length + 1) throw new InvalidTrustedPath(0);
 
-    const copy = new Array<string[]>(length);
+    const copy = new Array<PreparedTrustedPath>(length);
     for (let index = 0; index < length; index += 1) {
       const descriptor = Object.getOwnPropertyDescriptor(paths, String(index));
       if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) throw new InvalidTrustedPath(index);
+      const wildcard = copyTrustedWildcardPath(descriptor.value);
+      if (wildcard !== undefined) {
+        if (!hasSegments(wildcard, COLLECTION_EXCERPT_WILDCARD)) throw new InvalidTrustedPath(index);
+        copy[index] = { kind: "collection-excerpts" };
+        continue;
+      }
       const path = copyPath(descriptor.value as readonly string[]);
       if (path === undefined) throw new InvalidTrustedPath(index);
-      copy[index] = path;
+      copy[index] = { kind: "exact", path };
     }
     return copy;
   } catch (error) {
@@ -311,13 +402,111 @@ function trustOne(context: Record<string, unknown>, path: readonly string[]): Re
   return replacement as Record<string, unknown>;
 }
 
+function isPlainRecord(value: unknown): value is object {
+  try {
+    if (value === null || typeof value !== "object" || Array.isArray(value) || isProxy(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  } catch {
+    return false;
+  }
+}
+
+function ownRecordEntries(value: unknown): Array<[string, unknown]> | undefined {
+  if (!isPlainRecord(value)) return undefined;
+  try {
+    const entries: Array<[string, unknown]> = [];
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") return undefined;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) return undefined;
+      entries.push([key, descriptor.value]);
+    }
+    return entries;
+  } catch {
+    return undefined;
+  }
+}
+
+function denseArrayItems(value: unknown): unknown[] | undefined {
+  try {
+    if (!Array.isArray(value) || isProxy(value) || Object.getPrototypeOf(value) !== Array.prototype) return undefined;
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+    if (lengthDescriptor === undefined || !("value" in lengthDescriptor) || !Number.isSafeInteger(lengthDescriptor.value)) {
+      return undefined;
+    }
+    const length = lengthDescriptor.value as number;
+    const keys = Reflect.ownKeys(value);
+    if (keys.length !== length + 1) return undefined;
+
+    const items = new Array<unknown>(length);
+    for (const key of keys) {
+      if (key === "length") continue;
+      if (typeof key !== "string") return undefined;
+      const index = Number(key);
+      if (!Number.isInteger(index) || index < 0 || index >= length || String(index) !== key) return undefined;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) return undefined;
+      items[index] = descriptor.value;
+    }
+    return items;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasOwnExcerpt(value: unknown): boolean | undefined {
+  if (!isPlainRecord(value)) return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, "excerpt");
+    if (descriptor === undefined) return false;
+    if (!descriptor.enumerable || !("value" in descriptor)) return undefined;
+    // Collection cards without an excerpt are represented as an own nullish
+    // value by the generic composition record, not as a missing key.
+    return descriptor.value === undefined || descriptor.value === null ? false : true;
+  } catch {
+    return undefined;
+  }
+}
+
+function collectionExcerptPaths(context: Record<string, unknown>): string[][] {
+  if (!isPlainRecord(context)) throw new InvalidTrustedValue(["collections"]);
+  let collections: unknown;
+  try {
+    collections = ownValue(context, "collections");
+  } catch {
+    throw new InvalidTrustedValue(["collections"]);
+  }
+  const entries = ownRecordEntries(collections);
+  if (entries === undefined) throw new InvalidTrustedValue(["collections"]);
+
+  const paths: string[][] = [];
+  for (const [name, collection] of entries) {
+    const items = denseArrayItems(collection);
+    if (items === undefined) throw new InvalidTrustedValue(["collections", name]);
+    for (let index = 0; index < items.length; index += 1) {
+      const path = ["collections", name, String(index), "excerpt"];
+      const hasExcerpt = hasOwnExcerpt(items[index]);
+      if (hasExcerpt === undefined) throw new InvalidTrustedValue(path);
+      if (hasExcerpt) paths.push(path);
+    }
+  }
+  return paths;
+}
+
 function trustedContext(
   context: Record<string, unknown>,
-  trusted: readonly (readonly string[])[],
+  trusted: readonly TrustedPath[],
 ): Record<string, unknown> {
   const paths = copyTrustedPaths(trusted);
   let prepared = context;
-  for (const path of paths) prepared = trustOne(prepared, path);
+  for (const path of paths) {
+    if (path.kind === "exact") {
+      prepared = trustOne(prepared, path.path);
+      continue;
+    }
+    for (const excerpt of collectionExcerptPaths(prepared)) prepared = trustOne(prepared, excerpt);
+  }
   return prepared;
 }
 
@@ -376,6 +565,7 @@ export class TemplatingConcept {
   readonly #fillingsByID = new Map<string, FillingRecord>();
   readonly #renderingsByKey = new Map<string, RenderingRecord>();
   readonly #renderingsByID = new Map<string, RenderingRecord>();
+  readonly #failuresBySubject = new Map<string, FailureRecord>();
 
   define({ name, source }: { name: string; source: string }) {
     const inspected = this.#inspect(source, name);
@@ -414,31 +604,41 @@ export class TemplatingConcept {
     source,
     context,
     trusted,
+    sourceName,
+    sourceLine = 1,
   }: {
     subject: string;
     source: string;
     context: Record<string, unknown>;
-    trusted: readonly (readonly string[])[];
+    trusted: readonly TrustedPath[];
+    sourceName?: string;
+    sourceLine?: number;
   }) {
-    const inspected = this.#inspect(source);
-    const prepared = trustedContext(context, trusted);
-    this.#assertGraph(inspected.uses);
-    const tree = this.#tree(inspected.uses);
-    const reads = this.#effectiveReads(source);
-    const output = this.#evaluate(source, prepared);
-    const filling = this.#fillingsBySubject.get(subject)?.filling ?? identity("filling", subject);
-    const record: FillingRecord = {
-      filling,
-      subject,
-      digest: digest(source),
-      output,
-      uses: inspected.uses,
-      tree,
-      reads,
-    };
-    this.#fillingsBySubject.set(subject, record);
-    this.#fillingsByID.set(filling, record);
-    return { filling, output };
+    try {
+      const inspected = this.#inspect(source, sourceName);
+      const prepared = trustedContext(context, trusted);
+      this.#assertGraph(inspected.uses, sourceName);
+      const tree = this.#tree(inspected.uses);
+      const reads = this.#effectiveReads(source, sourceName);
+      const output = this.#evaluate(source, prepared, sourceName);
+      const filling = this.#fillingsBySubject.get(subject)?.filling ?? identity("filling", subject);
+      const record: FillingRecord = {
+        filling,
+        subject,
+        digest: digest(source),
+        output,
+        uses: inspected.uses,
+        tree,
+        reads,
+      };
+      this.#fillingsBySubject.set(subject, record);
+      this.#fillingsByID.set(filling, record);
+      this.#failuresBySubject.delete(subject);
+      return { filling, output };
+    } catch (error) {
+      this.#recordFailure(subject, error, sourceName, sourceLine - 1);
+      throw error;
+    }
   }
 
   render({
@@ -450,21 +650,27 @@ export class TemplatingConcept {
     template: string;
     subject: string;
     context: Record<string, unknown>;
-    trusted: readonly (readonly string[])[];
+    trusted: readonly TrustedPath[];
   }) {
-    const record = this.#templatesByID.get(template);
-    if (record === undefined) throw new TemplateNotFound();
-    const prepared = trustedContext(context, trusted);
-    this.#assertGraph(record.uses, record.name);
-    const tree = this.#tree(record.uses);
-    const reads = this.#effectiveReads(record.source, record.name);
-    const output = this.#evaluate(record.source, prepared, record.name);
-    const key = pairKey(template, subject);
-    const rendering = this.#renderingsByKey.get(key)?.rendering ?? identity("rendering", template, subject);
-    const rendered: RenderingRecord = { rendering, template, subject, output, tree, reads };
-    this.#renderingsByKey.set(key, rendered);
-    this.#renderingsByID.set(rendering, rendered);
-    return { rendering, output };
+    try {
+      const record = this.#templatesByID.get(template);
+      if (record === undefined) throw new TemplateNotFound();
+      const prepared = trustedContext(context, trusted);
+      this.#assertGraph(record.uses, record.name);
+      const tree = this.#tree(record.uses);
+      const reads = this.#effectiveReads(record.source, record.name);
+      const output = this.#evaluate(record.source, prepared, record.name);
+      const key = pairKey(template, subject);
+      const rendering = this.#renderingsByKey.get(key)?.rendering ?? identity("rendering", template, subject);
+      const rendered: RenderingRecord = { rendering, template, subject, output, tree, reads };
+      this.#renderingsByKey.set(key, rendered);
+      this.#renderingsByID.set(rendering, rendered);
+      this.#failuresBySubject.delete(subject);
+      return { rendering, output };
+    } catch (error) {
+      this.#recordFailure(subject, error);
+      throw error;
+    }
   }
 
   _template({ name }: { name: string }): { template: string; digest: string }[] {
@@ -500,6 +706,32 @@ export class TemplatingConcept {
     if (filling !== undefined) return filling.reads.map(({ path }) => ({ path: [...path] }));
     const template = this.#templatesByID.get(owner);
     return template === undefined ? [] : this.#effectiveReads(template.source, template.name);
+  }
+
+  _failure({ subject }: { subject: string }): FailureRecord[] {
+    const failure = this.#failuresBySubject.get(subject);
+    return failure === undefined
+      ? []
+      : [
+          {
+            code: failure.code,
+            templateName: failure.templateName,
+            line: failure.line,
+            column: failure.column,
+          },
+        ];
+  }
+
+  /** Resolve a failure to its named template, or to the caller's authored source. */
+  _failureLocation({ subject, fallbackSource }: { subject: string; fallbackSource: string }): {
+    source: string;
+    line: number | undefined;
+    column: number | undefined;
+  }[] {
+    const failure = this.#failuresBySubject.get(subject);
+    return failure === undefined
+      ? []
+      : [{ source: failure.templateName ?? fallbackSource, line: failure.line, column: failure.column }];
   }
 
   _filling({ subject }: { subject: string }): { filling: string; output: string }[] {
@@ -710,5 +942,19 @@ export class TemplatingConcept {
 
   #sourceOwner(owner: string): TemplateRecord | FillingRecord | undefined {
     return this.#templatesByID.get(owner) ?? this.#fillingsByID.get(owner);
+  }
+
+  #recordFailure(subject: string, error: unknown, sourceName?: string, lineOffset = 0): void {
+    const failure = failureFromError(error);
+    if (failure === undefined) return;
+    if (
+      failure.templateName === sourceName &&
+      failure.line !== undefined &&
+      Number.isSafeInteger(lineOffset) &&
+      lineOffset > 0
+    ) {
+      failure.line += lineOffset;
+    }
+    this.#failuresBySubject.set(subject, failure);
   }
 }

@@ -51,7 +51,7 @@ export const AdmittedRasterImagesRender = reaction(({ original, configuration, w
     .then(Transcoding.render({ original, widths, formats })),
 );
 
-/** Stage the exact fallback under its content-relative source path. */
+/** Stage the exact fallback beside the page that owns its primary image reference. */
 export const RasterFallbacksStage = reaction(
   ({
     original,
@@ -60,6 +60,11 @@ export const RasterFallbacksStage = reaction(
     page,
     raw,
     root,
+    imagePath,
+    name,
+    pageAddress,
+    pagePath,
+    prefix,
     path,
     pattern,
     content,
@@ -74,17 +79,21 @@ export const RasterFallbacksStage = reaction(
         Routing._classify({ target: raw }).is({ kind: "relative" }),
         Filing._resolve({ file: page, address: raw }).is({ target: image }),
         no(Routing._address({ owner: image })),
-        Filing._file({ file: image }).is({ root, path }),
+        Filing._file({ file: image }).is({ root, path: imagePath, name }),
         Filing._root({ root }).is({ name: ROOTS.content }),
         Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-        Matching._matches({ pattern, path }).is({ matched: true }),
+        Matching._matches({ pattern, path: imagePath }).is({ matched: true }),
+        Routing._address({ owner: page }).is({ address: pageAddress }),
+        Routing._file({ address: pageAddress }).is({ path: pagePath }),
+        Filing._directory({ path: pagePath }).is({ prefix }),
+        Filing._join({ prefix, name }).is({ path }),
         Transcoding._renditions({ original }).is({
           fallback: true,
           content,
           mediaType,
         }),
       )
-      .then(Emitting.intend({ producer: page, path, content, medium: mediaType })),
+      .then(Emitting.intend({ producer: page, claim: image, path, content, medium: mediaType })),
 );
 
 /** Declare the embedding only after that fallback intent has been staged. */
@@ -100,26 +109,36 @@ export const RasterFallbacksDeclare = reaction(
     label,
     image,
     root,
+    imagePath,
+    name,
     pattern,
+    pageAddress,
+    pagePath,
+    prefix,
     address,
     fallback,
     format,
     width,
     height,
+    attributes,
   }) =>
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
         earlier(Transcoding.render, { original }, { derived }),
         earlier(Referencing.scan, { subject: page, part: PARTS.body }, { source }),
-        Referencing._references({ source }).is({ reference, raw, label, role: "image" }),
+        Referencing._references({ source }).is({ reference, raw, label, role: "image", attributes }),
         Transcoding._original({ subject: image }).is({ original }),
         Routing._classify({ target: raw }).is({ kind: "relative" }),
         Filing._resolve({ file: page, address: raw }).is({ target: image }),
         no(Routing._address({ owner: image })),
-        Filing._file({ file: image }).is({ root, path }),
+        Filing._file({ file: image }).is({ root, path: imagePath, name }),
         Filing._root({ root }).is({ name: ROOTS.content }),
         Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-        Matching._matches({ pattern, path }).is({ matched: true }),
+        Matching._matches({ pattern, path: imagePath }).is({ matched: true }),
+        Routing._address({ owner: page }).is({ address: pageAddress }),
+        Routing._file({ address: pageAddress }).is({ path: pagePath }),
+        Filing._directory({ path: pagePath }).is({ prefix }),
+        Filing._join({ prefix, name }).is({ path }),
         Routing._locate({ path }).is({ address }),
         Routing._retarget({ replacement: address, original: raw }).is({ target: fallback }),
         Transcoding._renditions({ original }).is({ fallback: true, format, width, height }),
@@ -133,14 +152,14 @@ export const RasterFallbacksDeclare = reaction(
           expects: derived,
           original: fallback,
           originalFormat: format,
-          attributes: {},
+          attributes,
         }),
       ),
 );
 
 /** Unsafe raster fallback spellings cannot become safe responsive markup. */
 export const UnretargetableRasterPrimaryImagesDiagnose = reaction(
-  ({ source, page, raw, image, root, path, pattern, address, sourcePath }) =>
+  ({ source, page, raw, image, root, imagePath, name, pattern, pageAddress, pagePath, prefix, outputPath, address, sourcePath }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
         Referencing._source({ source }).is({ subject: page }),
@@ -148,11 +167,15 @@ export const UnretargetableRasterPrimaryImagesDiagnose = reaction(
         Routing._classify({ target: raw }).is({ kind: "relative" }),
         Filing._resolve({ file: page, address: raw }).is({ target: image }),
         no(Routing._address({ owner: image })),
-        Filing._file({ file: image }).is({ root, path }),
+        Filing._file({ file: image }).is({ root, path: imagePath, name }),
         Filing._root({ root }).is({ name: ROOTS.content }),
         Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-        Matching._matches({ pattern, path }).is({ matched: true }),
-        Routing._locate({ path }).is({ address }),
+        Matching._matches({ pattern, path: imagePath }).is({ matched: true }),
+        Routing._address({ owner: page }).is({ address: pageAddress }),
+        Routing._file({ address: pageAddress }).is({ path: pagePath }),
+        Filing._directory({ path: pagePath }).is({ prefix }),
+        Filing._join({ prefix, name }).is({ path: outputPath }),
+        Routing._locate({ path: outputPath }).is({ address }),
         no(Routing._retarget({ replacement: address, original: raw })),
         Filing._file({ file: page }).is({ path: sourcePath }),
       )
@@ -176,6 +199,7 @@ export const RasterRenditionsStage = reaction(
     raw,
     image,
     original,
+    rendition,
     content,
     mediaType,
     name,
@@ -192,6 +216,7 @@ export const RasterRenditionsStage = reaction(
         Filing._resolve({ file: page, address: raw }).is({ target: image }),
         Transcoding._original({ subject: image }).is({ original }),
         Transcoding._renditions({ original }).is({
+          rendition,
           fallback: false,
           content,
           mediaType,
@@ -205,7 +230,7 @@ export const RasterRenditionsStage = reaction(
         }).is({ value: assets }),
         Filing._join({ prefix: assets, name }).is({ path }),
       )
-      .then(Emitting.intend({ producer: page, path, content, medium: mediaType })),
+      .then(Emitting.intend({ producer: page, claim: rendition, path, content, medium: mediaType })),
 );
 
 /** Offer a rendition only after the matching asset intent has been staged. */

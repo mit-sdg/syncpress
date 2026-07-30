@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Give each thing one dependable address in a shared space, and prevent two things
-from using the same address.
+Give each thing one dependable address in a shared space, prevent two things
+from using the same address, and project canonical addresses into site URLs.
 
 ## Principle
 
@@ -15,7 +15,10 @@ identity. The address points to `notes/design/index.html`; `/404.html` points to
 people use but not who owns either address. Releasing an address makes it free
 for someone else. Retargeting `./design.md?print=1#section` to
 `/notes/design/` gives `/notes/design/?print=1#section`. Malformed requests leave
-every existing claim untouched.
+every existing claim untouched. Configuring the origin `https://notes.example/`
+then makes the rebased `/notes/design/` address available as
+`https://notes.example/library/notes/design/`; clearing the origin leaves the
+relative URL unchanged.
 
 ## Text And Identities
 
@@ -80,6 +83,17 @@ normalize or validate an authored target as a claimed Address. For example, base
 `/library/notes/?print=1#top`. A relative, fragment-only, scheme-bearing, or
 network-path target has no `_url` row.
 
+An Origin is optional and initially absent. A present Origin is a canonical
+HTTP or HTTPS URL origin, with an optional one trailing `/` accepted on input
+and removed in stored output. Its URL serialization must otherwise be exactly
+its input: it has no user information, path, query, fragment, noncanonical host
+case, or default port. `reorigin` changes only origin projection and never
+changes a Base, Address, or Claim. Omitting its `origin` input, or giving it
+`undefined`, clears the configured Origin. `_absolute` answers only when an
+Origin is configured and its input is a canonical Address. Its URL is the
+Origin followed by that Address's current Base projection. It accepts no query
+or fragment and does not require the Address to be claimed.
+
 `_classify` classifies Text lexically. Text beginning `#` is `fragment`; Text
 beginning `//` or with an ASCII URI scheme is `external`; remaining Text beginning
 `/` is `absolute`; and all other Text, including empty and query-only Text, is
@@ -115,6 +129,8 @@ replacement Address. Retargeting does not apply the current Base.
 ```state
 a Base Address, initially /
 
+an optional Origin, initially absent
+
 a set of Claims with
   an owner Owner
   an address Address
@@ -135,6 +151,17 @@ rebase (base: Address) : return (base: Address, changed: Flag)
   where base is canonical and differs from the current base
   then
     set the base and return it with changed true
+
+reorigin (origin: OptionalOrigin) : return (origin: OptionalOrigin, changed: Flag)
+  where a present origin is not a canonical HTTP or HTTPS origin
+  then
+    refuse INVALID_ORIGIN "An origin must be a canonical HTTP or HTTPS origin."
+  where origin equals the current origin
+  then
+    return origin and changed false
+  where origin differs from the current origin
+  then
+    set the origin and return it with changed true
 
 claim (owner: Owner, address: Address) : return (claim: Claim, address: Address, changed: Flag)
   where owner is not Text
@@ -180,6 +207,7 @@ _file (address: Address) : optional (path: Path)
 _locate (path: Path) : optional (address: Address)
 _retarget (replacement: Address, original: Target) : optional (target: Target)
 _url (target: Address) : optional (url: Url)
+_absolute (address: Address) : optional (url: Url)
 _classify (target: Address) : optional (kind: AddressKind)
 _claims () : many (owner: Owner, address: Address)
 ```
@@ -190,10 +218,12 @@ unclaimed address. `_address` answers the current URL using the current base, so
 rebasing is visible immediately without rewriting claims. `_classify` has exactly
 one row for every Text target and no row for a non-Text value. `_retarget` answers
 one row exactly for the accepted pair described above and otherwise no row.
+`_absolute` answers one row exactly when its canonical Address and a configured
+Origin can form a canonical absolute URL, and otherwise no row.
 `_claims` answers all claims in ascending UTF-8 byte order of canonical address,
 independent of claim arrival order.
 
 Routing owns this address grammar, unique claims, path projection, reference
-classification and retargeting, and base projection. It does not decide what an
-owner means, which things deserve addresses, whether an address should be
-reachable, or what is stored at the corresponding path.
+classification and retargeting, and base and origin projection. It does not
+decide what an owner means, which things deserve addresses, whether an address
+should be reachable, or what is stored at the corresponding path.

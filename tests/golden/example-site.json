@@ -1,15 +1,28 @@
 {
   "files": {
-    "about/index.html": "649b4bd5ee66e584a99b0091f4ed8a188a2b2d08deb1067e0be754b7874777a4",
+    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "404.html": "ad8f92045524338902cc34f960e0793bdbf56843e97b60065ee674c50b0fadeb",
     "assets/3bf5750494e5bfcb4d657fb33ba7f12bb438e6ed5816c74b4df50a1daacc048a.webp": "3bf5750494e5bfcb4d657fb33ba7f12bb438e6ed5816c74b4df50a1daacc048a",
-    "assets/blue.png": "fbf9502d48345632d4783f3e75c3d4ff49584094096f53bcc1b5ebc518118ea3",
-    "assets/guide.txt": "66b2bfdadead4801a5e7761d926c4206e98f945db04c07482efa5c381ff16327",
-    "assets/mark.svg": "99fdbcc81e99a7efdbcb8e2898158507a425d188a2d06b3e73b13150da89cda3",
-    "guides/getting-started/index.html": "84e14aca7f36094dea294d7a2e3d79d00305ef1a1318e2c4d451ee06e0dc600a",
-    "index.html": "73aec2656610189a088f3b4126c9ceb6f1211518d352e02641ff7435fc5c7788",
-    "legal/index.html": "412a0c379a3f3e1fa6dbc6299b90aea2a8961543f228c51eaee9ace29cae75c0",
-    "posts/first/index.html": "f2c3b333eca38625a95a2c046475e0d873a65e736180c541a22a757fb5182e6d",
-    "posts/second/index.html": "78c36c8845df186b1f0e63c8aefb2728959a187f6850f1d3520b0f52c16b1e4d",
-    "styles.css": "53b495350d862aeb5479b25f98d5afd9b20b436b31a9875f280fe69cc95c490e"
+    "assets/7620f2f21aab3f963b07fb3b50ea5171c3f8616b9aac3f0641f99bacf6ac785c.avif": "7620f2f21aab3f963b07fb3b50ea5171c3f8616b9aac3f0641f99bacf6ac785c",
+    "blue.png": "fbf9502d48345632d4783f3e75c3d4ff49584094096f53bcc1b5ebc518118ea3",
+    "downloads/build-checklist.txt": "9e0d92a401920c8d49337cd0b60e3fa5ddd55b62243e4ad243ce34a0395e59af",
+    "example-tour/index.html": "f85bb929597bfb7b21c9b3f463fa8568f1ad534723f45d02ccf0dd6a758c9a12",
+    "favicon.svg": "78a5400e0d918a910e3246682c6e46ae381d33fbba3e4eba9653db0bb247112e",
+    "feed.xml": "dfbd719daff29536af8fd7d03958513f35c89be22033534a8e76f5cbbb668bf0",
+    "guides/getting-started/guide.txt": "2c4cb524d8d39d33f625f4e4dc294d60a616332d377ed9c2a8aaa4d0be2ae9bb",
+    "guides/getting-started/index.html": "945e5834e1da66e73653ebce9d4ed90897e327352e713199b9f4369e51598508",
+    "index.html": "cb7d903a61c7de54c396a226c8a72dec55959257b3fe92bbf04df40ae1206268",
+    "journal/1/index.html": "2b4aaf29ed6ad1290d6b0fcc0a92c862ee992affdfc7f8cc3b14ea80abbfd599",
+    "journal/2/index.html": "3f2b48a4e9ad7713d38f0a99b0f20963c8bb1e33635f1326052a089ff3de05cc",
+    "legal/guide.txt": "2c4cb524d8d39d33f625f4e4dc294d60a616332d377ed9c2a8aaa4d0be2ae9bb",
+    "legal/index.html": "31a7bbda64481d50a77fc9bcfbd01b7655601c13d6cb86b88d4b9d7ff39120b1",
+    "mark.svg": "99fdbcc81e99a7efdbcb8e2898158507a425d188a2d06b3e73b13150da89cda3",
+    "posts/first/index.html": "23735996eebd57ee4e64ccee4ae92e44cad5c9019715c1395252e55ee837aab7",
+    "posts/second/index.html": "3ba125bf519e9fefcdff282e2ba0f5922e43a1ca8c9e0d9fc16f854e893d230c",
+    "robots.txt": "16ceb5ee3e0dc13aa9adf31a3ebbe45a1d965b8c2b9f72eaf84e5911e140ed95",
+    "site.webmanifest": "a9631251eb75d673bcffd99b37a1e55eb0d552790edcbc5599efd6bddbb40fb8",
+    "sitemap.xml": "3b5041c590177cbf05a4554885d2437711767a2bee304142395928be9c6522df",
+    "start/index.html": "a18cf4d752e4d685956284d54f8aa4b06fef97d3c31d19d08693197c39fe46d7",
+    "styles.css": "e040a834341f9a10414759f84b883c7187ebcd19b513791c597672f6bbde2f64"
   }
 }

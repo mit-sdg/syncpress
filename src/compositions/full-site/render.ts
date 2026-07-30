@@ -1,5 +1,6 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../../concept-set.ts";
+import { TRUSTED_COLLECTION_EXCERPTS } from "../../concepts/templating/templating.ts";
 import {
   CONTEXT_PATHS,
   DEFAULTS,
@@ -137,12 +138,35 @@ export const PageDataContextsSetUrl = reaction(({ page, address }) =>
     ),
 );
 
-export const PageUrlContextsSetSourcePath = reaction(({ page, path }) =>
+/** Canonical URLs are available to layouts only when the site opted into an origin. */
+export const PageUrlContextsSetCanonicalUrl = reaction(({ page, address, url }) =>
   when(
     Composing.set({
       subject: page,
       part: PARTS.context,
       path: CONTEXT_PATHS.pageUrl,
+    }).responds({}),
+  )
+    .where(
+      Routing._address({ owner: page }).is({ address }),
+      Routing._absolute({ address }).is({ url }),
+    )
+    .then(
+      Composing.set({
+        subject: page,
+        part: PARTS.context,
+        path: CONTEXT_PATHS.pageCanonicalUrl,
+        value: url,
+      }),
+    ),
+);
+
+export const CanonicalContextsSetSourcePath = reaction(({ page, path }) =>
+  when(
+    Composing.set({
+      subject: page,
+      part: PARTS.context,
+      path: CONTEXT_PATHS.pageCanonicalUrl,
     }).responds({}),
   )
     .where(Filing._file({ file: page }).is({ path }))
@@ -156,8 +180,31 @@ export const PageUrlContextsSetSourcePath = reaction(({ page, path }) =>
     ),
 );
 
+export const UnoriginatedPageUrlsSetSourcePath = reaction(({ page, address, path }) =>
+  when(
+    Composing.set({
+      subject: page,
+      part: PARTS.context,
+      path: CONTEXT_PATHS.pageUrl,
+    }).responds({}),
+  )
+    .where(
+      Routing._address({ owner: page }).is({ address }),
+      no(Routing._absolute({ address })),
+      Filing._file({ file: page }).is({ path }),
+    )
+    .then(
+      Composing.set({
+        subject: page,
+        part: PARTS.context,
+        path: CONTEXT_PATHS.pageSourcePath,
+        value: path,
+      }),
+    ),
+);
+
 /** Treat the authored document body as untrusted Liquid input. */
-export const AuthoredBodiesFill = reaction(({ page, body, context }) =>
+export const AuthoredBodiesFill = reaction(({ page, body, bodyLine, context, path }) =>
   when(
     Composing.set({
       subject: page,
@@ -166,10 +213,18 @@ export const AuthoredBodiesFill = reaction(({ page, body, context }) =>
     }).responds({}),
   )
     .where(
-      Documenting._document({ subject: page }).is({ body }),
+      Documenting._document({ subject: page }).is({ body, bodyLine }),
       Composing._record({ subject: page, part: PARTS.context }).is({ values: context }),
+      Filing._file({ file: page }).is({ path }),
     )
-    .then(Templating.fill({ subject: page, source: body, context, trusted: [] })),
+    .then(Templating.fill({
+      subject: page,
+      source: body,
+      context,
+      trusted: [TRUSTED_COLLECTION_EXCERPTS],
+      sourceName: path,
+      sourceLine: bodyLine,
+    })),
 );
 
 /** Honor an explicit page conversion profile. */
@@ -278,7 +333,7 @@ export const ConfiguredLayoutsRender = reaction(({ page, name, template, context
         template,
         subject: page,
         context,
-        trusted: [CONTEXT_PATHS.pageContent],
+        trusted: [CONTEXT_PATHS.pageContent, TRUSTED_COLLECTION_EXCERPTS],
       }),
     ),
 );
@@ -302,7 +357,7 @@ export const DefaultLayoutsRender = reaction(({ page, template, context }) =>
         template,
         subject: page,
         context,
-        trusted: [CONTEXT_PATHS.pageContent],
+        trusted: [CONTEXT_PATHS.pageContent, TRUSTED_COLLECTION_EXCERPTS],
       }),
     ),
 );
@@ -357,13 +412,14 @@ export const FinishedLayoutAnswersEmit = reaction(({ page, text, address, path }
 );
 
 /** Convert expected template and conversion failures into page diagnostics. */
-export const BodyTemplateFailuresDiagnose = reaction(({ page, error, detail, path }) =>
+export const BodyTemplateFailuresDiagnose = reaction(({ page, error, detail, path, source, line, column }) =>
   when(Templating.fill({ subject: page }).refuses({ error, detail }))
     .where(
       earlier(Phasing.advance, {}, { phase: "render" }),
       Filing._file({ file: page }).is({ path }),
+      Templating._failureLocation({ subject: page, fallbackSource: path }).is({ source, line, column }),
     )
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
+    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source, line, column })),
 );
 
 export const BodyConversionFailuresDiagnose = reaction(({ page, error, detail, path }) =>
@@ -375,13 +431,14 @@ export const BodyConversionFailuresDiagnose = reaction(({ page, error, detail, p
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
 );
 
-export const LayoutTemplateFailuresDiagnose = reaction(({ page, error, detail, path }) =>
+export const LayoutTemplateFailuresDiagnose = reaction(({ page, error, detail, path, source, line, column }) =>
   when(Templating.render({ subject: page }).refuses({ error, detail }))
     .where(
       earlier(Phasing.advance, {}, { phase: "render" }),
       Filing._file({ file: page }).is({ path }),
+      Templating._failureLocation({ subject: page, fallbackSource: path }).is({ source, line, column }),
     )
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
+    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source, line, column })),
 );
 
 /** A selected template that was never defined is an authored build error. */

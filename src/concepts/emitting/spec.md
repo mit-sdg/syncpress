@@ -41,7 +41,11 @@ because those two sets never become active together.
 Each `(producer, path)` pair has one deterministic, collision-free intent
 identity. Replacing its bytes keeps that identity; retracting and later
 recreating the pair may recreate it. Producer identities are supplied and are
-never interpreted.
+never interpreted. A Claim is an optional well-formed text identity naming the
+logical source of one intent. When omitted it is the Producer. Different Claims
+under one Producer may share one path only when their bytes agree, which lets a
+transactional producer distinguish same-page logical output collisions without
+changing its atomic attempt boundary.
 
 ## Attempts And Reconciliation
 
@@ -154,10 +158,13 @@ begin (producer: Producer) : return (producer: Producer, attempt: Number)
     raise its attempt and open an empty staged set
     return producer and attempt
 
-intend (producer: Producer, path: Path, content: Content, medium: Medium) : return (intent: Intent, path: Path, digest: Digest)
+intend (producer: Producer, path: Path, content: Content, medium: Medium, claim: Claim) : return (intent: Intent, path: Path, digest: Digest)
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
+  where a present claim is not well-formed text
+  then
+    refuse INVALID_CLAIM "An artifact claim identity must be well-formed text."
   where path is absolute or climbs outside the destination
   then
     refuse PATH_LEAVES_DESTINATION "An artifact path must stay inside the destination."
@@ -170,7 +177,7 @@ intend (producer: Producer, path: Path, content: Content, medium: Medium) : retu
   where medium is not well-formed text
   then
     refuse INVALID_MEDIUM "An artifact medium must be well-formed text."
-  where another producer reserves path with different bytes, or a reservation that would coexist with this intent overlaps path as an ancestor or descendant
+  where another producer or a different claim from this producer reserves path with different bytes, or a reservation that would coexist with this intent overlaps path as an ancestor or descendant
   then
     refuse PATH_CONTESTED "This artifact path conflicts with another intended artifact."
   where the artifact does not conflict
@@ -233,7 +240,7 @@ reconcile () : return (written: Number, replaced: Number, kept: Number, removed:
     return the four artifact-entry counts
 ```
 
-`intend` validates producer, path containment, canonical path form, content,
+`intend` validates producer, claim, path containment, canonical path form, content,
 medium, and collisions in that order. Refused actions leave all intents
 unchanged. `direct` and `reconcile` likewise replace their recorded state only
 after their filesystem work succeeds.

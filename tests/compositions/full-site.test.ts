@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { buildSite } from "../../src/edge.ts";
+import { buildSite, inspectSite, serveSite, watchSite } from "../../src/edge.ts";
 
 const exampleDirectory = resolve(import.meta.dir, "../../example");
 const goldenPath = resolve(import.meta.dir, "../golden/example-site.json");
@@ -43,9 +43,9 @@ test("the example site produces its exact deterministic golden tree", async () =
 
     const first = await buildSite(exampleDirectory, destination);
     expect(first).toMatchObject({
-      pages: 6,
-      inputFiles: 16,
-      written: 11,
+      pages: 10,
+      inputFiles: 28,
+      written: 24,
       replaced: 0,
       kept: 0,
       removed: 1,
@@ -55,18 +55,225 @@ test("the example site produces its exact deterministic golden tree", async () =
 
     const index = await readFile(join(destination, "index.html"), "utf8");
     expect(index).toContain('href="/field-notes/guides/getting-started/?from=home#install"');
-    expect(index).toContain('href="/field-notes/posts/second/">Second post</a>');
-    expect(index).toContain('<picture><source type="image/webp"');
-    expect(index).toContain('src="/field-notes/assets/blue.png?variant=example#pixel"');
+    expect(index).toContain('href="/field-notes/posts/second/">Assets follow references, not conventions</a>');
+    expect(index).toContain('<source type="image/webp"');
+    expect(index).toContain('src="/field-notes/blue.png?variant=field-note#pixel"');
+    expect(index).toContain('class="field-image" data-fixture="responsive" sizes="(min-width: 48rem) 42rem, 100vw"');
+    expect(index).toContain('<div class="excerpt-code"><p>The newest note appears first');
+    expect(index).toContain('<link rel="canonical" href="https://syncpress.example/field-notes/">');
     expect(await readFile(join(destination, "legal", "index.html"), "utf8")).toContain(
-      "This authored HTML is rendered for Syncpress Field Notes.",
+      "This authored HTML passes through the verbatim profile for Syncpress Field Notes.",
     );
+    expect(await readFile(join(destination, ".nojekyll"), "utf8")).toBe("");
+    expect(await readFile(join(destination, "start", "index.html"), "utf8")).toContain('href="/field-notes/guides/getting-started/"');
+    expect(await readFile(join(destination, "sitemap.xml"), "utf8")).toContain("https://syncpress.example/field-notes/journal/1/");
+    expect(await readFile(join(destination, "feed.xml"), "utf8")).toContain("Assets follow references, not conventions");
+    expect(await readFile(join(destination, "journal", "1", "index.html"), "utf8")).toContain("Field note archive");
+    expect(await readFile(join(destination, "guides", "getting-started", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
+    expect(await readFile(join(destination, "legal", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
 
     const second = await buildSite(exampleDirectory, destination);
-    expect(second).toMatchObject({ written: 0, replaced: 0, kept: 11, removed: 0, diagnostics: [] });
+    expect(second).toMatchObject({ written: 0, replaced: 0, kept: 24, removed: 0, diagnostics: [] });
     await expectGoldenTree(destination);
   } finally {
     await rm(destination, { recursive: true, force: true });
+  }
+});
+
+test("uses paths.output when no explicit destination is supplied", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-default-output-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const result = await buildSite(project);
+    expect(result).toMatchObject({ pages: 10, written: 24, diagnostics: [] });
+    expect(await readFile(join(project, "dist", "index.html"), "utf8")).toContain("Syncpress Field Notes");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("rejects a configured output symlink that escapes the project", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-output-link-site-"));
+  const outside = await mkdtemp(join(tmpdir(), "syncpress-output-link-target-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    await symlink(outside, join(project, "dist"));
+
+    await expect(buildSite(project)).rejects.toThrow("Configured paths.output must stay inside the site directory");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("generates a feed for a portable output path that is not a route", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-nested-feed-site-"));
+  const destination = join(project, "dist");
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const configurationPath = join(project, "site.yaml");
+    await writeFile(configurationPath, (await readFile(configurationPath, "utf8")).replace("path: feed.xml", "path: feeds/index.html"));
+
+    await buildSite(project, "dist");
+    expect(await readFile(join(destination, "feeds", "index.html"), "utf8")).toContain(
+      "https://syncpress.example/field-notes/feeds/index.html",
+    );
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("normalizes XML-invalid feed metadata to well-formed XML text", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-xml-feed-site-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const configurationPath = join(project, "site.yaml");
+    await writeFile(
+      configurationPath,
+      (await readFile(configurationPath, "utf8")).replaceAll("title: Syncpress Field Notes", 'title: "\\x01"'),
+    );
+
+    await buildSite(project, "dist");
+    const feed = await readFile(join(project, "dist", "feed.xml"), "utf8");
+    expect(feed).not.toContain("\x01");
+    expect(feed).toContain("<title>\uFFFD</title>");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("generates an empty sitemap for an otherwise empty site", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-empty-sitemap-site-"));
+
+  try {
+    await Promise.all([
+      mkdir(join(project, "content")),
+      mkdir(join(project, "templates")),
+      mkdir(join(project, "public")),
+    ]);
+    await writeFile(join(project, "site.yaml"), "site:\n  origin: https://empty.example\ndeploy:\n  sitemap: true\n");
+
+    await buildSite(project);
+    expect(await readFile(join(project, "dist", "sitemap.xml"), "utf8")).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>\n',
+    );
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("rejects feed dates that would be invalid or host-timezone dependent", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-feed-date-site-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const post = join(project, "content", "posts", "first.md");
+    await writeFile(post, (await readFile(post, "utf8")).replace("date: 2026-07-28", "date: 2026-02-31T12:00:00"));
+
+    await expect(buildSite(project, "dist")).rejects.toThrow("INVALID_FEED_ENTRY");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("reports multiple location-aware configuration errors before staging sources", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-policy-"));
+  const destination = join(project, "dist");
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    await writeFile(
+      join(project, "site.yaml"),
+      [
+        "site:",
+        "  basePath: not-a-route",
+        "paths:",
+        "  output: ../outside",
+        "deploy:",
+        "  nojekyll: yes",
+        "  sitemap: true",
+      ].join("\n"),
+    );
+    await mkdir(destination);
+    await writeFile(join(destination, "previous.txt"), "keep this file\n");
+
+    await expect(buildSite(project)).rejects.toThrow("INVALID_CONFIGURATION site.yaml:4");
+    await expect(buildSite(project)).rejects.toThrow("site.origin is required");
+    expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("inspect reports route ownership, template provenance, collection membership, and dependencies", async () => {
+  const report = await inspectSite(exampleDirectory, "/posts/first/");
+
+  expect(report).toMatchObject({
+    route: "/posts/first/",
+    source: { path: "posts/first.md" },
+    template: { name: "post.html" },
+  });
+  expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 1 }));
+  expect(report.dependencies.inputs).toContainEqual(expect.objectContaining({ input: expect.stringContaining("posts/first.md") }));
+  expect(report.outputs).toContainEqual(expect.objectContaining({ path: "posts/first/index.html" }));
+
+  const redirect = await inspectSite(exampleDirectory, "/start/");
+  expect(redirect.template).toBeUndefined();
+});
+
+test("the development server serves reconciled output with a live-reload client", async () => {
+  const destination = await mkdtemp(join(tmpdir(), "syncpress-dev-server-"));
+  const server = await serveSite(exampleDirectory, destination, { port: 0 });
+
+  try {
+    const response = await fetch(`http://${server.host}:${server.port}/`);
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("/__syncpress/live-reload");
+    expect(html).toContain("https://syncpress.example/field-notes/");
+    expect((await fetch(`http://${server.host}:${server.port}/missing`)).status).toBe(404);
+  } finally {
+    await server.close();
+    await rm(destination, { recursive: true, force: true });
+  }
+});
+
+test("watch ignores its own reconciliation transactions", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-watch-site-"));
+  let builds = 0;
+  let nextBuild: (() => void) | undefined;
+  const rebuilt = new Promise<void>((resolveRebuilt) => {
+    nextBuild = resolveRebuilt;
+  });
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    await mkdir(join(project, "build-output"));
+    await symlink("build-output", join(project, "dist"));
+    const watcher = await watchSite(project, "dist", {
+      onBuild() {
+        builds += 1;
+        if (builds === 2) nextBuild?.();
+      },
+    });
+    try {
+      const about = join(project, "content", "about.md");
+      await writeFile(about, `${await readFile(about, "utf8")}\n`);
+      await Promise.race([
+        rebuilt,
+        Bun.sleep(5_000).then(() => Promise.reject(new Error("Watch rebuild did not complete."))),
+      ]);
+      await Bun.sleep(250);
+      expect(builds).toBe(2);
+    } finally {
+      await watcher.close();
+    }
+  } finally {
+    await rm(project, { recursive: true, force: true });
   }
 });
 
@@ -104,6 +311,23 @@ test("malformed front matter blocks publication without replacing prior output",
   }
 });
 
+test("body Liquid failures report their original source coordinate after front matter", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-located-liquid-site-"));
+  const destination = join(project, "dist");
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    await writeFile(join(project, "content", "index.md"), "---\ntitle: Broken\n---\n{{ missing.value }}\n");
+    await mkdir(destination);
+    await writeFile(join(destination, "previous.txt"), "keep this file\n");
+
+    await expect(buildSite(project, "dist")).rejects.toThrow("UNDEFINED_VARIABLE index.md:4:");
+    expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("a link to an unpublished document is not copied as an asset", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-unpublished-site-"));
   const destination = join(project, "dist");
@@ -116,6 +340,28 @@ test("a link to an unpublished document is not copied as an asset", async () => 
     await writeFile(join(destination, "previous.txt"), "keep this file\n");
 
     await expect(buildSite(project, "dist")).rejects.toThrow("UNPUBLISHED_DOCUMENT_REFERENCE");
+    expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("two different local assets cannot silently claim one beside-page output path", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-asset-collision-"));
+  const destination = join(project, "dist");
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    await mkdir(join(project, "content", "one"));
+    await mkdir(join(project, "content", "two"));
+    await writeFile(join(project, "content", "one", "shared.txt"), "first\n");
+    await writeFile(join(project, "content", "two", "shared.txt"), "second\n");
+    const indexPath = join(project, "content", "index.md");
+    await writeFile(indexPath, `${await readFile(indexPath, "utf8")}\n[First](./one/shared.txt) [Second](./two/shared.txt)\n`);
+    await mkdir(destination);
+    await writeFile(join(destination, "previous.txt"), "keep this file\n");
+
+    await expect(buildSite(project, "dist")).rejects.toThrow("PATH_CONTESTED");
     expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
   } finally {
     await rm(project, { recursive: true, force: true });

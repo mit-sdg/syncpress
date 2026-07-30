@@ -8,6 +8,7 @@ import {
   DestinationNotDirected,
   DestinationUnavailable,
   EmittingConcept,
+  InvalidClaim,
   InvalidContent,
   InvalidDestination,
   InvalidMedium,
@@ -150,6 +151,21 @@ test("attempts are replaceable stages with stable identities and exact retractio
   emitting.begin({ producer: "direct" });
   expect(emitting.commit({ producer: "direct" })).toEqual({ producer: "direct", dropped: 1 });
   expect(emitting._byProducer({ producer: "direct" })).toEqual([]);
+});
+
+test("logical claims prevent one transactional producer from silently overwriting another source", () => {
+  const emitting = new EmittingConcept();
+  emitting.begin({ producer: "page" });
+  emitting.intend({ producer: "page", claim: "asset:a", path: "download.txt", content: bytes("first"), medium: "text/plain" });
+  expect(() =>
+    emitting.intend({ producer: "page", claim: "asset:b", path: "download.txt", content: bytes("second"), medium: "text/plain" }),
+  ).toThrow(PathContested);
+  expect(
+    emitting.intend({ producer: "page", claim: "asset:a", path: "download.txt", content: bytes("replacement"), medium: "text/plain" }),
+  ).toMatchObject({ path: "download.txt" });
+  expect(() =>
+    emitting.intend({ producer: "page", claim: "\ud800", path: "other.txt", content: bytes("x"), medium: "text/plain" }),
+  ).toThrow(InvalidClaim);
 });
 
 test("aborting releases staged reservations without changing active or emitted artifacts", async () => {
@@ -395,6 +411,7 @@ test("directing is non-destructive and failed tree preparation leaves the destin
 
 test("registry exposes every refusal, query promise, and normative message", async () => {
   expect(emittingRegistration.refusals).toEqual({
+    INVALID_CLAIM: InvalidClaim,
     INVALID_DESTINATION: InvalidDestination,
     DESTINATION_UNAVAILABLE: DestinationUnavailable,
     INVALID_PRODUCER: InvalidProducer,
@@ -438,6 +455,10 @@ test("registry exposes every refusal, query promise, and normative message", asy
   expect(await Emitting.begin({ producer: "\ud800" })).toEqual({
     error: "INVALID_PRODUCER",
     detail: "A producer identity must be well-formed text.",
+  });
+  expect(await Emitting.intend({ producer: "one", claim: "\ud800", path: "x", content: bytes("x"), medium: "x/test" })).toEqual({
+    error: "INVALID_CLAIM",
+    detail: "An artifact claim identity must be well-formed text.",
   });
   expect(await Emitting.intend({ producer: "one", path: "../x", content: bytes("x"), medium: "x/test" })).toEqual({
     error: "PATH_LEAVES_DESTINATION",

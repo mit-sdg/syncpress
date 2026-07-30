@@ -1,8 +1,21 @@
-<header>
-  <a href="/">{{ site.title }}</a>
-  <nav aria-label="Posts">
+<header class="site-header">
+  <div class="site-bar">
+    <a class="brand" href="/" aria-label="{{ site.title }} home">
+      {% render "site-mark.html" %}
+      <span>{{ site.title }}</span>
+    </a>
+    <nav class="primary-nav" aria-label="Primary navigation">
+      {% for item in site.navigation %}
+        <a href="{{ item.url }}">{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+  <div class="recent-notes">
+    <span class="recent-label">Recent field notes</span>
+    <nav aria-label="Recent field notes">
     {% for post in collections.posts %}
       <a href="{{ post.url }}">{{ post.data.title }}</a>
     {% endfor %}
-  </nav>
+    </nav>
+  </div>
 </header>

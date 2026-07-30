@@ -7,7 +7,9 @@ import {
   TemplateFailed,
   TemplateNotFound,
   TemplateSyntax,
+  TRUSTED_COLLECTION_EXCERPTS,
   TemplatingConcept,
+  type TrustedPath,
   UndefinedVariable,
   UnsupportedTemplate,
   UsedTemplateNotFound,
@@ -316,6 +318,92 @@ test("trusted paths use literal segments and validate shape, existence, and valu
   ).toEqual(["data", "count"]);
 });
 
+test("the collection excerpt capability trusts only rich collection excerpts", () => {
+  const templating = new TemplatingConcept();
+  const collections = {
+    notes: [{ excerpt: "<em>Note</em>", title: "Note <Three>" }],
+    posts: [
+      { body: "<script>body</script>", excerpt: "<p>First & foremost</p>", title: "Post <One>" },
+      { body: "<aside>body</aside>", title: "Post <Two>" },
+    ],
+  };
+  Object.defineProperty(collections, "__proto__", { enumerable: true, value: [{ excerpt: "<strong>Proto</strong>" }] });
+  const context = { collections };
+  const template = templating.define({
+    name: "collection-excerpts",
+    source:
+      '{% for card in collections.posts %}{{ card.title }}|{% if card.excerpt %}{{ card.excerpt }}{% else %}none{% endif %}|{{ card.body }};{% endfor %}{% for card in collections.notes %}{{ card.excerpt }};{% endfor %}{% for card in collections["__proto__"] %}{{ card.excerpt }};{% endfor %}',
+  });
+  const output = templating.render({
+    template: template.template,
+    subject: "collection-excerpts",
+    context,
+    trusted: [TRUSTED_COLLECTION_EXCERPTS],
+  }).output;
+
+  expect(output).toBe(
+    "Post &lt;One&gt;|<p>First & foremost</p>|&lt;script&gt;body&lt;/script&gt;;Post &lt;Two&gt;|none|&lt;aside&gt;body&lt;/aside&gt;;<em>Note</em>;<strong>Proto</strong>;",
+  );
+  expect(context.collections.posts[0]!.excerpt).toBe("<p>First & foremost</p>");
+
+  const literalStars = { collections: { "*": { "*": { excerpt: "<i>literal stars</i>" } } } };
+  expect(
+    templating.fill({
+      subject: "literal-stars",
+      source: '{{ collections["*"]["*"].excerpt }}',
+      context: literalStars,
+      trusted: [["collections", "*", "*", "excerpt"]],
+    }).output,
+  ).toBe("<i>literal stars</i>");
+});
+
+test("collection excerpt trust rejects broad declarations and unsafe collection shapes", () => {
+  const templating = new TemplatingConcept();
+  const context = { collections: { posts: [{ excerpt: "<p>Excerpt</p>" }] } };
+  const inherited = Object.create({ wildcard: ["collections", "*", "*", "excerpt"] });
+  const declarations = [
+    { wildcard: ["collections", "*", "excerpt"] },
+    { wildcard: ["collections", "*", "*", "body"] },
+    { wildcard: ["collections", "*", "*", "excerpt", "more"] },
+    { wildcard: ["collections", "*", "*", "excerpt"], extra: true },
+    inherited,
+    new Proxy({ wildcard: ["collections", "*", "*", "excerpt"] }, {}),
+  ];
+  for (const declaration of declarations) {
+    const error = thrown(
+      () => templating.fill({ subject: "invalid-wildcard", source: "", context, trusted: [declaration as TrustedPath] }),
+      InvalidTrustedPath,
+    );
+    expect(error.index).toBe(0);
+  }
+
+  const valueError = thrown(
+    () =>
+      templating.fill({
+        subject: "invalid-excerpt",
+        source: "",
+        context: { collections: { posts: [{ excerpt: 1 }] } },
+        trusted: [TRUSTED_COLLECTION_EXCERPTS],
+      }),
+    InvalidTrustedValue,
+  );
+  expect(valueError.path).toEqual(["collections", "posts", "0", "excerpt"]);
+
+  const decorated = [{ excerpt: "<p>Excerpt</p>" }] as { excerpt: string }[] & { extra?: boolean };
+  decorated.extra = true;
+  const shapeError = thrown(
+    () =>
+      templating.fill({
+        subject: "decorated-collection",
+        source: "",
+        context: { collections: { posts: decorated } },
+        trusted: [TRUSTED_COLLECTION_EXCERPTS],
+      }),
+    InvalidTrustedValue,
+  );
+  expect(shapeError.path).toEqual(["collections", "posts"]);
+});
+
 test("optional conditions and default are lenient while other undefined reads are errors", () => {
   const templating = new TemplatingConcept();
   const context = { page: { data: {} } };
@@ -468,27 +556,113 @@ test("successful outputs keep dependency snapshots across redefine and forget", 
   );
 });
 
-test("failed fill and render attempts preserve the last successful result", () => {
+test("failed fill and render attempts preserve snapshots and expose subject failures", () => {
   const templating = new TemplatingConcept();
-  const filling = templating.fill({ subject: "body", source: "good", context: {}, trusted: [] });
+  templating.define({ name: "old", source: "{{ site.old }}" });
+  templating.define({ name: "new", source: "{{ site.new }}" });
+  const context = { page: { old: "page old" }, site: { old: "site old", new: "site new" } };
+  const filling = templating.fill({
+    subject: "body",
+    source: '{% render "old" %}|{{ page.old }}',
+    context,
+    trusted: [],
+  });
+  const fillingTree = templating._tree({ owner: filling.filling });
+  const fillingReads = templating._reads({ owner: filling.filling });
   thrown(
-    () => templating.fill({ subject: "body", source: "{{ missing }}", context: {}, trusted: [] }),
+    () =>
+      templating.fill({
+        subject: "body",
+        source: '{% render "new" %}\n{{ missing }}',
+        context,
+        trusted: [],
+      }),
     UndefinedVariable,
   );
-  expect(templating._filling({ subject: "body" })).toEqual([{ filling: filling.filling, output: "good" }]);
+  expect(templating._filling({ subject: "body" })).toEqual([{ filling: filling.filling, output: "site old|page old" }]);
+  expect(templating._tree({ owner: filling.filling })).toEqual(fillingTree);
+  expect(templating._reads({ owner: filling.filling })).toEqual(fillingReads);
+  const fillFailure = templating._failure({ subject: "body" });
+  expect(fillFailure).toHaveLength(1);
+  expect(fillFailure[0]).toMatchObject({ code: "UNDEFINED_VARIABLE", templateName: undefined, line: 2 });
+  expect(fillFailure[0]!.column).toBeGreaterThan(0);
 
-  const page = templating.define({ name: "page", source: "good" });
-  const rendering = templating.render({ template: page.template, subject: "page", context: {}, trusted: [] });
-  templating.define({ name: "page", source: "{{ missing }}" });
+  const recovery = templating.define({ name: "recovery", source: "recovered" });
+  expect(templating.render({ template: recovery.template, subject: "body", context: {}, trusted: [] }).output).toBe("recovered");
+  expect(templating._failure({ subject: "body" })).toEqual([]);
+  expect(templating._tree({ owner: filling.filling })).toEqual(fillingTree);
+  expect(templating._reads({ owner: filling.filling })).toEqual(fillingReads);
+
+  const page = templating.define({ name: "page", source: '{% render "old" %}|{{ page.old }}' });
+  const rendering = templating.render({ template: page.template, subject: "page", context, trusted: [] });
+  const renderingTree = templating._tree({ owner: rendering.rendering });
+  const renderingReads = templating._reads({ owner: rendering.rendering });
+  templating.define({ name: "page", source: '{% render "new" %}\n{{ missing }}' });
   thrown(
-    () => templating.render({ template: page.template, subject: "page", context: {}, trusted: [] }),
+    () => templating.render({ template: page.template, subject: "page", context, trusted: [] }),
     UndefinedVariable,
   );
   expect(templating._rendering({ template: page.template, subject: "page" })).toEqual([
-    { rendering: rendering.rendering, output: "good" },
+    { rendering: rendering.rendering, output: "site old|page old" },
   ]);
   expect(templating._of({ rendering: rendering.rendering })).toEqual([
-    { template: page.template, subject: "page", output: "good" },
+    { template: page.template, subject: "page", output: "site old|page old" },
+  ]);
+  expect(templating._tree({ owner: rendering.rendering })).toEqual(renderingTree);
+  expect(templating._reads({ owner: rendering.rendering })).toEqual(renderingReads);
+  const renderFailure = templating._failure({ subject: "page" });
+  expect(renderFailure).toHaveLength(1);
+  expect(renderFailure[0]).toMatchObject({ code: "UNDEFINED_VARIABLE", templateName: "page", line: 2 });
+  expect(renderFailure[0]!.column).toBeGreaterThan(0);
+
+  expect(templating.fill({ subject: "page", source: "recovered", context: {}, trusted: [] }).output).toBe("recovered");
+  expect(templating._failure({ subject: "page" })).toEqual([]);
+  expect(templating._tree({ owner: rendering.rendering })).toEqual(renderingTree);
+  expect(templating._reads({ owner: rendering.rendering })).toEqual(renderingReads);
+
+  thrown(
+    () => templating.render({ template: "missing", subject: "missing", context: {}, trusted: [] }),
+    TemplateNotFound,
+  );
+  expect(templating._failure({ subject: "missing" })).toEqual([
+    { code: "TEMPLATE_NOT_FOUND", templateName: undefined, line: undefined, column: undefined },
+  ]);
+  expect(templating.fill({ subject: "missing", source: "recovered", context: {}, trusted: [] }).output).toBe("recovered");
+  expect(templating._failure({ subject: "missing" })).toEqual([]);
+});
+
+test("named fills report original source coordinates and a fallback source", () => {
+  const templating = new TemplatingConcept();
+
+  thrown(
+    () => templating.fill({
+      subject: "body",
+      source: "{{ missing }}",
+      context: {},
+      trusted: [],
+      sourceName: "posts/example.md",
+      sourceLine: 8,
+    }),
+    UndefinedVariable,
+  );
+
+  expect(templating._failure({ subject: "body" })).toEqual([
+    expect.objectContaining({
+      code: "UNDEFINED_VARIABLE",
+      templateName: "posts/example.md",
+      line: 8,
+    }),
+  ]);
+  expect(templating._failureLocation({ subject: "body", fallbackSource: "fallback.md" })).toEqual([
+    expect.objectContaining({ source: "posts/example.md", line: 8 }),
+  ]);
+
+  thrown(
+    () => templating.render({ template: "missing", subject: "missing", context: {}, trusted: [] }),
+    TemplateNotFound,
+  );
+  expect(templating._failureLocation({ subject: "missing", fallbackSource: "fallback.md" })).toEqual([
+    { source: "fallback.md", line: undefined, column: undefined },
   ]);
 });
 

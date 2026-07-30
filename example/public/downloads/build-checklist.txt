@@ -1,0 +1,5 @@
+Syncpress Public Build Checklist
+
+1. Run the strict site build.
+2. Review its diagnostics.
+3. Publish the reconciled output directory.

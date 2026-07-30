@@ -11,10 +11,18 @@ Ada starts a result, notes the things she uses, and finishes it. It is now up to
 date. When one of those things changes, the result needs doing again and
 remembers what changed; unrelated results stay up to date. Anything that used
 that result needs doing again too, however many results the change passes
-through. An unfinished result is marked as well, so it can be retried. Starting
-again replaces the old list of things used, and after it finishes it still
-remembers why it was redone. An input can be noted only while its result is being
-worked on.
+through. An unfinished result is marked as well, so it can be retried.
+
+After a result has settled, its last successful input graph remains in force
+through a later replacement attempt. Inputs noted by that replacement are
+provisional and replace the retained graph only if that attempt settles. A
+stale, restarted, or incomplete replacement therefore cannot discard
+last-known-good edges. Before a result has settled for the first time, its most
+recent attempt is its only graph and can be marked stale. An input can be noted
+while its result is being worked on or after it is current. A use that arrives
+after settlement extends the retained graph without reopening an attempt; this
+allows independently scheduled tracking reactions to finish after the reaction
+that settles the result.
 
 ## Text, Identity, And Reasons
 
@@ -50,6 +58,15 @@ a set of Uses with
   an input Input
 ```
 
+A result retains the Uses from its latest successful settlement. While a later
+attempt is building, it also collects a separate set of provisional inputs.
+Until the attempt settles, those provisional inputs are not Uses and do not
+participate in dependency traversal. A result with no successful settlement
+instead exposes the inputs from its most recent attempt as its Uses, so its
+first attempt can be invalidated. Starting another attempt discards that
+unsettled input set. A use received while a result is current is added directly
+to its retained Uses; it does not start or alter an attempt.
+
 ## Actions
 
 ```actions
@@ -59,21 +76,25 @@ begin (subject: Subject) : return (result: Result)
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
   where no result has subject
   then
-    add a result with no uses or reason, set it to building, and return it
+    add a result with no uses or reason, start an empty attempt, set it to building, and return it
   where a result has subject
   then
-    delete its uses, clear its reason if it was current, set it to building, and return it
+    discard its uncommitted attempt, retain its uses from the latest settlement if any,
+    clear its reason if it was current, start an empty attempt, set it to building, and return it
 
 use (subject: Subject, input: Input) : return (use: Use)
   where subject or input is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
-  where no result for subject is building
+  where no result for subject is building or current
   then
     refuse NOT_BUILDING "This result is not being computed."
   where a result for subject is building
   then
-    add a use with result and input if none exists and return it
+    add input to its active attempt if none exists and return its use
+  where a result for subject is current
+  then
+    add input to its retained uses if none exists and return its use
 
 settle (subject: Subject) : return (result: Result)
   where subject is not Text
@@ -84,14 +105,15 @@ settle (subject: Subject) : return (result: Result)
     refuse NOT_BUILDING "This result is not being computed."
   where a result for subject is building
   then
-    set it to current, retain its reason, and return it
+    replace its retained uses atomically with its active attempt's inputs, set it to current,
+    retain its reason, and return it
 
 touch (input: Input) : return (input: Input, count: Number)
   where input is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
   then
-    visit every direct and transitive dependent, including through already-stale results
+    visit every direct and transitive dependent through uses, including through already-stale results
     set each visited result that is not stale to stale with the reaching input as its reason
     return input and how many results became stale
 
@@ -100,7 +122,7 @@ drop (subject: Subject) : return (result: Result)
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
   then
-    remove the result and its uses if present
+    remove the result, its retained uses, and its active attempt if present
     return the stable result identity whether or not the result was present
 ```
 
@@ -119,8 +141,10 @@ _dependents (input: Input) : many (subject: Subject)
 answer meaning that no current result exists; it does not add a row to `_stale`.
 The other subject lookups answer no row for an unknown or non-Text subject, and
 input lookup answers no rows for a non-Text input. `_current` is present only for
-a current result. `_dependents` lists direct dependents; `touch` follows their
-transitive closure.
+a current result. `_uses` and `_dependents` show the retained graph while a
+replacement is building or stale; they do not expose its provisional inputs.
+Before first settlement, they show the most recent attempt's inputs. `touch`
+follows the same graph's transitive closure.
 
 All many queries use ascending UTF-8 byte order: `_stale` by subject, `_uses` by
 input, and `_dependents` by subject. `touch` proceeds by shortest path. If two

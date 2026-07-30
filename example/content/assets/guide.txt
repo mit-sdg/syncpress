@@ -1,1 +1,6 @@
-Install Syncpress and run the build command.
+Syncpress Field Guide Checklist
+
+1. Keep site.yaml, content, templates, and public files inside one project root.
+2. Build to a separate destination.
+3. Use local relative references for content assets and routed pages.
+4. Publish only after the strict build reports no diagnostics.

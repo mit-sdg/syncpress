@@ -92,6 +92,52 @@ test("discovers every supported HTML element and exposes structural roles and gr
   });
 });
 
+test("exposes deterministic Embedding-safe attributes only for primary image sources", () => {
+  const referencing = new ReferencingConcept();
+  const text = [
+    '<img src="primary.png" TITLE="Primary &amp; image" sizes="100vw" CLASS="hero" crossorigin="anonymous" dir="rtl" fetchpriority="high" id="hero" lang="en" referrerpolicy="strict-origin" role="img" DATA-owner="Ada&#39;s" ARIA-label="Primary &amp; image" srcset="candidate.png 2x" width="640" height="400" alt="Primary" loading="eager" decoding="sync" style="display:block" onload="unsafe">',
+    '<img srcset="set.png 2x" class="candidate">',
+    '<input type="image" src="input.png" class="input">',
+    '<source srcset="source.png 2x" class="source">',
+    '<img src="filtered.png" class="kept" crossorigin="Anonymous" dir="sideways" fetchpriority="urgent" referrerpolicy="everything" data-="ignored" aria-1bad="ignored" width="1" alt="Filtered">',
+    '<img src="bare.png" width="1" height="1" alt="Bare" loading="eager" decoding="sync">',
+    '<img src="recovered.png" class="first" data-rank="first" class="ignored" data-rank="ignored" src="ignored.png">',
+  ].join("");
+  const scanned = referencing.scan({ subject: "page", part: "attributes", text });
+  const references = referencing._references({ source: scanned.source });
+  const primary = references.find(({ raw }) => raw === "primary.png")!;
+  const filtered = references.find(({ raw }) => raw === "filtered.png")!;
+  const bare = references.find(({ raw }) => raw === "bare.png")!;
+  const recovered = references.find(({ raw }) => raw === "recovered.png")!;
+
+  expect(Object.getPrototypeOf(primary.attributes!)).toBeNull();
+  expect(Object.entries(primary.attributes!)).toEqual([
+    ["aria-label", "Primary & image"],
+    ["class", "hero"],
+    ["crossorigin", "anonymous"],
+    ["data-owner", "Ada's"],
+    ["dir", "rtl"],
+    ["fetchpriority", "high"],
+    ["id", "hero"],
+    ["lang", "en"],
+    ["referrerpolicy", "strict-origin"],
+    ["role", "img"],
+    ["sizes", "100vw"],
+    ["title", "Primary & image"],
+  ]);
+  expect(Object.entries(filtered.attributes!)).toEqual([["class", "kept"]]);
+  expect(Object.keys(bare.attributes!)).toEqual([]);
+  expect(recovered.raw).toBe("recovered.png");
+  expect(Object.entries(recovered.attributes!)).toEqual([
+    ["class", "first"],
+    ["data-rank", "first"],
+  ]);
+  for (const reference of references) expect(Object.hasOwn(reference, "attributes")).toBe(reference.role === "image");
+
+  (primary.attributes as Record<string, string>).class = "changed";
+  expect(referencing._reference({ reference: primary.reference })[0]!.attributes?.class).toBe("hero");
+});
+
 test("parses srcset URL tokens, entities, descriptors, and candidate source positions", () => {
   const referencing = new ReferencingConcept();
   const text = `<img

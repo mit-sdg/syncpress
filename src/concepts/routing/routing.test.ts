@@ -4,6 +4,7 @@ import {
   AddressTaken,
   InvalidAddress,
   InvalidBase,
+  InvalidOrigin,
   InvalidOwner,
   NotClaimed,
   RoutingConcept,
@@ -211,6 +212,60 @@ test("classifies references and projects only site-absolute targets below the ba
   expect(routing._classify({ target: "\ud800" })).toEqual([]);
 });
 
+test("validates optional HTTP(S) origins and projects canonical absolute URLs", () => {
+  const routing = new RoutingConcept();
+  expect(routing._absolute({ address: "/notes/" })).toEqual([]);
+
+  expect(routing.reorigin({ origin: "https://example.test/" })).toEqual({
+    origin: "https://example.test",
+    changed: true,
+  });
+  expect(routing.reorigin({ origin: "https://example.test" })).toEqual({
+    origin: "https://example.test",
+    changed: false,
+  });
+  expect(routing._absolute({ address: "/" })).toEqual([{ url: "https://example.test/" }]);
+
+  routing.rebase({ base: "/library/" });
+  expect(routing._absolute({ address: "/caf%C3%A9/" })).toEqual([
+    { url: "https://example.test/library/caf%C3%A9/" },
+  ]);
+  expect(routing._absolute({ address: "/404.html" })).toEqual([
+    { url: "https://example.test/library/404.html" },
+  ]);
+  expect(routing._absolute({ address: "/notes/?print=1" })).toEqual([]);
+
+  const projected = [{ url: "https://example.test/library/notes/" }];
+  for (const origin of [
+    "",
+    "https://EXAMPLE.test",
+    "https://example.test:443",
+    "https://example.test/path",
+    "https://example.test/?query",
+    "https://user@example.test",
+    "ftp://example.test",
+    "//example.test",
+    "example.test",
+    1,
+    null,
+    "\ud800",
+  ]) {
+    expect(() => routing.reorigin({ origin })).toThrow(InvalidOrigin);
+    expect(routing._absolute({ address: "/notes/" })).toEqual(projected);
+  }
+
+  expect(routing.reorigin({ origin: "http://localhost:8080" })).toEqual({
+    origin: "http://localhost:8080",
+    changed: true,
+  });
+  expect(routing._absolute({ address: "/notes/" })).toEqual([
+    { url: "http://localhost:8080/library/notes/" },
+  ]);
+  expect(routing.reorigin({})).toEqual({ origin: undefined, changed: true });
+  expect(routing._absolute({ address: "/notes/" })).toEqual([]);
+  expect(routing.reorigin({ origin: undefined })).toEqual({ origin: undefined, changed: false });
+});
+
 test("retargets safe relative references while preserving their exact suffix spelling", () => {
   const routing = new RoutingConcept();
   const examples: [replacement: string, original: string, target: string][] = [
@@ -376,6 +431,7 @@ test("actions reject malformed runtime identities and lookup queries stay safe",
     expect(routing._retarget({ replacement: value, original: "relative" })).toEqual([]);
     expect(routing._retarget({ replacement: "/relative/", original: value })).toEqual([]);
     expect(routing._url({ target: value })).toEqual([]);
+    expect(routing._absolute({ address: value })).toEqual([]);
     expect(routing._classify({ target: value })).toEqual([]);
   }
   expect(routing._claims()).toEqual([{ owner: "kept", address: "/kept/" }]);
@@ -384,6 +440,7 @@ test("actions reject malformed runtime identities and lookup queries stay safe",
 test("registry refusals, messages, and query promises match the standalone contract", async () => {
   expect(routingRegistration.refusals).toEqual({
     INVALID_BASE: InvalidBase,
+    INVALID_ORIGIN: InvalidOrigin,
     INVALID_OWNER: InvalidOwner,
     INVALID_ADDRESS: InvalidAddress,
     ADDRESS_TAKEN: AddressTaken,
@@ -395,6 +452,7 @@ test("registry refusals, messages, and query promises match the standalone contr
     ),
   ).toEqual([
     ["INVALID_BASE", "A base must be a canonical directory address."],
+    ["INVALID_ORIGIN", "An origin must be a canonical HTTP or HTTPS origin."],
     ["INVALID_OWNER", "An owner must be a well-formed text identity."],
     ["INVALID_ADDRESS", "An address must be a canonical site-absolute path."],
     ["ADDRESS_TAKEN", "Another owner has already claimed this address."],
@@ -409,6 +467,7 @@ test("registry refusals, messages, and query promises match the standalone contr
     ["_locate", "optional"],
     ["_retarget", "optional"],
     ["_url", "optional"],
+    ["_absolute", "optional"],
     ["_classify", "optional"],
     ["_claims", "many"],
   ]);
@@ -420,6 +479,10 @@ test("registry refusals, messages, and query promises match the standalone contr
     error: "INVALID_BASE",
     detail: "A base must be a canonical directory address.",
   });
+  expect(await Routing.reorigin({ origin: "https://example.test/path" })).toEqual({
+    error: "INVALID_ORIGIN",
+    detail: "An origin must be a canonical HTTP or HTTPS origin.",
+  });
   expect(await Routing.claim({ owner: 1, address: "/one/" })).toEqual({
     error: "INVALID_OWNER",
     detail: "An owner must be a well-formed text identity.",
@@ -429,6 +492,11 @@ test("registry refusals, messages, and query promises match the standalone contr
     detail: "An address must be a canonical site-absolute path.",
   });
   await Routing.claim({ owner: "one", address: "/one/" });
+  expect(await Routing.reorigin({ origin: "https://example.test/" })).toEqual({
+    origin: "https://example.test",
+    changed: true,
+  });
+  expect(await Routing._absolute({ address: "/one/" })).toEqual([{ url: "https://example.test/one/" }]);
   expect(await Routing.claim({ owner: "two", address: "/one/" })).toEqual({
     error: "ADDRESS_TAKEN",
     detail: "Another owner has already claimed this address.",

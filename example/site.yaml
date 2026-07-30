@@ -1,19 +1,49 @@
 site:
   title: Syncpress Field Notes
+  description: A small, complete field guide to the Syncpress static publishing workflow.
+  origin: https://syncpress.example
   basePath: /field-notes/
+  owner: The Syncpress project
+  navigation:
+    - label: Overview
+      url: /
+    - label: Build guide
+      url: /guides/getting-started/
+    - label: Example tour
+      url: /example-tour/
+    - label: Markup notes
+      url: /legal/
+    - label: Latest notes
+      url: /#journal
 paths:
   content: content
   templates: templates
   public: public
   assets: assets
+  output: dist
 defaults:
   - match: "**/*.md"
     values:
+      section: Field guide
       build:
         markup: markdown
         template: page.html
+        publish: true
+  - match: "**/*.html"
+    values:
+      section: Verbatim HTML
+      build:
+        markup: verbatim
+        template: page.html
+        publish: true
+  - match: "guides/**/*.md"
+    values:
+      section: Build guide
+      build:
+        template: guide.html
   - match: "posts/**/*.md"
     values:
+      section: Field note
       build:
         template: post.html
 collections:
@@ -22,10 +52,52 @@ collections:
     sort:
       by: data.date
       order: desc
+  featured:
+    match: "**/*.md"
+    where:
+      field: data.featured
+      equals: true
+    sort:
+      by: data.title
+      order: asc
+  siteBuilding:
+    match: "**/*.md"
+    where:
+      field: data.topics
+      contains: site-building
+    sort:
+      by: data.title
+      order: asc
+  documented:
+    match: "**/*.md"
+    where:
+      field: data.description
+      exists: true
+    sort:
+      by: data.title
+      order: asc
 markdown:
-  extensions: [tables, strikethrough]
+  extensions: [tables, footnotes, strikethrough, autolinks]
   raw: true
   excerptSeparator: "<!--more-->"
 images:
   widths: [1]
-  formats: [webp, original]
+  formats: [avif, webp, original]
+deploy:
+  nojekyll: true
+  requireNotFound: true
+  sitemap: true
+  feed:
+    collection: posts
+    path: feed.xml
+    title: Syncpress Field Notes
+    description: Release notes for the deterministic publishing field guide.
+  redirects:
+    /start/: /guides/getting-started/
+  pagination:
+    journal:
+      collection: posts
+      perPage: 1
+      route: /journal/:page/
+      template: page.html
+      title: Field note archive

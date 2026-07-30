@@ -1,0 +1,11 @@
+<article class="post-card">
+  <p class="card-meta">{{ post.data.date }} <span aria-hidden="true">/</span> <code>{{ post.source.path }}</code></p>
+  <h3><a href="{{ post.url }}">{{ post.data.title }}</a></h3>
+  <p>{{ post.data.description }}</p>
+  {% if post.excerpt %}
+<div class="excerpt-preview">
+<p class="excerpt-heading">Card excerpt, safely trusted after conversion</p>
+<div class="excerpt-code">{{ post.excerpt }}</div>
+</div>
+  {% endif %}
+</article>

@@ -26,6 +26,7 @@ export const DEFAULTS = {
   imageWidths: [480, 960, 1440],
   markdownExtensions: ["tables", "footnotes", "strikethrough", "autolinks"],
   markdownRaw: true,
+  outputPath: "dist",
   publicPath: "public",
   template: "page.html",
   templatesPath: "templates",
@@ -65,15 +66,18 @@ export const PATHS = {
   markdownRaw: ["markdown", "raw"],
   pathsAssets: ["paths", "assets"],
   pathsContent: ["paths", "content"],
+  pathsOutput: ["paths", "output"],
   pathsPublic: ["paths", "public"],
   pathsTemplates: ["paths", "templates"],
   site: ["site"],
   siteBasePath: ["site", "basePath"],
+  siteOrigin: ["site", "origin"],
 } as const;
 
 export const CONTEXT_PATHS = {
   collections: ["collections"],
   pageContent: ["page", "content"],
+  pageCanonicalUrl: ["page", "canonicalUrl"],
   pageData: ["page", "data"],
   pageSourcePath: ["page", "source", "path"],
   pageUrl: ["page", "url"],

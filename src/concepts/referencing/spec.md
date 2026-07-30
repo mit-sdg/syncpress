@@ -13,6 +13,8 @@ HTML, and which other addresses share that element or attribute. Ada can replace
 an address safely or trust supplied markup to replace one whole element. The HTML
 is finished only after every found address has an answer. Scanning again forgets
 the old answers, and removing the scan makes its old reference identities invalid.
+Primary image sources also carry a vetted record of authored attributes that an
+image embedding policy may preserve.
 
 ## Text And HTML
 
@@ -51,6 +53,26 @@ chooses the effective value when malformed input repeats an attribute.
 This is deliberately not a complete inventory of every URL-bearing HTML feature.
 Form actions, citation attributes, ping lists, `srcdoc`, CSS URLs, SVG references,
 and other element/attribute pairs are outside this concept's contract.
+
+Only a primary `img[src]` reference exposes `attributes`. It is a fresh
+null-prototype record of decoded, parser-retained, source-backed attribute values
+that Embedding can accept: `class`, `crossorigin`, `dir`, `fetchpriority`, `id`,
+`lang`, `referrerpolicy`, `role`, `sizes`, `title`, `aria-*`, and `data-*`.
+Dynamic names match `^(?:aria|data)-[a-z][a-z0-9_.:-]*$`. `crossorigin` is empty,
+`anonymous`, or `use-credentials`; `dir` is `auto`, `ltr`, or `rtl`;
+`fetchpriority` is `auto`, `high`, or `low`; and `referrerpolicy` is empty,
+`no-referrer`, `no-referrer-when-downgrade`, `origin`,
+`origin-when-cross-origin`, `same-origin`, `strict-origin`,
+`strict-origin-when-cross-origin`, or `unsafe-url`. Everything else is omitted,
+including Syncpress-owned `src`, `srcset`, `width`, `height`, `alt`, `loading`,
+and `decoding` attributes, event handlers, and `style`.
+
+Attribute names are canonical lowercase and records use ascending UTF-8 name
+order. Each query returns a new record, so changing a returned record cannot
+change stored state. Repeated or malformed attributes use the HTML parser's
+effective value, and attributes without a parser source location are omitted.
+No `srcset` candidate, `input[type=image]`, `source`, or other reference exposes
+`attributes`.
 
 `raw` is the HTML-decoded attribute value, not its entity spelling in the source.
 For `srcset`, the HTML-decoded value is parsed using the HTML candidate algorithm:
@@ -156,6 +178,7 @@ a set of References with
   a column Number
   a target Span
   an element span Span
+  optional attributes Attributes for a primary img src
   an optional answer Text
   an optional form Form
 ```
@@ -214,8 +237,8 @@ drop (subject: Subject, part: Part) : return (source: Source, count: Number, dro
 
 ```queries
 _source (source: Source) : optional (subject: Subject, part: Part)
-_reference (reference: Reference) : optional (source: Source, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number)
-_references (source: Source) : many (reference: Reference, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number)
-_unanswered (source: Source) : many (reference: Reference, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number)
+_reference (reference: Reference) : optional (source: Source, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number, attributes?: Attributes)
+_references (source: Source) : many (reference: Reference, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number, attributes?: Attributes)
+_unanswered (source: Source) : many (reference: Reference, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number, attributes?: Attributes)
 _finished (subject: Subject, part: Part) : optional (source: Source, text: Text)
 ```

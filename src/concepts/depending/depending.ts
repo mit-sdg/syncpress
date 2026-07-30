@@ -23,6 +23,8 @@ type ResultRecord = {
   state: ResultState;
   reason?: string;
   inputs: Set<string>;
+  attemptInputs: Set<string>;
+  settled: boolean;
 };
 
 const encoder = new TextEncoder();
@@ -66,12 +68,19 @@ export class DependingConcept {
     requireText(subject);
     let result = this.#results.get(subject);
     if (result === undefined) {
-      result = { result: resultIdentity(subject), subject, state: "building", inputs: new Set() };
+      result = {
+        result: resultIdentity(subject),
+        subject,
+        state: "building",
+        inputs: new Set(),
+        attemptInputs: new Set(),
+        settled: false,
+      };
       this.#results.set(subject, result);
       return { result: result.result };
     }
 
-    this.#clearInputs(result);
+    this.#discardAttempt(result);
     if (result.state === "current") result.reason = undefined;
     result.state = "building";
     return { result: result.result };
@@ -81,16 +90,12 @@ export class DependingConcept {
     requireText(subject);
     requireText(input);
     const result = this.#results.get(subject);
-    if (result?.state !== "building") throw new NotBuilding();
+    if (result?.state !== "building" && result?.state !== "current") throw new NotBuilding();
 
-    if (!result.inputs.has(input)) {
-      result.inputs.add(input);
-      let dependents = this.#dependentsByInput.get(input);
-      if (dependents === undefined) {
-        dependents = new Set();
-        this.#dependentsByInput.set(input, dependents);
-      }
-      dependents.add(subject);
+    const inputs = result.state === "building" ? result.attemptInputs : result.inputs;
+    if (!inputs.has(input)) {
+      inputs.add(input);
+      if (result.state === "current" || !result.settled) this.#addDependent(subject, input);
     }
     return { use: useIdentity(result.result, input) };
   }
@@ -99,6 +104,14 @@ export class DependingConcept {
     requireText(subject);
     const result = this.#results.get(subject);
     if (result?.state !== "building") throw new NotBuilding();
+
+    if (result.settled) this.#clearInputs(result);
+    result.inputs = result.attemptInputs;
+    result.attemptInputs = new Set();
+    if (result.settled) {
+      for (const input of result.inputs) this.#addDependent(result.subject, input);
+    }
+    result.settled = true;
     result.state = "current";
     return { result: result.result };
   }
@@ -137,6 +150,7 @@ export class DependingConcept {
     const result = this.#results.get(subject);
     if (result !== undefined) {
       this.#clearInputs(result);
+      this.#discardAttempt(result);
       this.#results.delete(subject);
     }
     return { result: result?.result ?? resultIdentity(subject) };
@@ -167,7 +181,8 @@ export class DependingConcept {
 
   _uses({ subject }: { subject: unknown }): { input: string }[] {
     if (!isText(subject)) return [];
-    return ordered(this.#results.get(subject)?.inputs ?? []).map((input) => ({ input }));
+    const result = this.#results.get(subject);
+    return ordered(result === undefined ? [] : result.settled ? result.inputs : result.attemptInputs).map((input) => ({ input }));
   }
 
   _dependents({ input }: { input: unknown }): { subject: string }[] {
@@ -182,5 +197,25 @@ export class DependingConcept {
       if (dependents?.size === 0) this.#dependentsByInput.delete(input);
     }
     result.inputs.clear();
+  }
+
+  #discardAttempt(result: ResultRecord): void {
+    if (!result.settled) {
+      for (const input of result.attemptInputs) {
+        const dependents = this.#dependentsByInput.get(input);
+        dependents?.delete(result.subject);
+        if (dependents?.size === 0) this.#dependentsByInput.delete(input);
+      }
+    }
+    result.attemptInputs.clear();
+  }
+
+  #addDependent(subject: string, input: string): void {
+    let dependents = this.#dependentsByInput.get(input);
+    if (dependents === undefined) {
+      dependents = new Set();
+      this.#dependentsByInput.set(input, dependents);
+    }
+    dependents.add(subject);
   }
 }

@@ -1,16 +1,23 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>{{ page.data.title }} | {{ site.title }}</title>
-  <link rel="stylesheet" href="/styles.css">
+  {% render "head.html" %}
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   {% render "header.html" %}
-  <main>
-    <article class="post">
-      <p class="date">{{ page.data.date }}</p>
-      {{ page.content }}
+  <main id="main" class="site-main">
+    <article class="document post">
+      <header class="document-header">
+        <p class="eyebrow">{{ page.data.section }}</p>
+        <p class="post-date">Published {{ page.data.date }}</p>
+        <h1>{{ page.data.title }}</h1>
+        <p class="lede">{{ page.data.description }}</p>
+      </header>
+      <div class="prose">
+        {{ page.content }}
+      </div>
+      {% render "page-footer.html" %}
     </article>
   </main>
   {% render "footer.html" %}
