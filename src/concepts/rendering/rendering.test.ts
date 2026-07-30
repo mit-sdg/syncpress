@@ -28,10 +28,13 @@ test("its principle: attempts select profiles and advance each stage once", () =
   expect(markdown.template).toBe("page.html");
   expect(custom.template).toBe("special.html");
   expect(rendering.settleBody({ rendering: markdown.rendering })).toMatchObject({ transitioned: true });
+  expect(rendering._active({ rendering: markdown.rendering })[0]?.stage).toBe("body-settled");
   expect(rendering.settleBody({ rendering: markdown.rendering })).toMatchObject({ transitioned: false });
   expect(rendering.settleLayout({ rendering: markdown.rendering })).toMatchObject({ transitioned: true });
+  expect(rendering._active({ rendering: markdown.rendering })[0]?.stage).toBe("layout-settled");
   expect(rendering.settleLayout({ rendering: markdown.rendering })).toMatchObject({ transitioned: false });
   expect(rendering.finish({ rendering: markdown.rendering })).toMatchObject({ transitioned: true });
+  expect(rendering._active({ rendering: markdown.rendering })).toEqual([]);
   expect(rendering.finish({ rendering: markdown.rendering })).toMatchObject({ transitioned: false });
   expect(rendering._attempt({ rendering: markdown.rendering })).toEqual([
     { subject: "page:post", path: "posts/post.md", profile: "markdown", template: "page.html", stage: "completed" },
@@ -47,6 +50,8 @@ test("a new attempt supersedes unfinished work and ignores its late completion",
   expect(rendering._attempt({ rendering: first.rendering })).toEqual([
     { subject: "page:post", path: "post.md", profile: "markdown", template: "page.html", stage: "superseded" },
   ]);
+  expect(rendering._active({ rendering: first.rendering })).toEqual([]);
+  expect(rendering._active({ rendering: second.rendering })[0]?.stage).toBe("started");
   expect(rendering.settleLayout({ rendering: first.rendering })).toMatchObject({ transitioned: false });
   expect(rendering._latest({ subject: "page:post" })).toEqual([
     { rendering: second.rendering, path: "post.html", profile: "verbatim", template: "page.html", stage: "started" },
@@ -85,6 +90,8 @@ test("queries retain attempts in start order and reject malformed identities", (
 
   expect(rendering._all().map(({ rendering: identity }) => identity)).toEqual([first.rendering, second.rendering]);
   expect(rendering._attempt({ rendering: null })).toEqual([]);
+  expect(rendering._active({ rendering: null })).toEqual([]);
+  expect(rendering._active({ rendering: "missing" })).toEqual([]);
   expect(rendering._latest({ subject: null })).toEqual([]);
 });
 
@@ -100,6 +107,7 @@ test("registry refusals, promises, and assembled outcomes match the specificatio
   });
   expect(registration.specification.queries).toEqual([
     { name: "_attempt", inputs: ["rendering"], promise: "optional" },
+    { name: "_active", inputs: ["rendering"], promise: "optional" },
     { name: "_latest", inputs: ["subject"], promise: "optional" },
     { name: "_all", inputs: [], promise: "many" },
   ]);

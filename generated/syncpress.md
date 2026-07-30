@@ -465,6 +465,7 @@ Actions:
 
 Queries (standing questions the state answers):
 
+- `_active (rendering)` — promises at most one row
 - `_all (…)` — promises any number of rows
 - `_attempt (rendering)` — promises at most one row
 - `_latest (subject)` — promises at most one row
@@ -672,7 +673,7 @@ matching catalog of page (page) — inputs (page); outputs (catalog, path); bind
 relative body reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, role); bindings () — answers any number of (rendering, page, reference, raw, role)
   where
     Referencing._source (source) has (part: "body", subject: rendering)
-    Rendering._attempt (rendering) has (subject: page)
+    Rendering._active (rendering) has (subject: page)
     Referencing._references (source) has (raw, reference, role)
     Routing._classify (target: raw) has (kind: "relative")
 ```
@@ -708,7 +709,7 @@ responsive body image embedding (embedding) — inputs (embedding); outputs (ren
     Embedding._embedding (embedding) has (subject: reference)
     Referencing._reference (reference) has (raw, role: "image", source)
     Referencing._source (source) has (part: "body", subject: rendering)
-    Rendering._attempt (rendering) has (subject: page)
+    Rendering._active (rendering) has (subject: page)
     Routing._classify (target: raw) has (kind: "relative")
     Filing._resolve (address: raw, file: page) has (target: image)
     Transcoding._original (subject: image) has (original)
@@ -806,7 +807,7 @@ Former "the operational inspection of page (owner)" — inputs (owner); bindings
 ```former
 Former "the originated completed render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, canonicalUrl, path, content); promises exactly one record — forms:
   a record of
-    where Rendering._attempt (rendering) has (subject: page)
+    where Rendering._active (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -829,7 +830,7 @@ Former "the originated completed render context of page (page)" — inputs (rend
 ```former
 Former "the originated render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, canonicalUrl, path); promises exactly one record — forms:
   a record of
-    where Rendering._attempt (rendering) has (subject: page)
+    where Rendering._active (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -872,7 +873,7 @@ Former "the sitemap urls" — inputs (); bindings (owner, address, url); promise
 ```former
 Former "the unoriginated completed render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, path, content); promises exactly one record — forms:
   a record of
-    where Rendering._attempt (rendering) has (subject: page)
+    where Rendering._active (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -894,7 +895,7 @@ Former "the unoriginated completed render context of page (page)" — inputs (re
 ```former
 Former "the unoriginated render context of page (page)" — inputs (rendering); bindings (page, configuration, site, collections, data, address, path); promises exactly one record — forms:
   a record of
-    where Rendering._attempt (rendering) has (subject: page)
+    where Rendering._active (rendering) has (subject: page)
     where Configuring._active () has (root: configuration)
     where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
     where Cataloging._record () has (catalogs: collections)
@@ -1042,7 +1043,7 @@ then
 when refused Converting.convert (part: "body", subject: rendering, detail, error)
 where
   earlier, Phasing.advance (phase: "render")
-  Rendering._attempt (rendering) has (subject: page)
+  Rendering._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: path)
@@ -1054,7 +1055,7 @@ then
 when refused Templating.fill (subject: rendering, detail, error)
 where
   earlier, Phasing.advance (phase: "render")
-  Rendering._attempt (rendering) has (subject: page)
+  Rendering._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
   Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
 then
@@ -1571,7 +1572,7 @@ then
 ```reaction
 when Templating.fill (subject: rendering, output)
 where
-  Rendering._attempt (rendering) has (profile: name)
+  Rendering._active (rendering) has (profile: name)
   Converting._profile (name) has (profile)
 then
   Converting.convert (part: "body", profile, source: output, subject: rendering)
@@ -1582,7 +1583,7 @@ then
 ```reaction
 when Templating.fill (subject: rendering, filling)
 where
-  Rendering._attempt (rendering) has (subject: page)
+  Rendering._active (rendering) has (subject: page)
   Templating._tree (owner: filling) has (used)
   Templating._template (name: used) has (template)
 then
@@ -1853,7 +1854,7 @@ then
 when refused Templating.render (subject: rendering, detail, error)
 where
   earlier, Phasing.advance (phase: "render")
-  Rendering._attempt (rendering) has (subject: page)
+  Rendering._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
   Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
 then
@@ -1952,7 +1953,7 @@ then
 ```reaction
 when Templating.fill (subject: rendering)
 where
-  Rendering._attempt (rendering) has (profile: name, subject: page)
+  Rendering._active (rendering) has (profile: name, subject: page)
   no Converting._profile (name)
   Filing._file (file: page) has (path)
 then
@@ -1964,7 +1965,7 @@ then
 ```reaction
 when Rendering.settleBody (rendering, subject: page, transitioned: true)
 where
-  Rendering._attempt (rendering) has (template: name)
+  Rendering._active (rendering) has (template: name)
   no Templating._template (name)
   Filing._file (file: page) has (path)
 then
@@ -2203,7 +2204,7 @@ when refused Embedding.declare (subject: reference, detail, error)
 where
   Referencing._reference (reference) has (source)
   Referencing._source (source) has (part: "body", subject: rendering)
-  Rendering._attempt (rendering) has (subject: page)
+  Rendering._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: path)
@@ -2249,7 +2250,7 @@ where
   Embedding._embedding (embedding) has (subject: reference)
   Referencing._reference (reference) has (source)
   Referencing._source (source) has (part: "body", subject: rendering)
-  Rendering._attempt (rendering) has (subject: page)
+  Rendering._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: path)
@@ -2407,7 +2408,7 @@ then
 when Referencing.scan (part: "layout", source)
 where
   Referencing._source (source) has (subject: rendering)
-  Rendering._attempt (rendering) has (subject: page)
+  Rendering._active (rendering) has (subject: page)
   Referencing._references (source) has (raw)
   Routing._classify (target: raw) has (kind: "relative")
   Filing._file (file: page) has (path)
@@ -2428,7 +2429,7 @@ then
 ```reaction
 when Templating.render (subject: attempt, rendering)
 where
-  Rendering._attempt (rendering: attempt) has (subject: page)
+  Rendering._active (rendering: attempt) has (subject: page)
   Templating._tree (owner: rendering) has (used)
   Templating._template (name: used) has (template)
 then
@@ -2787,7 +2788,7 @@ when Rendering.settleBody (rendering, subject: page, transitioned: true)
 where
   Routing._address (owner: page) has (address)
   Routing._absolute (address)
-  Rendering._attempt (rendering) has (template: name)
+  Rendering._active (rendering) has (template: name)
   Templating._template (name) has (template)
 then
   Templating.render (context: former "the originated completed render context of page (page)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
@@ -2800,7 +2801,7 @@ when Rendering.settleBody (rendering, subject: page, transitioned: true)
 where
   Routing._address (owner: page) has (address)
   no Routing._absolute (address)
-  Rendering._attempt (rendering) has (template: name)
+  Rendering._active (rendering) has (template: name)
   Templating._template (name) has (template)
 then
   Templating.render (context: former "the unoriginated completed render context of page (page)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])

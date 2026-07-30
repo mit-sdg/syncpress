@@ -118,6 +118,17 @@ export class RenderingConcept {
     return record === undefined ? [] : [this.#row(record)];
   }
 
+  _active({ rendering }: { rendering: unknown }): Omit<RenderingRecord, "rendering" | "order">[] {
+    if (!isText(rendering)) return [];
+    const record = this.#attempts.get(rendering);
+    return record === undefined
+      || this.#latestBySubject.get(record.subject) !== record
+      || record.stage === "completed"
+      || record.stage === "superseded"
+      ? []
+      : [this.#row(record)];
+  }
+
   _latest({ subject }: { subject: unknown }): Omit<RenderingRecord, "subject" | "order">[] {
     if (!isText(subject)) return [];
     const record = this.#latestBySubject.get(subject);

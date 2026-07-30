@@ -39,11 +39,13 @@ a set of Renderings with
   a start order Number
 
 at most one latest Rendering for each Subject
+at most one active Rendering for each Subject
 ```
 
 Beginning always creates a new rendering identity. If the subject's latest
 attempt is unfinished, beginning another marks the earlier one superseded.
 Completed and superseded attempts remain queryable as historical evidence.
+The latest attempt is active while started, body-settled, or layout-settled.
 
 ## Actions
 
@@ -113,13 +115,15 @@ finish (rendering: Rendering) : return (rendering: Rendering, subject: Subject, 
 
 ```queries
 _attempt (rendering: Rendering) : optional (subject: Subject, path: Path, profile: Profile, template: TemplateName, stage: Stage)
+_active (rendering: Rendering) : optional (subject: Subject, path: Path, profile: Profile, template: TemplateName, stage: Stage)
 _latest (subject: Subject) : optional (rendering: Rendering, path: Path, profile: Profile, template: TemplateName, stage: Stage)
 _all () : many (rendering: Rendering, subject: Subject, path: Path, profile: Profile, template: TemplateName, stage: Stage)
 ```
 
-`_attempt` includes historical superseded and completed attempts. `_latest`
-returns the most recently begun attempt for a subject. `_all` lists attempts in
-start order.
+`_attempt` includes historical superseded and completed attempts. `_active`
+returns an attempt only while it is the subject's latest unfinished attempt.
+`_latest` returns the most recently begun attempt for a subject. `_all` lists
+attempts in start order.
 
 Rendering records lifecycle and source-profile selection. It does not fill
 templates, convert source, resolve references, emit output, or decide that

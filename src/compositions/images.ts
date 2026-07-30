@@ -48,7 +48,7 @@ export const ResponsiveBodyImageEmbedding = view(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source, raw, role: "image" }),
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Routing._classify({ target: raw }).is({ kind: "relative" }),
       Filing._resolve({ file: page, address: raw }).is({ target: image }),
       Transcoding._original({ subject: image }).is({ original }),
@@ -282,7 +282,7 @@ export const RasterEmbeddingDeclarationsDiagnose = reaction(({ reference, error,
     .where(
       Referencing._reference({ reference }).is({ source }),
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
@@ -294,7 +294,7 @@ export const RasterOffersDiagnose = reaction(({ embedding, error, detail, refere
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source }),
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),

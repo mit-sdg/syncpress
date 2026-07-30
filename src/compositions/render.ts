@@ -92,7 +92,7 @@ export const RenderingAttemptsFillAuthoredBodies = reaction(({ page, rendering, 
 export const MissingRenderingProfilesDiagnose = reaction(({ rendering, page, name, path }) =>
   when(Templating.fill({ subject: rendering }).responds({}))
     .where(
-      Rendering._attempt({ rendering }).is({ subject: page, profile: name }),
+      Rendering._active({ rendering }).is({ subject: page, profile: name }),
       no(Converting._profile({ name })),
       Filing._file({ file: page }).is({ path }),
     )
@@ -108,7 +108,7 @@ export const MissingRenderingProfilesDiagnose = reaction(({ rendering, page, nam
 export const FilledBodiesConvert = reaction(({ rendering, output, profile, name }) =>
   when(Templating.fill({ subject: rendering }).responds({ output }))
     .where(
-      Rendering._attempt({ rendering }).is({ profile: name }),
+      Rendering._active({ rendering }).is({ profile: name }),
       Converting._profile({ name }).is({ profile }),
     )
     .then(Converting.convert({ subject: rendering, part: PARTS.body, profile, source: output })),
@@ -125,7 +125,7 @@ export const ConvertedBodiesScan = reaction(({ rendering, output }) =>
 export const FilledBodiesTrackTemplates = reaction(({ page, rendering, filling, used, template }) =>
   when(Templating.fill({ subject: rendering }).responds({ filling }))
     .where(
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Templating._tree({ owner: filling }).is({ used }),
       Templating._template({ name: used }).is({ template }),
     )
@@ -151,7 +151,7 @@ export const SettledBodiesRenderOriginatedPages = reaction(({ rendering, page, a
     .where(
       Routing._address({ owner: page }).is({ address }),
       Routing._absolute({ address }),
-      Rendering._attempt({ rendering }).is({ template: name }),
+      Rendering._active({ rendering }).is({ template: name }),
       Templating._template({ name }).is({ template }),
     )
     .then(Templating.render({
@@ -168,7 +168,7 @@ export const SettledBodiesRenderUnoriginatedPages = reaction(({ rendering, page,
     .where(
       Routing._address({ owner: page }).is({ address }),
       no(Routing._absolute({ address })),
-      Rendering._attempt({ rendering }).is({ template: name }),
+      Rendering._active({ rendering }).is({ template: name }),
       Templating._template({ name }).is({ template }),
     )
     .then(Templating.render({
@@ -182,7 +182,7 @@ export const SettledBodiesRenderUnoriginatedPages = reaction(({ rendering, page,
 export const MissingRenderingTemplatesDiagnose = reaction(({ rendering, page, name, path }) =>
   when(Rendering.settleBody({ rendering }).responds({ subject: page, transitioned: true }))
     .where(
-      Rendering._attempt({ rendering }).is({ template: name }),
+      Rendering._active({ rendering }).is({ template: name }),
       no(Templating._template({ name })),
       Filing._file({ file: page }).is({ path }),
     )
@@ -200,7 +200,7 @@ export const MissingRenderingTemplatesDiagnose = reaction(({ rendering, page, na
 export const RenderedLayoutsTrackTemplates = reaction(({ page, attempt, rendering, used, template }) =>
   when(Templating.render({ subject: attempt }).responds({ rendering }))
     .where(
-      Rendering._attempt({ rendering: attempt }).is({ subject: page }),
+      Rendering._active({ rendering: attempt }).is({ subject: page }),
       Templating._tree({ owner: rendering }).is({ used }),
       Templating._template({ name: used }).is({ template }),
     )
@@ -249,7 +249,7 @@ export const BodyTemplateFailuresDiagnose = reaction(({ page, rendering, error, 
   when(Templating.fill({ subject: rendering }).refuses({ error, detail }))
     .where(
       earlier(Phasing.advance, {}, { phase: "render" }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
       Templating._failureLocation({ subject: rendering, fallbackSource: path }).is({ source, line, column }),
     )
@@ -260,7 +260,7 @@ export const BodyConversionFailuresDiagnose = reaction(({ page, rendering, error
   when(Converting.convert({ subject: rendering, part: PARTS.body }).refuses({ error, detail }))
     .where(
       earlier(Phasing.advance, {}, { phase: "render" }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
@@ -270,7 +270,7 @@ export const LayoutTemplateFailuresDiagnose = reaction(({ page, rendering, error
   when(Templating.render({ subject: rendering }).refuses({ error, detail }))
     .where(
       earlier(Phasing.advance, {}, { phase: "render" }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
       Templating._failureLocation({ subject: rendering, fallbackSource: path }).is({ source, line, column }),
     )

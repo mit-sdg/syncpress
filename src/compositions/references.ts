@@ -11,7 +11,7 @@ export const RelativeBodyReference = view(
   ({ source }, { rendering, page, reference, raw, role }, _bindings) =>
     where(
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ reference, raw, role }),
       Routing._classify({ target: raw }).is({ kind: "relative" }),
     ),
@@ -328,7 +328,7 @@ export const RelativeLayoutReferencesDiagnose = reaction(({ source, rendering, p
   when(Referencing.scan({ part: PARTS.layout }).responds({ source }))
     .where(
       Referencing._source({ source }).is({ subject: rendering }),
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ raw }),
       Routing._classify({ target: raw }).is({ kind: "relative" }),
       Filing._file({ file: page }).is({ path }),

@@ -113,7 +113,7 @@ export const PageRenderContext = former(
   "the originated render context of page (page)",
   ({ rendering }, { page, configuration, site, collections, data, address, canonicalUrl, path }) =>
     where(
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
@@ -132,7 +132,7 @@ export const UnoriginatedPageRenderContext = former(
   "the unoriginated render context of page (page)",
   ({ rendering }, { page, configuration, site, collections, data, address, path }) =>
     where(
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
@@ -151,7 +151,7 @@ export const CompletedPageRenderContext = former(
   "the originated completed render context of page (page)",
   ({ rendering }, { page, configuration, site, collections, data, address, canonicalUrl, path, content }) =>
     where(
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
@@ -171,7 +171,7 @@ export const CompletedUnoriginatedPageRenderContext = former(
   "the unoriginated completed render context of page (page)",
   ({ rendering }, { page, configuration, site, collections, data, address, path, content }) =>
     where(
-      Rendering._attempt({ rendering }).is({ subject: page }),
+      Rendering._active({ rendering }).is({ subject: page }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
       Cataloging._record({}).is({ catalogs: collections }),
