@@ -43,6 +43,25 @@ code {
   font-size: 0.9em;
 }
 
+pre {
+  max-width: 100%;
+  margin: 1.5rem 0;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  border: 1px solid #263957;
+  border-radius: 0.7rem;
+  background: #18243a;
+  color: #dbe7ff;
+  line-height: 1.6;
+}
+
+pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.88rem;
+}
+
 .skip-link {
   position: fixed;
   z-index: 10;
@@ -182,6 +201,15 @@ h3 { font-size: 1.15rem; }
 
 .prose p,
 .prose li { max-width: 46rem; line-height: 1.75; }
+
+.prose > ul,
+.prose > ol { padding-left: 1.4rem; }
+
+.prose hr {
+  margin: 2.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
 
 .prose blockquote {
   margin: 1.5rem 0;

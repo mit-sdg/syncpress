@@ -1,6 +1,6 @@
 ---
 title: Verbatim HTML and escaped values
-description: An HTML source page that keeps authored markup while Liquid still protects interpolated data.
+description: An HTML source page that keeps authored markup and HTML-escapes ordinary Liquid output.
 escapeExample: '<strong>not markup</strong> & "quotes"'
 ---
 <section class="html-note">
@@ -12,5 +12,6 @@ escapeExample: '<strong>not markup</strong> & "quotes"'
     <code>{{ page.data.escapeExample }}</code>
   </div>
   <p>The page layout can trust its completed <code>page.content</code>, but authors cannot turn an arbitrary data value into trusted markup with a filter.</p>
+  <p>HTML escaping is not contextual sanitization. Do not place unvalidated data in URI, CSS, or JavaScript contexts.</p>
   <p><a class="button" href="./assets/guide.txt?format=text#checklist" download>Download the local content checklist</a></p>
 </section>

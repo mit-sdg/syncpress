@@ -1,17 +1,29 @@
 ---
-title: A small, complete site
-description: A documentation-first Syncpress project that can be built exactly as it appears here.
+title: Static publishing with explicit rules
+description: Syncpress builds Markdown, HTML, templates, and local files into a deterministic static site.
 topics: [overview, site-building]
 ---
 
-Syncpress turns ordinary files into a deterministic static site. This field guide is both a readable example and an integration-sized source project: its configuration, content, templates, local assets, and copied public files all live beside one another.
+Syncpress is a static site generator for documentation, blogs, portfolios, and other content-oriented sites. A project contains YAML policy, Markdown or HTML content, Liquid layouts, and ordinary files. A successful build writes a static directory with no server-side runtime.
 
-## A build that explains itself
+This documentation is also the repository's executable example. Every page is built from [`example/`](https://github.com/mit-sdg/syncpress/tree/main/example), and the integration suite checks the complete output tree by SHA-256. The examples therefore demonstrate the interfaces they describe.
 
-- Ordered defaults choose Markdown or verbatim HTML and then specialize guides and posts.
-- Content-relative links become routed pages, copied downloads, or optimized image output.
-- A base path lets the same output deploy below a domain root without authoring special URLs.
-- Liquid values are escaped by default; only the finished page body is trusted by its layout.
+## Start here
+
+1. [Build the example](./guides/getting-started.md) to see one complete project lifecycle.
+2. Read [configuration](./reference/configuration.md), [content and routes](./reference/content-routing.md), [templates and data](./reference/templates.md), and [assets and images](./reference/assets.md) when changing a site.
+3. Use [commands, deployment, and diagnostics](./reference/operations.md) when running builds locally or in automation.
+4. Read [how Syncpress is built](./about.md) for the concept-and-reaction architecture.
+
+## What a build guarantees
+
+Equal declared input bytes and configuration produce equal output bytes. The build does not use filesystem enumeration order, a clock, random identifiers, or undeclared environment values as publishing inputs. A build rejected before reconciliation does not replace the previous output tree. See [reconciliation failures](./reference/operations.md#build) for the filesystem assumptions at the final installation step.
+
+Syncpress does not provide server rendering, API routes, a database, executable configuration, or a plugin platform. Use another system when a page must depend on request-time state or arbitrary build-time code.
+
+## This page as an example
+
+The source for this page demonstrates front matter, Markdown, Liquid collection access, a named partial, local page references, an ordinary SVG, and a responsive raster image. Inspect [`content/index.md`](https://github.com/mit-sdg/syncpress/blob/main/example/content/index.md) beside the generated result.
 
 <figure class="responsive-swatch">
   <img src="./assets/blue.png?variant=field-note#pixel" alt="A flat blue field used as a responsive image fixture" class="field-image" sizes="(min-width: 48rem) 42rem, 100vw" data-fixture="responsive">
@@ -23,13 +35,13 @@ Syncpress turns ordinary files into a deterministic static site. This field guid
   <figcaption>The adjacent SVG is a normal local asset, copied beside the referencing page.</figcaption>
 </figure>
 
-## Follow the source
+## Reference handling in this page
 
-[Build the guide](./guides/getting-started.md?from=home#install), [tour the source tree](./about.md?from=home#route-policy), or [inspect the verbatim HTML page](./legal.html#escaping). Those local links retain their query strings and fragments after Syncpress retargets them to routed output.
+[Build the example](./guides/getting-started.md?from=home#prerequisites), [trace the implementation](./about.md?from=home#build-lifecycle), or [inspect a verbatim HTML page](./legal.html#escaping). These content-relative links retain their query strings and fragments when Syncpress retargets them to canonical routes.
 
 The `documented` collection uses an existence filter and currently contains **{{ collections.documented.size }}** routed documents. The `siteBuilding` collection uses a list-contains filter, while the featured section below uses a boolean equality filter.
 
-## Featured routes
+## Documentation routes selected by a collection
 
 <div class="feature-grid">
 {% for item in collections.featured %}
@@ -37,7 +49,7 @@ The `documented` collection uses an existence filter and currently contains **{{
 {% endfor %}
 </div>
 
-## Latest field notes
+## Design notes
 
 <div id="journal" class="post-list">
 {% for post in collections.posts %}

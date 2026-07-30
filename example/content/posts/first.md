@@ -12,4 +12,4 @@ Every routed document starts with an ordinary content path. `posts/first.md` der
 
 Collections receive this authored prefix as an excerpt before page rendering. The post card renders that conversion as trusted markup through Syncpress's fixed excerpt capability; front matter remains escaped.
 
-[Read the route tour](../about.md#route-policy) for the project-level view.
+[Read the build lifecycle](../about.md#build-lifecycle) for the project-level view.

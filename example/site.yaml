@@ -1,20 +1,20 @@
 site:
-  title: Syncpress Field Notes
-  description: A small, complete field guide to the Syncpress static publishing workflow.
+  title: Syncpress Documentation
+  description: User and implementation documentation for the Syncpress static publishing generator.
   origin: https://syncpress.example
   basePath: /field-notes/
-  owner: The Syncpress project
+  owner: the Syncpress project
   navigation:
-    - label: Overview
+    - label: Introduction
       url: /
-    - label: Build guide
+    - label: Get started
       url: /guides/getting-started/
-    - label: Example tour
-      url: /example-tour/
-    - label: Markup notes
-      url: /legal/
-    - label: Latest notes
-      url: /#journal
+    - label: User guide
+      url: /reference/
+    - label: Internals
+      url: /internals/
+    - label: Source
+      url: https://github.com/mit-sdg/syncpress
 paths:
   content: content
   templates: templates
@@ -24,7 +24,7 @@ paths:
 defaults:
   - match: "**/*.md"
     values:
-      section: Field guide
+      section: Syncpress documentation
       build:
         markup: markdown
         template: page.html
@@ -39,6 +39,16 @@ defaults:
   - match: "guides/**/*.md"
     values:
       section: Build guide
+      build:
+        template: guide.html
+  - match: "reference/**/*.md"
+    values:
+      section: User guide
+      build:
+        template: guide.html
+  - match: "internals/**/*.md"
+    values:
+      section: How Syncpress is built
       build:
         template: guide.html
   - match: "posts/**/*.md"
@@ -91,7 +101,7 @@ deploy:
     collection: posts
     path: feed.xml
     title: Syncpress Field Notes
-    description: Release notes for the deterministic publishing field guide.
+    description: Design notes from the Syncpress executable documentation.
   redirects:
     /start/: /guides/getting-started/
   pagination:
