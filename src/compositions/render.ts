@@ -230,17 +230,24 @@ export const FinishedLayoutAnswersSettleRendering = reaction(({ rendering }) =>
     .then(Rendering.settleLayout({ rendering })),
 );
 
-/** A newly settled layout commits the complete page attempt. */
-export const SettledLayoutsEmit = reaction(({ rendering, page, text, address, path }) =>
-  when(Rendering.settleLayout({ rendering }).responds({ subject: page, transitioned: true }))
+/** A newly settled layout completes only while it remains the active attempt. */
+export const SettledLayoutsFinish = reaction(({ rendering }) =>
+  when(Rendering.settleLayout({ rendering }).responds({ transitioned: true })).then(
+    Rendering.finish({ rendering }),
+  ),
+);
+
+/** A completed rendering publishes only while it remains the page's latest attempt. */
+export const FinishedRenderingsEmit = reaction(({ rendering, page, text, address, path }) =>
+  when(Rendering.finish({ rendering }).responds({ subject: page, transitioned: true }))
     .where(
+      Rendering._latest({ subject: page }).is({ rendering, stage: "completed" }),
       Referencing._finished({ subject: rendering, part: PARTS.layout }).is({ text }),
       Routing._address({ owner: page }).is({ address }),
       Routing._file({ address }).is({ path }),
     )
     .then(Emitting.intend({ producer: page, path, content: text, medium: "text/html" }).responds({}))
     .then(Emitting.commit({ producer: page }).responds({}))
-    .then(Rendering.finish({ rendering }).responds({ transitioned: true }))
     .then(Depending.settle({ subject: page })),
 );
 

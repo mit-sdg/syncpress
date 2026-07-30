@@ -1184,7 +1184,7 @@ then
 ### fullSite.ClaimedRoutesBeginRendering
 
 ```reaction
-when Routing.claim (owner: page, changed: true)
+when Routing.claim (owner: page)
 where
   earlier, Phasing.advance (phase: "route")
   Filing._file (file: page) has (path)
@@ -1658,6 +1658,35 @@ where
   Deploying._forOwner (owner) has (producer)
 then
   Emitting.begin (producer)
+```
+
+### fullSite.FinishedRenderingsEmit
+
+```reaction
+when Rendering.finish (rendering, subject: page, transitioned: true)
+where
+  Rendering._latest (subject: page) has (rendering, stage: "completed")
+  Referencing._finished (part: "layout", subject: rendering) has (text)
+  Routing._address (owner: page) has (address)
+  Routing._file (address) has (path)
+then
+  Emitting.intend (content: text, medium: "text/html", path, producer: page)
+```
+
+### fullSite.FinishedRenderingsEmit#2
+
+```reaction
+when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.FinishedRenderingsEmit
+then
+  Emitting.commit (producer: page)
+```
+
+### fullSite.FinishedRenderingsEmit#3
+
+```reaction
+when Emitting.commit (producer: page), asked by fullSite.FinishedRenderingsEmit#2
+then
+  Depending.settle (subject: page)
 ```
 
 ### fullSite.FixedPatternsCompile:html
@@ -2783,44 +2812,12 @@ then
   Templating.render (context: former "the unoriginated completed render context of page (page)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
-### fullSite.SettledLayoutsEmit
+### fullSite.SettledLayoutsFinish
 
 ```reaction
-when Rendering.settleLayout (rendering, subject: page, transitioned: true)
-where
-  Referencing._finished (part: "layout", subject: rendering) has (text)
-  Routing._address (owner: page) has (address)
-  Routing._file (address) has (path)
-then
-  Emitting.intend (content: text, medium: "text/html", path, producer: page)
-```
-
-### fullSite.SettledLayoutsEmit#2
-
-```reaction
-when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.SettledLayoutsEmit
-then
-  Emitting.commit (producer: page)
-```
-
-### fullSite.SettledLayoutsEmit#3
-
-```reaction
-when Emitting.commit (producer: page), asked by fullSite.SettledLayoutsEmit#2
-where
-  earlier, Rendering.settleLayout (rendering, subject: page, transitioned: true)
+when Rendering.settleLayout (rendering, transitioned: true)
 then
   Rendering.finish (rendering)
-```
-
-### fullSite.SettledLayoutsEmit#4
-
-```reaction
-when Rendering.finish (rendering, transitioned: true), asked by fullSite.SettledLayoutsEmit#3
-where
-  earlier, Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.SettledLayoutsEmit
-then
-  Depending.settle (subject: page)
 ```
 
 ### fullSite.SitemapWorkPrepares

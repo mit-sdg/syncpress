@@ -78,7 +78,7 @@ export const InvalidRouteClaimsDiagnose = reaction(({ page, root, path, detail }
 
 /** A successful route starts one observable rendering attempt and selects its source profile. */
 export const ClaimedRoutesBeginRendering = reaction(({ page, path, data }) =>
-  when(Routing.claim({ owner: page }).responds({ changed: true }))
+  when(Routing.claim({ owner: page }).responds({}))
     .where(
       earlier(Phasing.advance, {}, { phase: "route" }),
       Filing._file({ file: page }).is({ path }),
