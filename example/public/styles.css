@@ -1,0 +1,3 @@
+body { font-family: system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; }
+header, nav { display: flex; gap: 1rem; }
+.post .date { color: #475569; }

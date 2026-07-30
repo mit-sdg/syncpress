@@ -1,8 +1,10 @@
 # Syncpress
 
-Syncpress is a deterministic static publishing generator built as independently
-specified sync-engine concepts and phased composition reactions. The product and
-architecture are specified in [the design document](docs/static-publishing-generator.md).
+Syncpress is a deterministic static publishing generator built from independently
+specified sync-engine concepts and composition reactions. The [progress
+tracker](docs/static-publishing-generator.md) records the composed batch build
+and remaining delivery work. Current concept specifications and generated
+assembly documentation define behavior contracts.
 
 ## Install and run
 
@@ -18,20 +20,24 @@ compares parsed action and query declarations with the class source, checks both
 generated files, runs application diagnostics, and typechecks the project.
 `principle` runs every concept's direct Principle test without an assembly.
 
-## Initial CLI
+## Build a site
 
-The first runnable composition builds Markdown files with YAML front matter into
-HTML using one fixed page layout. It is deliberately narrow while the rest of
-the SSG composition is built out: no configuration file, assets, collections,
-or watch mode yet.
+The batch CLI builds a configured project. `site.yaml` selects roots, defaults,
+collections, Markdown settings, image variants, and the site base path. Markdown
+and HTML content live under `content/`; layouts live under `templates/`; Liquid
+partials live under `templates/includes/`; copied files live under `public/`.
+The output path is resolved relative to the site directory.
 
 ```sh
 bun run site --help
-bun run site build ./content ./dist
+bun run site build ./example ./dist
 ```
 
 `index.md` becomes `dist/index.html`; `about.md` becomes
-`dist/about/index.html`. The composition is in `src/compositions/minimal-site.ts`.
+`dist/about/index.html`. Local routes, assets, and responsive raster images are
+rewritten after layouts render, so a configured base path is applied once.
+`src/compositions/full-site/` contains the phase-oriented composition; `example/`
+is its executable source fixture.
 
 A concept's State section is optional uninterpreted human notation. It is not a
 schema, is not compared with class fields or storage, and does not enter

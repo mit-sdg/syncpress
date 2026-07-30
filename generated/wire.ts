@@ -18,18 +18,20 @@ export type SyncpressWire = {
       "destination": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Emitting"]["direct"]>[0], ["destination"]>>;
     };
     output: {
-      "destination": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Emitting"]["direct"]>[0], ["destination"]>>;
+      "sequence": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Phasing"]["declare"]>>, ["sequence"]>>;
     };
-    error: { error: AppWideError | "DESTINATION_UNAVAILABLE" | "INCOMPATIBLE_PROFILE" | "INVALID_DESTINATION" | "INVALID_INPUT" | "INVALID_PROFILE" | "MALFORMED_PATTERN" | "TEMPLATE_SYNTAX" | "UNSUPPORTED_EXTENSION" | "UNSUPPORTED_PROFILE_KIND" | "UNSUPPORTED_TEMPLATE" };
+    error: { error: AppWideError | "DESTINATION_UNAVAILABLE" | "INCOMPATIBLE_PROFILE" | "INVALID_BASE" | "INVALID_DESTINATION" | "INVALID_DIRECTION" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_PHASES" | "INVALID_PROFILE" | "INVALID_TEXT" | "MALFORMED_CONFIGURATION" | "MALFORMED_PATTERN" | "NO_PHASES" | "PHASE_REPEATED" | "UNKNOWN_SEVERITY" | "UNSUPPORTED_EXTENSION" | "UNSUPPORTED_NOTATION" | "UNSUPPORTED_PROFILE_KIND" };
   };
   "/site/reconcile": {
-    input: Record<string, never>;
+    input: {
+      "job": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Composing"]["_record"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Phasing"]["_outcome"]>[0], ["job"]>]>>;
+    };
     output: {
       "kept": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["kept"]>>;
       "removed": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["removed"]>>;
       "replaced": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["replaced"]>>;
       "written": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["written"]>>;
     };
-    error: { error: AppWideError | "DESTINATION_NOT_DIRECTED" | "RECONCILIATION_FAILED" };
+    error: { error: AppWideError | "BUILD_FAILED" | "BUILD_HAS_ERRORS" | "BUILD_INCOMPLETE" | "BUILD_NOT_COMPLETE" | "DESTINATION_NOT_DIRECTED" | "INVALID_INPUT" | "RECONCILIATION_FAILED" };
   };
 };

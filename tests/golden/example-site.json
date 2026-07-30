@@ -1,0 +1,15 @@
+{
+  "files": {
+    "about/index.html": "649b4bd5ee66e584a99b0091f4ed8a188a2b2d08deb1067e0be754b7874777a4",
+    "assets/3bf5750494e5bfcb4d657fb33ba7f12bb438e6ed5816c74b4df50a1daacc048a.webp": "3bf5750494e5bfcb4d657fb33ba7f12bb438e6ed5816c74b4df50a1daacc048a",
+    "assets/blue.png": "fbf9502d48345632d4783f3e75c3d4ff49584094096f53bcc1b5ebc518118ea3",
+    "assets/guide.txt": "66b2bfdadead4801a5e7761d926c4206e98f945db04c07482efa5c381ff16327",
+    "assets/mark.svg": "99fdbcc81e99a7efdbcb8e2898158507a425d188a2d06b3e73b13150da89cda3",
+    "guides/getting-started/index.html": "84e14aca7f36094dea294d7a2e3d79d00305ef1a1318e2c4d451ee06e0dc600a",
+    "index.html": "73aec2656610189a088f3b4126c9ceb6f1211518d352e02641ff7435fc5c7788",
+    "legal/index.html": "412a0c379a3f3e1fa6dbc6299b90aea2a8961543f228c51eaee9ace29cae75c0",
+    "posts/first/index.html": "f2c3b333eca38625a95a2c046475e0d873a65e736180c541a22a757fb5182e6d",
+    "posts/second/index.html": "78c36c8845df186b1f0e63c8aefb2728959a187f6850f1d3520b0f52c16b1e4d",
+    "styles.css": "53b495350d862aeb5479b25f98d5afd9b20b436b31a9875f280fe69cc95c490e"
+  }
+}

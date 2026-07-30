@@ -495,6 +495,51 @@ Queries (standing questions the state answers):
 - `_rendition (rendition)` — promises at most one row
 - `_renditions (original)` — promises any number of rows
 
+## Views
+
+_Views name reusable conditions. Multiple `where` blocks are alternatives._
+
+```view
+collection rule (rule) accepts page (page) — inputs (page, rule); outputs (); bindings (field, value)
+  where no Configuring._at (node: rule, path: ["where"])
+  where
+    Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
+    Configuring._at (node: rule, path: ["where", "equals"]) has (value)
+    Composing._holds (field, part: "card", subject: page, value) has (equal: true)
+  where
+    Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
+    Configuring._at (node: rule, path: ["where", "contains"]) has (value)
+    Composing._holds (field, part: "card", subject: page, value) has (contains: true)
+  where
+    Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
+    Configuring._at (node: rule, path: ["where", "exists"]) has (value: true)
+    Composing._holds (field, part: "card", subject: page, value: null) has (present: true)
+```
+
+```view
+matching collection of page (page) — inputs (page); outputs (collection, rule, path, card); bindings (content, configuration, collections, name, text, pattern) — answers any number of (collection, rule, path, card)
+  where
+    Routing._address (owner: page)
+    Filing._named (name: "content") has (root: content)
+    Filing._file (file: page) has (path, root: content)
+    Composing._record (part: "card", subject: page) has (values: card)
+    Configuring._active () has (root: configuration)
+    Configuring._at (node: configuration, path: ["collections"]) has (found: collections)
+    Configuring._entries (node: collections) has (child: rule, key: name)
+    Collecting._named (name) has (collection)
+    Configuring._at (node: rule, path: ["match"]) has (value: text)
+    Matching._compiled (text) has (pattern)
+    Matching._matches (path, pattern) has (matched: true)
+    view "collection rule (rule) accepts page (page)" with (page, rule)
+```
+
+```view
+unsettled routed page — inputs (); outputs (page); bindings () — answers any number of (page)
+  where
+    Routing._claims () has (owner: page)
+    no Depending._current (subject: page)
+```
+
 ## Reactions
 
 ### DeliverFaultToAsker
@@ -517,180 +562,1563 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### minimalSite.ChangedMarkdownIsDocumented
+### fullSite.AbsoluteBodyReferencesHold
 
 ```reaction
-when Filing.place (changed: true, file)
+when Referencing.scan (part: "body", source)
 where
-  Filing._file (file) has (path)
-  Filing._text (file) has (text)
-  Matching._compiled (text: "**/*.md") has (pattern)
-  Matching._matches (path, pattern) has (matched: true)
+  Referencing._references (source) has (raw, reference)
+  Routing._classify (target: raw) has (kind: "absolute")
 then
-  Documenting.parse (subject: file, text)
+  Referencing.answer (form: "address", reference, value: raw)
 ```
 
-### minimalSite.ClaimedRouteClearsContext
+### fullSite.AbsoluteLayoutReferencesRebase
 
 ```reaction
-when Routing.claim (owner)
+when Referencing.scan (part: "layout", source)
+where
+  Referencing._references (source) has (raw, reference)
+  Routing._classify (target: raw) has (kind: "absolute")
+  Routing._url (target: raw) has (url)
 then
-  Composing.clear (part: "context", subject: owner)
+  Referencing.answer (form: "address", reference, value: url)
 ```
 
-### minimalSite.ClearedContextGetsPageData
+### fullSite.AdmittedRasterImagesRender
 
 ```reaction
-when Composing.clear (part: "context", subject)
+when Transcoding.admit (original)
 where
+  Configuring._active () has (root: configuration)
+  Configuring._values (node: configuration, otherwise: [480, 960, 1440], path: ["images", "widths"]) has (values: widths)
+  Configuring._values (node: configuration, otherwise: ["avif", "webp", "original"], path: ["images", "formats"]) has (values: formats)
+then
+  Transcoding.render (formats, original, widths)
+```
+
+### fullSite.AuthoredBodiesFill
+
+```reaction
+when Composing.set (part: "context", path: ["page", "source", "path"], subject: page)
+where
+  Documenting._document (subject: page) has (body)
+  Composing._record (part: "context", subject: page) has (values: context)
+then
+  Templating.fill (context, source: body, subject: page, trusted: [])
+```
+
+### fullSite.BodyConversionFailuresDiagnose
+
+```reaction
+when refused Converting.convert (part: "body", subject: page, detail, error)
+where
+  earlier, Phasing.advance (phase: "render")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.BodyTemplateFailuresDiagnose
+
+```reaction
+when refused Templating.fill (subject: page, detail, error)
+where
+  earlier, Phasing.advance (phase: "render")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.CardDataSetsUrl
+
+```reaction
+when Composing.set (part: "card", path: ["data"], subject: page)
+where
+  earlier, Phasing.advance (phase: "collect")
+  Routing._address (owner: page) has (address)
+then
+  Composing.set (part: "card", path: ["url"], subject: page, value: address)
+```
+
+### fullSite.CardExcerptSetsSourcePath
+
+```reaction
+when Composing.set (part: "card", path: ["excerpt"], subject: page)
+where
+  earlier, Phasing.advance (phase: "collect")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+then
+  Composing.set (part: "card", path: ["source", "path"], subject: page, value: path)
+```
+
+### fullSite.CardUrlSetsExcerpt
+
+```reaction
+when Composing.set (part: "card", path: ["url"], subject: page)
+where
+  earlier, Phasing.advance (phase: "collect")
+  whether Converting._excerpt (part: "excerpt", subject: page) has (excerpt)
+then
+  Composing.set (part: "card", path: ["excerpt"], subject: page, value: excerpt)
+```
+
+### fullSite.ClaimedBodyReferencesRetarget
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw, reference)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  Routing._address (owner: target) has (address)
+  Routing._retarget (original: raw, replacement: address) has (target: value)
+then
+  Referencing.answer (form: "address", reference, value)
+```
+
+### fullSite.ClearedCardsSetData
+
+```reaction
+when Composing.clear (part: "card", subject: page)
+where
+  earlier, Phasing.advance (phase: "collect")
+  Layering._resolved (subject: page) has (values: data)
+then
+  Composing.set (part: "card", path: ["data"], subject: page, value: data)
+```
+
+### fullSite.ClearedContentGetsAttributes
+
+```reaction
+when Layering.clear (subject)
+where
+  earlier, Phasing.advance (phase: "read")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: subject) has (root)
   Documenting._document (subject) has (attributes)
 then
-  Composing.set (part: "context", path: ["page", "data"], subject, value: attributes)
+  Layering.contribute (rank: 9007199254740991, subject, values: attributes)
 ```
 
-### minimalSite.ConfigureSite
+### fullSite.ClearedContentGetsDefaults
+
+```reaction
+when Layering.clear (subject)
+where
+  earlier, Phasing.advance (phase: "read")
+  Filing._named (name: "content") has (root: content)
+  Filing._file (file: subject) has (path, root: content)
+  Configuring._active () has (root: configuration)
+  Configuring._at (node: configuration, path: ["defaults"]) has (found: defaults)
+  Configuring._items (node: defaults) has (index, item: rule)
+  Configuring._at (node: rule, path: ["match"]) has (value: text)
+  Matching._compiled (text) has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Configuring._at (node: rule, path: ["values"]) has (found: valuesNode)
+  Configuring._record (node: valuesNode) has (values)
+then
+  Layering.contribute (rank: index, subject, values)
+```
+
+### fullSite.ClearedContextsSetSite
+
+```reaction
+when Composing.clear (part: "context", subject: page)
+where
+  Configuring._active () has (root: configuration)
+  Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+then
+  Composing.set (part: "context", path: ["site"], subject: page, value: site)
+```
+
+### fullSite.CollectionContextsSetPageData
+
+```reaction
+when Composing.set (part: "context", path: ["collections"], subject: page)
+where
+  Layering._resolved (subject: page) has (values: data)
+then
+  Composing.set (part: "context", path: ["page", "data"], subject: page, value: data)
+```
+
+### fullSite.CompletedEmbeddingsAnswer
+
+```reaction
+when Embedding.offer (embedding, completed: true)
+where
+  Embedding._embedding (embedding) has (subject: reference)
+  Embedding._markup (embedding) has (markup)
+then
+  Referencing.answer (form: "markup", reference, value: markup)
+```
+
+### fullSite.ConfigureSite
 
 ```reaction
 when RequestBoundary.request (destination, path: "/site/configure", requestId)
+where
+  Filing._named (name: "project") has (root: project)
+  Filing._at (path: "site.yaml", root: project) has (file: settings)
+  Filing._text (file: settings) has (text: source)
 then
-  Matching.compile (text: "**/*.md")
+  Configuring.load (notation: "yaml", source)
 ```
 
-### minimalSite.ConfigureSite#2
+### fullSite.ConfigureSite#2
 
 ```reaction
-when Matching.compile (text: "**/*.md"), asked by minimalSite.ConfigureSite
-then
-  Converting.declare (extensions: [], kind: "markdown", name: "markdown", raw: true, separator: "")
-```
-
-### minimalSite.ConfigureSite#3
-
-```reaction
-when Converting.declare (extensions: [], kind: "markdown", name: "markdown", raw: true, separator: ""), asked by minimalSite.ConfigureSite#2
-then
-  Templating.define (name: "page.html", source: "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>{{ page.data.title | default: \"Syncpress\" }}</title></head>\n<body><main>{{ page.content }}</main></body>\n</html>\n")
-```
-
-### minimalSite.ConfigureSite#4
-
-```reaction
-when Templating.define (name: "page.html", source: "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>{{ page.data.title | default: \"Syncpress\" }}</title></head>\n<body><main>{{ page.content }}</main></body>\n</html>\n"), asked by minimalSite.ConfigureSite#3
+when Configuring.load (notation: "yaml", source), asked by fullSite.ConfigureSite
 where
   earlier, RequestBoundary.request (destination, path: "/site/configure", requestId)
 then
   Emitting.direct (destination)
 ```
 
-### minimalSite.ConfigureSite#5
+### fullSite.ConfigureSite#3
 
 ```reaction
-when Emitting.direct (destination), asked by minimalSite.ConfigureSite#4
+when Emitting.direct (destination), asked by fullSite.ConfigureSite#2
+then
+  Phasing.declare (name: "site-build", phases: ["settings", "read", "route", "excerpt", "collect", "render", "emit"])
+```
+
+### fullSite.ConfigureSite#4
+
+```reaction
+when Phasing.declare (name: "site-build", phases: ["settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.ConfigureSite#3
 where
   earlier, RequestBoundary.request (destination, path: "/site/configure", requestId)
 then
-  RequestBoundary.respond (destination, requestId)
+  RequestBoundary.respond (requestId, sequence)
 ```
 
-### minimalSite.ContextContentIsRendered
+### fullSite.ConfiguredBodiesConvert
 
 ```reaction
-when Composing.set (part: "context", path: ["page", "content"], subject)
+when Templating.fill (subject: page, output)
 where
-  Composing._record (part: "context", subject) has (values: context)
+  Layering._value (path: ["build", "markup"], subject: page) has (value: markup)
+  Converting._profile (name: markup) has (profile)
+then
+  Converting.convert (part: "body", profile, source: output, subject: page)
+```
+
+### fullSite.ConfiguredLayoutsRender
+
+```reaction
+when Composing.set (part: "context", path: ["page", "content"], subject: page)
+where
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  Templating._template (name) has (template)
+  Composing._record (part: "context", subject: page) has (values: context)
+then
+  Templating.render (context, subject: page, template, trusted: [["page", "content"]])
+```
+
+### fullSite.ConvertedBodiesScan
+
+```reaction
+when Converting.convert (part: "body", subject: page, output)
+then
+  Referencing.scan (part: "body", subject: page, text: output)
+```
+
+### fullSite.CopiedNonRasterPrimaryImagesAnswer
+
+```reaction
+when Emitting.intend (path, producer: page)
+where
+  earlier, Referencing.scan (part: "body", subject: page, source)
+  Referencing._references (source) has (raw, reference, role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  no Routing._address (owner: target)
+  no Documenting._document (subject: target)
+  Filing._file (file: target) has (path, root)
+  Filing._root (root) has (name: "content")
+  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+  Matching._matches (path, pattern) has (matched: false)
+  Routing._locate (path) has (address)
+  Routing._retarget (original: raw, replacement: address) has (target: value)
+then
+  Referencing.answer (form: "address", reference, value)
+```
+
+### fullSite.CopiedOrdinaryBodyAssetsAnswer
+
+```reaction
+when Emitting.intend (path, producer: page)
+where
+  earlier, Referencing.scan (part: "body", subject: page, source)
+  Referencing._references (source) has (raw, reference) and not (role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  no Routing._address (owner: target)
+  no Documenting._document (subject: target)
+  Filing._file (file: target) has (path, root)
+  Filing._root (root) has (name: "content")
+  Routing._locate (path) has (address)
+  Routing._retarget (original: raw, replacement: address) has (target: value)
+then
+  Referencing.answer (form: "address", reference, value)
+```
+
+### fullSite.DeclaredEmbeddingsAnswer
+
+```reaction
+when Embedding.declare (completed: true, embedding)
+where
+  Embedding._embedding (embedding) has (subject: reference)
+  Embedding._markup (embedding) has (markup)
+then
+  Referencing.answer (form: "markup", reference, value: markup)
+```
+
+### fullSite.DefaultLayoutsRender
+
+```reaction
+when Composing.set (part: "context", path: ["page", "content"], subject: page)
+where
+  no Layering._value (path: ["build", "template"], subject: page)
   Templating._template (name: "page.html") has (template)
+  Composing._record (part: "context", subject: page) has (values: context)
 then
-  Templating.render (context, subject, template, trusted: [["page", "content"]])
+  Templating.render (context, subject: page, template, trusted: [["page", "content"]])
 ```
 
-### minimalSite.ContextDataGetsURL
+### fullSite.DerivedRoutesClaim
 
 ```reaction
-when Composing.set (part: "context", path: ["page", "data"], subject)
+when Phasing.advance (phase: "route")
 where
-  Routing._address (owner: subject) has (url)
-then
-  Composing.set (part: "context", path: ["page", "url"], subject, value: url)
-```
-
-### minimalSite.ContextURLGetsContent
-
-```reaction
-when Composing.set (part: "context", path: ["page", "url"], subject)
-where
-  Converting._for (part: "body", subject) has (output)
-then
-  Composing.set (part: "context", path: ["page", "content"], subject, value: output)
-```
-
-### minimalSite.ConvertedBodyClaimsRoute
-
-```reaction
-when Converting.convert (part: "body", subject)
-where
-  Filing._file (file: subject) has (path)
+  Documenting._all () has (subject: page)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
+  no Layering._value (path: ["build", "route"], subject: page)
   Routing._derive (path) has (address)
 then
-  Routing.claim (address, owner: subject)
+  Routing.claim (address, owner: page)
 ```
 
-### minimalSite.DocumentIsConverted
+### fullSite.DocumentParseFailuresDiagnose
 
 ```reaction
-when Documenting.parse (subject, body)
+when refused Documenting.parse (subject: file, detail, error: "MALFORMED_ATTRIBUTES")
 where
-  Converting._profile (name: "markdown") has (profile)
+  earlier, Phasing.advance (phase: "read")
+  Filing._named (name: "content") has (root)
+  Filing._file (file) has (path, root)
 then
-  Converting.convert (part: "body", profile, source: body, subject)
+  Diagnosing.report (code: "MALFORMED_ATTRIBUTES", message: detail, severity: "error", source: path)
 ```
 
-### minimalSite.EmissionBeginsIntent
+### fullSite.EmptyBodyScansSetContent
 
 ```reaction
-when Emitting.begin (producer)
+when Referencing.scan (part: "body", subject: page, completed: true)
 where
-  Templating._template (name: "page.html") has (template)
-  Templating._rendering (subject: producer, template) has (output)
-  Routing._address (owner: producer) has (address)
+  Referencing._finished (part: "body", subject: page) has (text)
+then
+  Composing.set (part: "context", path: ["page", "content"], subject: page, value: text)
+```
+
+### fullSite.EmptyLayoutScansEmit
+
+```reaction
+when Referencing.scan (part: "layout", subject: page, completed: true)
+where
+  Referencing._finished (part: "layout", subject: page) has (text)
+  Routing._address (owner: page) has (address)
   Routing._file (address) has (path)
 then
-  Emitting.intend (content: output, medium: "text/html", path, producer)
+  Emitting.intend (content: text, medium: "text/html", path, producer: page)
 ```
 
-### minimalSite.IntendedPageCommits
+### fullSite.EmptyLayoutScansEmit#2
 
 ```reaction
-when Emitting.intend (producer)
+when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.EmptyLayoutScansEmit
 then
-  Emitting.commit (producer)
+  Emitting.commit (producer: page)
 ```
 
-### minimalSite.ReconcileSite
+### fullSite.EmptyLayoutScansEmit#3
 
 ```reaction
-when RequestBoundary.request (path: "/site/reconcile", requestId)
+when Emitting.commit (producer: page), asked by fullSite.EmptyLayoutScansEmit#2
+then
+  Depending.settle (subject: page)
+```
+
+### fullSite.ExcerptConversionFailuresDiagnose
+
+```reaction
+when refused Converting.convert (part: "excerpt", subject: page, detail, error)
+where
+  earlier, Phasing.advance (phase: "excerpt")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.ExplicitMarkupExcerptsConvert
+
+```reaction
+when Phasing.advance (phase: "excerpt")
+where
+  Routing._claims () has (owner: page)
+  Documenting._document (subject: page) has (body)
+  Layering._value (path: ["build", "markup"], subject: page) has (value: name)
+  Converting._profile (name) has (profile)
+then
+  Converting.convert (part: "excerpt", profile, source: body, subject: page)
+```
+
+### fullSite.ExplicitRoutesClaim
+
+```reaction
+when Phasing.advance (phase: "route")
+where
+  Documenting._all () has (subject: page)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (root)
+  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
+  Layering._value (path: ["build", "route"], subject: page) has (value: address)
+then
+  Routing.claim (address, owner: page)
+```
+
+### fullSite.ExternalBodyReferencesHold
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._references (source) has (raw, reference)
+  Routing._classify (target: raw) has (kind: "external")
+then
+  Referencing.answer (form: "address", reference, value: raw)
+```
+
+### fullSite.ExternalLayoutReferencesHold
+
+```reaction
+when Referencing.scan (part: "layout", source)
+where
+  Referencing._references (source) has (raw, reference)
+  Routing._classify (target: raw) has (kind: "external")
+then
+  Referencing.answer (form: "address", reference, value: raw)
+```
+
+### fullSite.FilledBodiesTrackTemplates
+
+```reaction
+when Templating.fill (subject: page, filling)
+where
+  Templating._tree (owner: filling) has (used)
+  Templating._template (name: used) has (template)
+then
+  Depending.use (input: template, subject: page)
+```
+
+### fullSite.FinishedBodyAnswersSetContent
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  Referencing._finished (part: "body", subject: page) has (text)
+then
+  Composing.set (part: "context", path: ["page", "content"], subject: page, value: text)
+```
+
+### fullSite.FinishedLayoutAnswersEmit
+
+```reaction
+when Referencing.answer (completed: true, part: "layout", subject: page)
+where
+  Referencing._finished (part: "layout", subject: page) has (text)
+  Routing._address (owner: page) has (address)
+  Routing._file (address) has (path)
+then
+  Emitting.intend (content: text, medium: "text/html", path, producer: page)
+```
+
+### fullSite.FinishedLayoutAnswersEmit#2
+
+```reaction
+when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.FinishedLayoutAnswersEmit
+then
+  Emitting.commit (producer: page)
+```
+
+### fullSite.FinishedLayoutAnswersEmit#3
+
+```reaction
+when Emitting.commit (producer: page), asked by fullSite.FinishedLayoutAnswersEmit#2
+then
+  Depending.settle (subject: page)
+```
+
+### fullSite.FixedPatternsCompile:html
+
+```reaction
+when Phasing.start (phase: "settings")
+then
+  Matching.compile (text: "**/*.html")
+```
+
+### fullSite.FixedPatternsCompile:markdown
+
+```reaction
+when Phasing.start (phase: "settings")
+then
+  Matching.compile (text: "**/*.md")
+```
+
+### fullSite.FixedPatternsCompile:raster
+
+```reaction
+when Phasing.start (phase: "settings")
+then
+  Matching.compile (text: "**/*.{avif,gif,jpeg,jpg,png,webp}")
+```
+
+### fullSite.FragmentBodyReferencesHold
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._references (source) has (raw, reference)
+  Routing._classify (target: raw) has (kind: "fragment")
+then
+  Referencing.answer (form: "address", reference, value: raw)
+```
+
+### fullSite.FragmentLayoutReferencesHold
+
+```reaction
+when Referencing.scan (part: "layout", source)
+where
+  Referencing._references (source) has (raw, reference)
+  Routing._classify (target: raw) has (kind: "fragment")
+then
+  Referencing.answer (form: "address", reference, value: raw)
+```
+
+### fullSite.HtmlBodiesConvert
+
+```reaction
+when Templating.fill (subject: page, output)
+where
+  no Layering._value (path: ["build", "markup"], subject: page)
+  Filing._file (file: page) has (path)
+  Matching._compiled (text: "**/*.html") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Converting._profile (name: "verbatim") has (profile)
+then
+  Converting.convert (part: "body", profile, source: output, subject: page)
+```
+
+### fullSite.HtmlDocumentsParse
+
+```reaction
+when Phasing.advance (phase: "read")
+where
+  Filing._named (name: "content") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Matching._compiled (text: "**/*.html") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Filing._text (file) has (text)
+then
+  Documenting.parse (subject: file, text)
+```
+
+### fullSite.HtmlExcerptsConvert
+
+```reaction
+when Phasing.advance (phase: "excerpt")
+where
+  Routing._claims () has (owner: page)
+  Documenting._document (subject: page) has (body)
+  no Layering._value (path: ["build", "markup"], subject: page)
+  Filing._file (file: page) has (path)
+  Matching._compiled (text: "**/*.html") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Converting._profile (name: "verbatim") has (profile)
+then
+  Converting.convert (part: "excerpt", profile, source: body, subject: page)
+```
+
+### fullSite.IncludeDefinitionFailuresDiagnose
+
+```reaction
+when refused Templating.define (name: path, source: text, detail, error)
+where
+  earlier, Phasing.advance (phase: "read")
+  Filing._named (name: "includes") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Filing._text (file) has (text)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.IncludesDefine
+
+```reaction
+when Phasing.advance (phase: "read")
+where
+  Filing._named (name: "includes") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Filing._text (file) has (text)
+then
+  Templating.define (name: path, source: text)
+```
+
+### fullSite.InvalidBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolution (address: raw, file: page) has (status: "invalid")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference has an invalid path spelling.", severity: "error", source: path)
+```
+
+### fullSite.InvalidRouteClaimsDiagnose
+
+```reaction
+when refused Routing.claim (owner: page, detail, error: "INVALID_ADDRESS")
+where
+  earlier, Phasing.advance (phase: "route")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+then
+  Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "error", source: path)
+```
+
+### fullSite.LayoutTemplateFailuresDiagnose
+
+```reaction
+when refused Templating.render (subject: page, detail, error)
+where
+  earlier, Phasing.advance (phase: "render")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.MarkdownBodiesConvert
+
+```reaction
+when Templating.fill (subject: page, output)
+where
+  no Layering._value (path: ["build", "markup"], subject: page)
+  Filing._file (file: page) has (path)
+  Matching._compiled (text: "**/*.md") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Converting._profile (name: "markdown") has (profile)
+then
+  Converting.convert (part: "body", profile, source: output, subject: page)
+```
+
+### fullSite.MarkdownDocumentsParse
+
+```reaction
+when Phasing.advance (phase: "read")
+where
+  Filing._named (name: "content") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Matching._compiled (text: "**/*.md") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Filing._text (file) has (text)
+then
+  Documenting.parse (subject: file, text)
+```
+
+### fullSite.MarkdownExcerptsConvert
+
+```reaction
+when Phasing.advance (phase: "excerpt")
+where
+  Routing._claims () has (owner: page)
+  Documenting._document (subject: page) has (body)
+  no Layering._value (path: ["build", "markup"], subject: page)
+  Filing._file (file: page) has (path)
+  Matching._compiled (text: "**/*.md") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Converting._profile (name: "markdown") has (profile)
+then
+  Converting.convert (part: "excerpt", profile, source: body, subject: page)
+```
+
+### fullSite.MissingBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolution (address: raw, file: page) has (status: "missing")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "MISSING_LOCAL_REFERENCE", message: "This local reference names no staged content file.", severity: "error", source: path)
+```
+
+### fullSite.MissingConfiguredLayoutsDiagnose
+
+```reaction
+when Composing.set (part: "context", path: ["page", "content"], subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  no Templating._template (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.MissingConfiguredProfilesDiagnose
+
+```reaction
+when Templating.fill (subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Layering._value (path: ["build", "markup"], subject: page) has (value: markup)
+  no Converting._profile (name: markup)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "PROFILE_NOT_FOUND", message: "The selected body conversion profile is not defined.", severity: "error", source: path)
+```
+
+### fullSite.MissingDefaultLayoutsDiagnose
+
+```reaction
+when Composing.set (part: "context", path: ["page", "content"], subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  no Layering._value (path: ["build", "template"], subject: page)
+  no Templating._template (name: "page.html")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.NonRasterPrimaryImagesCopy
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw, role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  no Routing._address (owner: target)
+  no Documenting._document (subject: target)
+  Filing._file (file: target) has (content, path, root)
+  Filing._root (root) has (name: "content")
+  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+  Matching._matches (path, pattern) has (matched: false)
+then
+  Emitting.intend (content, medium: "application/octet-stream", path, producer: page)
+```
+
+### fullSite.OrdinaryBodyAssetsCopy
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw) and not (role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  no Routing._address (owner: target)
+  no Documenting._document (subject: target)
+  Filing._file (file: target) has (content, path, root)
+  Filing._root (root) has (name: "content")
+then
+  Emitting.intend (content, medium: "application/octet-stream", path, producer: page)
+```
+
+### fullSite.OutsideBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolution (address: raw, file: page) has (status: "outside")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "OUTSIDE_LOCAL_REFERENCE", message: "This local reference leaves the content root.", severity: "error", source: path)
+```
+
+### fullSite.PageDataContextsSetUrl
+
+```reaction
+when Composing.set (part: "context", path: ["page", "data"], subject: page)
+where
+  Routing._address (owner: page) has (address)
+then
+  Composing.set (part: "context", path: ["page", "url"], subject: page, value: address)
+```
+
+### fullSite.PageEmissionFailuresDiagnose
+
+```reaction
+when refused Emitting.intend (producer: page, detail, error)
+where
+  earlier, Phasing.advance (phase: "render")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.PageUrlContextsSetSourcePath
+
+```reaction
+when Composing.set (part: "context", path: ["page", "url"], subject: page)
+where
+  Filing._file (file: page) has (path)
+then
+  Composing.set (part: "context", path: ["page", "source", "path"], subject: page, value: path)
+```
+
+### fullSite.ParsedContentClearsLayers
+
+```reaction
+when Documenting.parse (subject)
+where
+  earlier, Phasing.advance (phase: "read")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: subject) has (root)
+then
+  Layering.clear (subject)
+```
+
+### fullSite.PrimaryRasterImagesAdmit
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw, role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  no Routing._address (owner: image)
+  Filing._file (file: image) has (content, path, root)
+  Filing._root (root) has (name: "content")
+  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+then
+  Transcoding.admit (content, subject: image)
+```
+
+### fullSite.PublicFilesEmit
+
+```reaction
+when Phasing.advance (phase: "read")
+where
+  Filing._named (name: "public") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Filing._file (file) has (content)
+then
+  Emitting.intend (content, medium: "application/octet-stream", path, producer: file)
+```
+
+### fullSite.RasterAdmissionsDiagnose
+
+```reaction
+when refused Transcoding.admit (subject: image, detail, error)
+where
+  earlier, Referencing.scan (part: "body", source)
+  Referencing._source (source) has (part: "body", subject: page)
+  Referencing._references (source) has (raw, role: "image")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.RasterEmbeddingDeclarationsDiagnose
+
+```reaction
+when refused Embedding.declare (subject: reference, detail, error)
+where
+  Referencing._reference (reference) has (source)
+  Referencing._source (source) has (part: "body", subject: page)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.RasterFallbacksDeclare
+
+```reaction
+when Emitting.intend (path, producer: page)
+where
+  earlier, Transcoding.render (original, derived)
+  earlier, Referencing.scan (part: "body", subject: page, source)
+  Referencing._references (source) has (label, raw, reference, role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  Transcoding._original (subject: image) has (original)
+  no Routing._address (owner: image)
+  Filing._file (file: image) has (path, root)
+  Filing._root (root) has (name: "content")
+  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Routing._locate (path) has (address)
+  Routing._retarget (original: raw, replacement: address) has (target: fallback)
+  Transcoding._renditions (original) has (fallback: true, format, height, width)
+then
+  Embedding.declare (alternative: label, attributes: (), expects: derived, height, original: fallback, originalFormat: format, subject: reference, width)
+```
+
+### fullSite.RasterFallbacksStage
+
+```reaction
+when Transcoding.render (original)
+where
+  earlier, Referencing.scan (part: "body", source)
+  Referencing._source (source) has (part: "body", subject: page)
+  Referencing._references (source) has (raw, role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  Transcoding._original (subject: image) has (original)
+  no Routing._address (owner: image)
+  Filing._file (file: image) has (path, root)
+  Filing._root (root) has (name: "content")
+  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Transcoding._renditions (original) has (content, fallback: true, mediaType)
+then
+  Emitting.intend (content, medium: mediaType, path, producer: page)
+```
+
+### fullSite.RasterOffersDiagnose
+
+```reaction
+when refused Embedding.offer (embedding, detail, error)
+where
+  Embedding._embedding (embedding) has (subject: reference)
+  Referencing._reference (reference) has (source)
+  Referencing._source (source) has (part: "body", subject: page)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.RasterRendersDiagnose
+
+```reaction
+when refused Transcoding.render (original, detail, error)
+where
+  earlier, Referencing.scan (part: "body", source)
+  Referencing._source (source) has (part: "body", subject: page)
+  Referencing._references (source) has (raw, role: "image")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  Transcoding._original (subject: image) has (original)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.RasterRenditionsOffer
+
+```reaction
+when Emitting.intend (path, producer: page)
+where
+  earlier, Embedding.declare (embedding)
+  Embedding._embedding (embedding) has (subject: reference)
+  Referencing._reference (reference) has (raw, role: "image", source)
+  Referencing._source (source) has (part: "body", subject: page)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  Transcoding._original (subject: image) has (original)
+  Transcoding._renditions (original) has (fallback: false, format, name, order, width)
+  Configuring._active () has (root: configuration)
+  Configuring._scalar (node: configuration, otherwise: "assets", path: ["paths", "assets"]) has (value: assets)
+  Filing._join (name, prefix: assets) has (path)
+  Routing._locate (path) has (address)
+then
+  Embedding.offer (address, embedding, format, order, width)
+```
+
+### fullSite.RasterRenditionsStage
+
+```reaction
+when Embedding.declare (embedding)
+where
+  Embedding._embedding (embedding) has (subject: reference)
+  Referencing._reference (reference) has (raw, role: "image", source)
+  Referencing._source (source) has (part: "body", subject: page)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  Transcoding._original (subject: image) has (original)
+  Transcoding._renditions (original) has (content, fallback: false, mediaType, name)
+  Configuring._active () has (root: configuration)
+  Configuring._scalar (node: configuration, otherwise: "assets", path: ["paths", "assets"]) has (value: assets)
+  Filing._join (name, prefix: assets) has (path)
+then
+  Emitting.intend (content, medium: mediaType, path, producer: page)
+```
+
+### fullSite.ReconcileSite:errors
+
+```reaction
+when RequestBoundary.request (job, path: "/site/reconcile", requestId)
+where
+  Composing._record (part: "reconcile", subject: job)
+  Phasing._outcome (job) has (state: "finished")
+  Diagnosing._clean () has (clean: false)
+then
+  RequestBoundary.respond (error: "BUILD_HAS_ERRORS", requestId)
+```
+
+### fullSite.ReconcileSite:failed
+
+```reaction
+when RequestBoundary.request (job, path: "/site/reconcile", requestId)
+where
+  Composing._record (part: "reconcile", subject: job)
+  Phasing._outcome (job) has (state: "failed")
+then
+  RequestBoundary.respond (error: "BUILD_FAILED", requestId)
+```
+
+### fullSite.ReconcileSite:incomplete
+
+```reaction
+when RequestBoundary.request (job, path: "/site/reconcile", requestId)
+where
+  Composing._record (part: "reconcile", subject: job)
+  no Phasing._outcome (job)
+then
+  RequestBoundary.respond (error: "BUILD_NOT_COMPLETE", requestId)
+```
+
+### fullSite.ReconcileSite:reconcile
+
+```reaction
+when RequestBoundary.request (job, path: "/site/reconcile", requestId)
+where
+  Composing._record (part: "reconcile", subject: job)
+  Phasing._outcome (job) has (state: "finished")
+  Diagnosing._clean () has (clean: true)
+  no view "unsettled routed page"
 then
   Emitting.reconcile ()
 ```
 
-### minimalSite.ReconcileSite#2
+### fullSite.ReconcileSite:reconcile#2
 
 ```reaction
-when Emitting.reconcile (kept, removed, replaced, written), asked by minimalSite.ReconcileSite
+when Emitting.reconcile (kept, removed, replaced, written), asked by fullSite.ReconcileSite:reconcile
 where
-  earlier, RequestBoundary.request (path: "/site/reconcile", requestId)
+  earlier, RequestBoundary.request (job, path: "/site/reconcile", requestId)
 then
   RequestBoundary.respond (kept, removed, replaced, requestId, written)
 ```
 
-### minimalSite.RenderedPageBeginsEmission
+### fullSite.ReconcileSite:unsettled
 
 ```reaction
-when Templating.render (subject, template)
+when RequestBoundary.request (job, path: "/site/reconcile", requestId)
 where
-  Templating._template (name: "page.html") has (template)
+  Composing._record (part: "reconcile", subject: job)
+  Phasing._outcome (job) has (state: "finished")
+  Diagnosing._clean () has (clean: true)
+  view "unsettled routed page"
 then
-  Emitting.begin (producer: subject)
+  RequestBoundary.respond (error: "BUILD_INCOMPLETE", requestId)
+```
+
+### fullSite.RelativeLayoutReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "layout", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "RELATIVE_LAYOUT_REFERENCE", message: "A layout reference must be site-absolute, external, or fragment-only.", severity: "error", source: path)
+```
+
+### fullSite.RenderedLayoutsScan
+
+```reaction
+when Templating.render (subject: page, output)
+then
+  Referencing.scan (part: "layout", subject: page, text: output)
+```
+
+### fullSite.RenderedLayoutsTrackTemplates
+
+```reaction
+when Templating.render (subject: page, rendering)
+where
+  Templating._tree (owner: rendering) has (used)
+  Templating._template (name: used) has (template)
+then
+  Depending.use (input: template, subject: page)
+```
+
+### fullSite.RenderingAttemptsClearContext
+
+```reaction
+when Diagnosing.retract (source: path)
+where
+  earlier, Emitting.begin (producer: page)
+  Filing._file (file: page) has (path)
+then
+  Composing.clear (part: "context", subject: page)
+```
+
+### fullSite.RenderingAttemptsOpenEmission
+
+```reaction
+when Depending.begin (subject: page)
+then
+  Emitting.begin (producer: page)
+```
+
+### fullSite.RenderingAttemptsRetractDiagnostics
+
+```reaction
+when Emitting.begin (producer: page)
+where
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.retract (source: path)
+```
+
+### fullSite.RenderingAttemptsTrackSource
+
+```reaction
+when Emitting.begin (producer: page)
+then
+  Depending.use (input: page, subject: page)
+```
+
+### fullSite.RouteCollisionsReport
+
+```reaction
+when refused Routing.claim (owner: page, error: "ADDRESS_TAKEN")
+where
+  earlier, Phasing.advance (phase: "route")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+then
+  Diagnosing.report (code: "ROUTE_COLLISION", message: "Two pages claim one address.", severity: "error", source: path)
+```
+
+### fullSite.RoutedDocumentsBeginRendering
+
+```reaction
+when Phasing.advance (phase: "render")
+where
+  Routing._claims () has (owner: page)
+then
+  Depending.begin (subject: page)
+```
+
+### fullSite.RoutedPagesClearCards
+
+```reaction
+when Phasing.advance (phase: "collect")
+where
+  Routing._claims () has (owner: page)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (root)
+then
+  Composing.clear (part: "card", subject: page)
+```
+
+### fullSite.SettingsCollectionDeclarationFailuresDiagnose
+
+```reaction
+when refused Collecting.declare (direction, name, detail, error)
+where
+  earlier, Phasing.start (phase: "settings")
+  earlier, Configuring.load (root)
+  Configuring._at (node: root, path: ["collections"]) has (found: collections)
+  Configuring._entries (node: collections) has (child: rule, key: name)
+  Configuring._scalar (node: rule, otherwise: "asc", path: ["sort", "order"]) has (value: direction)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SettingsCollectionPatternFailuresDiagnose
+
+```reaction
+when refused Matching.compile (text, detail, error)
+where
+  earlier, Phasing.start (phase: "settings")
+  earlier, Configuring.load (root)
+  Configuring._at (node: root, path: ["collections"]) has (found: collections)
+  Configuring._entries (node: collections) has (child: rule)
+  Configuring._at (node: rule, path: ["match"]) has (value: text)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SettingsCompileCollectionPatterns
+
+```reaction
+when Configuring.load (root)
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._at (node: root, path: ["collections"]) has (found: collections)
+  Configuring._entries (node: collections) has (child: rule)
+  Configuring._at (node: rule, path: ["match"]) has (value: text)
+then
+  Matching.compile (text)
+```
+
+### fullSite.SettingsCompileDefaultPatterns
+
+```reaction
+when Configuring.load (root)
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._at (node: root, path: ["defaults"]) has (found: defaults)
+  Configuring._items (node: defaults) has (item: rule)
+  Configuring._at (node: rule, path: ["match"]) has (value: text)
+then
+  Matching.compile (text)
+```
+
+### fullSite.SettingsDeclareCollections
+
+```reaction
+when Collecting.reset ()
+where
+  earlier, Phasing.start (phase: "settings")
+  earlier, Configuring.load (root)
+  Configuring._at (node: root, path: ["collections"]) has (found: collections)
+  Configuring._entries (node: collections) has (child: rule, key: name)
+  Configuring._scalar (node: rule, otherwise: "asc", path: ["sort", "order"]) has (value: direction)
+then
+  Collecting.declare (direction, name)
+```
+
+### fullSite.SettingsDeclareMarkdownProfile
+
+```reaction
+when Configuring.load (root)
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._values (node: root, otherwise: ["tables", "footnotes", "strikethrough", "autolinks"], path: ["markdown", "extensions"]) has (values: extensions)
+  Configuring._scalar (node: root, otherwise: true, path: ["markdown", "raw"]) has (value: raw)
+  Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
+then
+  Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator)
+```
+
+### fullSite.SettingsDeclareVerbatimProfile
+
+```reaction
+when Configuring.load (root)
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
+then
+  Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator)
+```
+
+### fullSite.SettingsDefaultPatternFailuresDiagnose
+
+```reaction
+when refused Matching.compile (text, detail, error)
+where
+  earlier, Phasing.start (phase: "settings")
+  earlier, Configuring.load (root)
+  Configuring._at (node: root, path: ["defaults"]) has (found: defaults)
+  Configuring._items (node: defaults) has (item: rule)
+  Configuring._at (node: rule, path: ["match"]) has (value: text)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SettingsLoad
+
+```reaction
+when Phasing.start (phase: "settings")
+where
+  Filing._named (name: "project") has (root: project)
+  Filing._at (path: "site.yaml", root: project) has (file)
+  Filing._text (file) has (text)
+then
+  Configuring.load (notation: "yaml", source: text)
+```
+
+### fullSite.SettingsLoadFailuresDiagnose
+
+```reaction
+when refused Configuring.load (notation: "yaml", source: text, detail, error)
+where
+  earlier, Phasing.start (phase: "settings")
+  Filing._named (name: "project") has (root: project)
+  Filing._at (path: "site.yaml", root: project) has (file)
+  Filing._text (file) has (text)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SettingsMarkdownProfileFailuresDiagnose
+
+```reaction
+when refused Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
+where
+  earlier, Phasing.start (phase: "settings")
+  earlier, Configuring.load (root)
+  Configuring._values (node: root, otherwise: ["tables", "footnotes", "strikethrough", "autolinks"], path: ["markdown", "extensions"]) has (values: extensions)
+  Configuring._scalar (node: root, otherwise: true, path: ["markdown", "raw"]) has (value: raw)
+  Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SettingsRebaseFailuresDiagnose
+
+```reaction
+when refused Routing.rebase (base, detail, error: "INVALID_BASE")
+where
+  earlier, Phasing.start (phase: "settings")
+  earlier, Configuring.load (root)
+  Configuring._scalar (node: root, otherwise: "/", path: ["site", "basePath"]) has (value: base)
+then
+  Diagnosing.report (code: "INVALID_BASE", message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SettingsRebaseRouting
+
+```reaction
+when Configuring.load (root)
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._scalar (node: root, otherwise: "/", path: ["site", "basePath"]) has (value: base)
+then
+  Routing.rebase (base)
+```
+
+### fullSite.SettingsResetCollections
+
+```reaction
+when Configuring.load ()
+where
+  earlier, Phasing.start (phase: "settings")
+then
+  Collecting.reset ()
+```
+
+### fullSite.SettingsVerbatimProfileFailuresDiagnose
+
+```reaction
+when refused Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
+where
+  earlier, Phasing.start (phase: "settings")
+  earlier, Configuring.load (root)
+  Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SiteContextsSetCollections
+
+```reaction
+when Composing.set (part: "context", path: ["site"], subject: page)
+where
+  Collecting._catalog () has (collections)
+then
+  Composing.set (part: "context", path: ["collections"], subject: page, value: collections)
+```
+
+### fullSite.SortedPagesJoinCollections
+
+```reaction
+when Composing.set (part: "card", path: ["source", "path"], subject: page)
+where
+  earlier, Phasing.advance (phase: "collect")
+  view "matching collection of page (page)" with (page) has (card, collection, path, rule)
+  Configuring._at (node: rule, path: ["sort", "by"]) has (value: sortPath)
+  Composing._field (field: sortPath, part: "card", subject: page) has (value: key)
+then
+  Collecting.include (card, collection, item: page, key, tiebreak: path)
+```
+
+### fullSite.TemplateDefinitionFailuresDiagnose
+
+```reaction
+when refused Templating.define (name: path, source: text, detail, error)
+where
+  earlier, Phasing.advance (phase: "read")
+  Filing._named (name: "templates") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Filing._text (file) has (text)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.TemplatesDefine
+
+```reaction
+when Phasing.advance (phase: "read")
+where
+  Filing._named (name: "templates") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Filing._text (file) has (text)
+then
+  Templating.define (name: path, source: text)
+```
+
+### fullSite.UnkeyedSortedPagesJoinCollections
+
+```reaction
+when Composing.set (part: "card", path: ["source", "path"], subject: page)
+where
+  earlier, Phasing.advance (phase: "collect")
+  view "matching collection of page (page)" with (page) has (card, collection, path, rule)
+  Configuring._at (node: rule, path: ["sort", "by"]) has (value: sortPath)
+  no Composing._field (field: sortPath, part: "card", subject: page)
+then
+  Collecting.include (card, collection, item: page, tiebreak: path)
+```
+
+### fullSite.UnpublishedDocumentBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  no Routing._address (owner: target)
+  Documenting._document (subject: target)
+  Filing._file (file: target) has (root)
+  Filing._root (root) has (name: "content")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "UNPUBLISHED_DOCUMENT_REFERENCE", message: "This local reference targets an unpublished document.", severity: "error", source: path)
+```
+
+### fullSite.UnpublishedRoutesRelease
+
+```reaction
+when Phasing.advance (phase: "route")
+where
+  Documenting._all () has (subject: page)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (root)
+  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: false)
+  Routing._address (owner: page)
+then
+  Routing.release (owner: page)
+```
+
+### fullSite.UnretargetableAssetBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw) and not (role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  no Routing._address (owner: target)
+  no Documenting._document (subject: target)
+  Filing._file (file: target) has (path, root)
+  Filing._root (root) has (name: "content")
+  Routing._locate (path) has (address)
+  no Routing._retarget (original: raw, replacement: address)
+  Filing._file (file: page) has (path: sourcePath)
+then
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", severity: "error", source: sourcePath)
+```
+
+### fullSite.UnretargetableClaimedBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw)
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  Routing._address (owner: target) has (address)
+  no Routing._retarget (original: raw, replacement: address)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", severity: "error", source: path)
+```
+
+### fullSite.UnretargetableNonRasterPrimaryImagesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw, role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target)
+  no Routing._address (owner: target)
+  no Documenting._document (subject: target)
+  Filing._file (file: target) has (path, root)
+  Filing._root (root) has (name: "content")
+  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+  Matching._matches (path, pattern) has (matched: false)
+  Routing._locate (path) has (address)
+  no Routing._retarget (original: raw, replacement: address)
+  Filing._file (file: page) has (path: sourcePath)
+then
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", severity: "error", source: sourcePath)
+```
+
+### fullSite.UnretargetableRasterPrimaryImagesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  Referencing._source (source) has (subject: page)
+  Referencing._references (source) has (raw, role: "image")
+  Routing._classify (target: raw) has (kind: "relative")
+  Filing._resolve (address: raw, file: page) has (target: image)
+  no Routing._address (owner: image)
+  Filing._file (file: image) has (path, root)
+  Filing._root (root) has (name: "content")
+  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+  Matching._matches (path, pattern) has (matched: true)
+  Routing._locate (path) has (address)
+  no Routing._retarget (original: raw, replacement: address)
+  Filing._file (file: page) has (path: sourcePath)
+then
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", severity: "error", source: sourcePath)
+```
+
+### fullSite.UnsortedPagesJoinCollections
+
+```reaction
+when Composing.set (part: "card", path: ["source", "path"], subject: page)
+where
+  earlier, Phasing.advance (phase: "collect")
+  view "matching collection of page (page)" with (page) has (card, collection, path, rule)
+  no Configuring._at (node: rule, path: ["sort", "by"])
+then
+  Collecting.include (card, collection, item: page, tiebreak: path)
 ```
 
 ## Endpoint input contracts
@@ -701,3 +2129,4 @@ the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
 - `/site/configure` — requires `destination`
+- `/site/reconcile` — requires `job`

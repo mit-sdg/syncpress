@@ -1,0 +1,31 @@
+site:
+  title: Syncpress Field Notes
+  basePath: /field-notes/
+paths:
+  content: content
+  templates: templates
+  public: public
+  assets: assets
+defaults:
+  - match: "**/*.md"
+    values:
+      build:
+        markup: markdown
+        template: page.html
+  - match: "posts/**/*.md"
+    values:
+      build:
+        template: post.html
+collections:
+  posts:
+    match: "posts/**/*.md"
+    sort:
+      by: data.date
+      order: desc
+markdown:
+  extensions: [tables, strikethrough]
+  raw: true
+  excerptSeparator: "<!--more-->"
+images:
+  widths: [1]
+  formats: [webp, original]

@@ -1,0 +1,1 @@
+Install Syncpress and run the build command.

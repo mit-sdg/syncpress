@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ page.data.title }} | {{ site.title }}</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  {% render "header.html" %}
+  <main>
+    <article class="post">
+      <p class="date">{{ page.data.date }}</p>
+      {{ page.content }}
+    </article>
+  </main>
+  {% render "footer.html" %}
+</body>
+</html>
