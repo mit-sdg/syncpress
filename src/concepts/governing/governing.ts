@@ -45,6 +45,13 @@ const PATH_KEYS = new Set(["content", "templates", "public", "assets", "output"]
 const DEPLOY_KEYS = new Set(["nojekyll", "requireNotFound", "sitemap", "feed", "redirects", "pagination"]);
 const DEFAULT_PATHS = { output: "dist" };
 
+function defaultPolicy(): SitePolicy {
+  return {
+    outputPath: DEFAULT_PATHS.output,
+    deploy: { nojekyll: false, requireNotFound: false, sitemap: false, redirects: [], pagination: [] },
+  };
+}
+
 function mapping(node: Node | null | undefined): Mapping | undefined {
   if (!isMap(node)) return undefined;
   const entries = new Map<string, Node | null>();
@@ -355,26 +362,38 @@ export function parseSitePolicy(source: string): { policy: SitePolicy; problems:
   const counter = new LineCounter();
   const document = parseDocument(source, { lineCounter: counter, prettyErrors: false, schema: "core", version: "1.2" });
   const problems: ConfigurationProblem[] = [];
+  for (const issue of [...document.errors, ...document.warnings]) {
+    const position = counter.linePos(issue.pos[0]);
+    problems.push({
+      code: "INVALID_CONFIGURATION",
+      message: `The site configuration is not valid YAML 1.2: ${issue.message}`,
+      line: position.line,
+      column: position.col,
+    });
+  }
+  if (document.directives.yaml.version !== "1.2") {
+    problem(problems, counter, document.contents, "The site configuration must use YAML 1.2.");
+  }
+  if (problems.length > 0) return { policy: defaultPolicy(), problems };
+
   const root = mapping(document.contents);
   if (root === undefined) {
     problem(problems, counter, document.contents, "The site configuration must be a mapping.");
-    return {
-      policy: { outputPath: DEFAULT_PATHS.output, deploy: { nojekyll: false, requireNotFound: false, sitemap: false, redirects: [], pagination: [] } },
-      problems,
-    };
+    return { policy: defaultPolicy(), problems };
   }
 
   checkKnownKeys(root, TOP_LEVEL_KEYS, "site.yaml", problems, counter);
   const paths = root.get("paths") === undefined ? undefined : mapping(root.get("paths"));
   if (root.has("paths") && paths === undefined) problem(problems, counter, root.get("paths"), "paths must be a mapping.");
+  let outputPath = DEFAULT_PATHS.output;
   if (paths !== undefined) {
     checkKnownKeys(paths, PATH_KEYS, "paths", problems, counter);
     for (const key of PATH_KEYS) {
       const value = stringValue(paths, key, key === "output" ? DEFAULT_PATHS.output : undefined, problems, counter);
       if (value !== undefined && !portableDirectory(value)) problem(problems, counter, paths.get(key), `paths.${key} must be a portable project-relative directory path.`);
+      if (key === "output" && value !== undefined) outputPath = value;
     }
   }
-  const outputPath = stringValue(paths, "output", DEFAULT_PATHS.output, problems, counter) ?? DEFAULT_PATHS.output;
 
   const site = root.get("site") === undefined ? undefined : mapping(root.get("site"));
   if (root.has("site") && site === undefined) problem(problems, counter, root.get("site"), "site must be a mapping.");
@@ -442,7 +461,7 @@ export class GoverningConcept {
 
   _deployment(): { nojekyll: boolean; requireNotFound: boolean; sitemap: boolean }[] {
     const deployment = this.#assessment?.policy.deploy;
-    return deployment === undefined
+    return deployment === undefined || this.#assessment!.problems.length > 0
       ? []
       : [{
           nojekyll: deployment.nojekyll,
@@ -452,7 +471,7 @@ export class GoverningConcept {
   }
 
   _publishing(): { policy: SitePolicy["deploy"] }[] {
-    return this.#assessment === undefined
+    return this.#assessment === undefined || this.#assessment.problems.length > 0
       ? []
       : [{ policy: structuredClone(this.#assessment.policy.deploy) }];
   }

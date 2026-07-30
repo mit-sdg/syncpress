@@ -56,12 +56,20 @@ export const CompletedDeploymentsDispatch = reaction(({ deployment, work }) =>
   when(Deploying.complete({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
 );
 
-export const CompletedOwnerDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.completeOwner({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
+export const FailedDeploymentsDispatch = reaction(({ deployment, work }) =>
+  when(Deploying.fail({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
 );
 
-export const CompletedProducerDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.completeProducer({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
+export const RejectedDeploymentsDispatch = reaction(({ deployment, work }) =>
+  when(Deploying.reject({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
+);
+
+export const RejectedOwnerDeploymentsDispatch = reaction(({ deployment, work }) =>
+  when(Deploying.rejectOwner({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
+);
+
+export const RejectedProducerDeploymentsDispatch = reaction(({ deployment, work }) =>
+  when(Deploying.rejectProducer({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
 );
 
 export const DividedPaginationsDispatch = reaction(({ deployment, work }) =>
@@ -200,7 +208,7 @@ export const MissingPaginationCollectionsDiagnose = reaction(({ deployment, work
       message: "A pagination rule names no configured collection.",
       source: CONFIGURATION_PATH,
     }).responds({}))
-    .then(Deploying.complete({ work })),
+    .then(Deploying.reject({ work })),
 );
 
 export const MissingPaginationTemplatesDiagnose = reaction(({ deployment, work, collectionName, templateName }) =>
@@ -216,7 +224,7 @@ export const MissingPaginationTemplatesDiagnose = reaction(({ deployment, work, 
       message: "A pagination rule selects an undefined template.",
       source: CONFIGURATION_PATH,
     }).responds({}))
-    .then(Deploying.complete({ work })),
+    .then(Deploying.reject({ work })),
 );
 
 export const ClaimedPaginationPagesFormContext = reaction(
@@ -277,6 +285,9 @@ export const FragmentDeploymentLayoutReferencesHold = reaction(({ source, refere
     .then(Referencing.answer({ reference, form: "address", value: raw })),
 );
 
+// These effects share an owner discovered by a state read, so they cannot form
+// portable later stages. Either partial result remains non-publishable: rejected
+// work makes the deployment fail, while unrejected work leaves it active.
 export const UnprojectableDeploymentLayoutReferencesDiagnose = reaction(({ source, owner, raw }) =>
   when(Referencing.scan({ part: DEPLOYMENT_LAYOUT }).responds({ source }))
     .where(
@@ -293,7 +304,7 @@ export const UnprojectableDeploymentLayoutReferencesDiagnose = reaction(({ sourc
         message: "A generated layout reference could not be projected.",
         source: CONFIGURATION_PATH,
       }).named("diagnose"),
-      Deploying.completeOwner({ owner }).named("continue"),
+      Deploying.rejectOwner({ owner }).named("reject"),
     ),
 );
 
@@ -312,7 +323,7 @@ export const InvalidDeploymentLayoutReferencesDiagnose = reaction(({ source, own
         message: "A generated layout reference must be site-absolute, external, or fragment-only.",
         source: CONFIGURATION_PATH,
       }).named("diagnose"),
-      Deploying.completeOwner({ owner }).named("continue"),
+      Deploying.rejectOwner({ owner }).named("reject"),
     ),
 );
 
@@ -341,21 +352,19 @@ export const BegunPaginationPagesIntend = reaction(({ producer, address, path, t
 export const PaginationTemplateFailuresDiagnose = reaction(({ owner, error, detail }) =>
   when(Templating.render({ subject: owner }).refuses({ error, detail }))
     .where(Deploying._forOwner({ owner }).is({ kind: "pagination-page" }))
-    .then(
-      Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.completeOwner({ owner }).named("continue"),
-    ),
+    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).responds({}))
+    .then(Deploying.rejectOwner({ owner })),
 );
 
 export const DeploymentReferenceScanFailuresDiagnose = reaction(({ owner, error, detail }) =>
   when(Referencing.scan({ subject: owner, part: DEPLOYMENT_LAYOUT }).refuses({ error, detail }))
     .where(Deploying._forOwner({ owner }))
-    .then(
-      Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.completeOwner({ owner }).named("continue"),
-    ),
+    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).responds({}))
+    .then(Deploying.rejectOwner({ owner })),
 );
 
+// This owner is also discovered by a state read, so the same non-publishable
+// partial-failure rule used above applies.
 export const DeploymentReferenceAnswerFailuresDiagnose = reaction(({ reference, error, detail, source, owner }) =>
   when(Referencing.answer({ reference }).refuses({ error, detail }))
     .where(
@@ -365,7 +374,7 @@ export const DeploymentReferenceAnswerFailuresDiagnose = reaction(({ reference, 
     )
     .then(
       Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.completeOwner({ owner }).named("continue"),
+      Deploying.rejectOwner({ owner }).named("reject"),
     ),
 );
 
@@ -414,35 +423,33 @@ export const MissingFeedCollectionsDiagnose = reaction(({ deployment, work, coll
       message: "Feed names no configured collection.",
       source: CONFIGURATION_PATH,
     }).responds({}))
-    .then(Deploying.complete({ work })),
+    .then(Deploying.reject({ work })),
 );
 
 export const OriginlessFeedsDiagnose = reaction(({ work }) =>
   when(Deploying.feed({ work }).responds({ origin: false }))
-    .then(
-      Diagnosing.report({
-        severity: "error",
-        code: "ORIGIN_REQUIRED",
-        message: "Feed generation requires a valid site.origin.",
-        source: CONFIGURATION_PATH,
-      }).named("diagnose"),
-      Deploying.complete({ work }).named("continue"),
-    ),
+    .then(Diagnosing.report({
+      severity: "error",
+      code: "ORIGIN_REQUIRED",
+      message: "Feed generation requires a valid site.origin.",
+      source: CONFIGURATION_PATH,
+    }).responds({}))
+    .then(Deploying.reject({ work })),
 );
 
 export const InvalidFeedEntriesDiagnose = reaction(({ work }) =>
-  when(Deploying.feed({ work }).responds({ origin: true, valid: false })).then(
-    Diagnosing.report({
+  when(Deploying.feed({ work }).responds({ origin: true, valid: false }))
+    .then(Diagnosing.report({
       severity: "error",
       code: "INVALID_FEED_ENTRY",
       message: "Feed entries need a routed URL and a valid data.date.",
       source: CONFIGURATION_PATH,
-    }),
-  ),
+    }).responds({}))
+    .then(Deploying.reject({ work })),
 );
 
 export const PreparedFeedsBegin = reaction(({ work, producer }) =>
-  when(Deploying.feed({ work }).responds({ origin: true }))
+  when(Deploying.feed({ work }).responds({ origin: true, valid: true }))
     .where(Deploying._work({ work }).is({ producer }))
     .then(Emitting.begin({ producer })),
 );
@@ -472,42 +479,34 @@ export const CommittedDeploymentArtifactsComplete = reaction(({ producer, work }
 export const GeneratedRouteCollisionsDiagnose = reaction(({ owner, detail }) =>
   when(Routing.claim({ owner }).refuses({ error: "ADDRESS_TAKEN", detail }))
     .where(Deploying._forOwner({ owner }))
-    .then(
-      Diagnosing.report({ severity: "error", code: "ROUTE_COLLISION", message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.completeOwner({ owner }).named("continue"),
-    ),
+    .then(Diagnosing.report({ severity: "error", code: "ROUTE_COLLISION", message: detail, source: CONFIGURATION_PATH }).responds({}))
+    .then(Deploying.rejectOwner({ owner })),
 );
 
 export const InvalidGeneratedRoutesDiagnose = reaction(({ owner, detail }) =>
   when(Routing.claim({ owner }).refuses({ error: "INVALID_ADDRESS", detail }))
     .where(Deploying._forOwner({ owner }))
-    .then(
-      Diagnosing.report({ severity: "error", code: "INVALID_ADDRESS", message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.completeOwner({ owner }).named("continue"),
-    ),
+    .then(Diagnosing.report({ severity: "error", code: "INVALID_ADDRESS", message: detail, source: CONFIGURATION_PATH }).responds({}))
+    .then(Deploying.rejectOwner({ owner })),
 );
 
 export const DeploymentBeginFailuresDiagnose = reaction(({ producer, error, detail }) =>
   when(Emitting.begin({ producer }).refuses({ error, detail }))
     .where(Deploying._forProducer({ producer }))
-    .then(
-      Diagnosing.report({ severity: "error", code: "OUTPUT_COLLISION", message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.completeProducer({ producer }).named("continue"),
-    ),
+    .then(Diagnosing.report({ severity: "error", code: "OUTPUT_COLLISION", message: detail, source: CONFIGURATION_PATH }).responds({}))
+    .then(Deploying.rejectProducer({ producer })),
 );
 
-export const DeploymentIntentFailuresDiagnose = reaction(({ producer, path, error, detail }) =>
+export const DeploymentIntentFailuresFailAndAbort = reaction(({ producer, path, error, detail }) =>
   when(Emitting.intend({ producer, path }).refuses({ error, detail }))
     .where(Deploying._forProducer({ producer }))
-    .then(
-      Deploying.outputFailure({ path, detail }).named("describe"),
-      Emitting.abort({ producer }).named("abort"),
-      Deploying.completeProducer({ producer }).named("continue"),
-    ),
+    .then(Deploying.fail({ producer, path, detail }).responds({}))
+    .then(Emitting.abort({ producer })),
 );
 
+/** Failure state is durable before diagnostics, so interrupted reporting cannot publish. */
 export const DescribedDeploymentOutputFailuresDiagnose = reaction(({ path, message }) =>
-  when(Deploying.outputFailure({ path }).responds({ message })).then(
+  when(Deploying.fail({ path }).responds({ message })).then(
     Diagnosing.report({
       severity: "error",
       code: "OUTPUT_COLLISION",
@@ -520,7 +519,7 @@ export const DescribedDeploymentOutputFailuresDiagnose = reaction(({ path, messa
 export const DeploymentOutputFailuresRelateProducers = reaction(({ diagnostic, path, producer }) =>
   when(Diagnosing.report({ code: "OUTPUT_COLLISION" }).responds({ diagnostic }))
     .where(
-      earlier(Deploying.outputFailure, {}, { path }),
+      earlier(Deploying.fail, {}, { path }),
       Emitting._producers({ path }).is({ producer }),
     )
     .then(Diagnosing.relate({
@@ -533,8 +532,6 @@ export const DeploymentOutputFailuresRelateProducers = reaction(({ diagnostic, p
 export const DeploymentCommitFailuresDiagnose = reaction(({ producer, error, detail }) =>
   when(Emitting.commit({ producer }).refuses({ error, detail }))
     .where(Deploying._forProducer({ producer }))
-    .then(
-      Diagnosing.report({ severity: "error", code: "OUTPUT_COLLISION", message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.completeProducer({ producer }).named("continue"),
-    ),
+    .then(Diagnosing.report({ severity: "error", code: "OUTPUT_COLLISION", message: detail, source: CONFIGURATION_PATH }).responds({}))
+    .then(Deploying.rejectProducer({ producer })),
 );

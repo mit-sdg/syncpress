@@ -1,3 +1,5 @@
+import { isCanonicalAddress, isText, pathSegments } from "../../address.ts";
+
 export type DeploymentPolicy = {
   nojekyll: boolean;
   requireNotFound: boolean;
@@ -15,7 +17,9 @@ export type DeploymentPolicy = {
 };
 
 type CollectionEntry = { item: string; key?: unknown; card: unknown };
-type BaseWork = { work: string; deployment: string };
+type WorkStatus = "pending" | "active" | "prepared" | "failed" | "completed";
+type DeploymentOutcome = "absent" | "active" | "failed" | "completed";
+type BaseWork = { work: string; deployment: string; status: WorkStatus; preparation?: unknown };
 type NojekyllWork = BaseWork & { kind: "nojekyll"; producer: string; path: string };
 type RedirectWork = BaseWork & {
   kind: "redirect";
@@ -70,6 +74,69 @@ export class WorkNotCurrent extends Error {
   }
 }
 
+export class DeploymentActive extends Error {
+  constructor() {
+    super("A deployment is already active.");
+    this.name = "DeploymentActive";
+  }
+}
+
+export class WorkNotPending extends Error {
+  constructor() {
+    super("Current deployment work has already been activated.");
+    this.name = "WorkNotPending";
+  }
+}
+
+export class WorkNotActive extends Error {
+  constructor() {
+    super("Deployment work must be active before this transition.");
+    this.name = "WorkNotActive";
+  }
+}
+
+export class WorkNotPrepared extends Error {
+  constructor() {
+    super("Deployment work must be prepared before completion.");
+    this.name = "WorkNotPrepared";
+  }
+}
+
+export class InvalidPolicy extends Error {
+  constructor() {
+    super("A deployment policy must have the supported publishing shape.");
+    this.name = "InvalidPolicy";
+  }
+}
+
+export class InvalidEntries extends Error {
+  constructor() {
+    super("Deployment entries must be a dense list of structured-cloneable identified cards.");
+    this.name = "InvalidEntries";
+  }
+}
+
+export class InvalidUrls extends Error {
+  constructor() {
+    super("Sitemap URLs must be a dense list of absolute HTTP URL records.");
+    this.name = "InvalidUrls";
+  }
+}
+
+export class InvalidContext extends Error {
+  constructor() {
+    super("Deployment context values must be structured-cloneable.");
+    this.name = "InvalidContext";
+  }
+}
+
+export class InvalidRedirect extends Error {
+  constructor() {
+    super("Redirect preparation requires a valid projection of its configured target.");
+    this.name = "InvalidRedirect";
+  }
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -78,6 +145,123 @@ function record(value: unknown): Record<string, unknown> {
 
 function text(value: unknown, otherwise = ""): string {
   return typeof value === "string" ? value : otherwise;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function optionalText(value: unknown): boolean {
+  return value === undefined || isText(value);
+}
+
+function isDenseArray(value: unknown): value is unknown[] {
+  if (!Array.isArray(value)) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (!(index in value)) return false;
+  }
+  return true;
+}
+
+function webUrl(value: unknown): value is string {
+  if (!isText(value)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function redirectTarget(value: unknown): value is string {
+  return isCanonicalAddress(value) || webUrl(value);
+}
+
+function paginationRoute(value: unknown): value is string {
+  if (!isText(value)) return false;
+  const parts = value.split(":page");
+  return parts.length === 2 && isCanonicalAddress(`${parts[0]}1${parts[1]}`);
+}
+
+function redirectsAreAcyclic(redirects: ReadonlyArray<{ from: string; to: string }>): boolean {
+  const bySource = new Map(redirects.map(({ from, to }) => [from, to]));
+  for (const { from } of redirects) {
+    const visited = new Set<string>();
+    let current: string | undefined = from;
+    while (current !== undefined) {
+      if (visited.has(current)) return false;
+      visited.add(current);
+      current = bySource.get(current);
+    }
+  }
+  return true;
+}
+
+function validRedirectProjection(configured: string, target: unknown, canonical: unknown): target is string {
+  if (webUrl(configured)) return target === configured && canonical === configured;
+  if (!isCanonicalAddress(target)) return false;
+  if (target !== configured && !target.endsWith(configured)) return false;
+  if (canonical === target) return true;
+  if (!webUrl(canonical)) return false;
+  const url = new URL(canonical);
+  return url.pathname === target && url.search === "" && url.hash === "";
+}
+
+function isDeploymentPolicy(value: unknown): value is DeploymentPolicy {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.nojekyll !== "boolean" ||
+    typeof value.requireNotFound !== "boolean" ||
+    typeof value.sitemap !== "boolean" ||
+    !isDenseArray(value.redirects) ||
+    !isDenseArray(value.pagination)
+  ) return false;
+  for (const redirect of value.redirects) {
+    if (!isRecord(redirect) || !isCanonicalAddress(redirect.from) || !redirectTarget(redirect.to)) return false;
+  }
+  for (const pagination of value.pagination) {
+    if (
+      !isRecord(pagination) ||
+      !isText(pagination.name) || pagination.name === "" ||
+      !isText(pagination.collection) || pagination.collection === "" ||
+      !Number.isSafeInteger(pagination.perPage) ||
+      (pagination.perPage as number) <= 0 ||
+      !paginationRoute(pagination.route) ||
+      !isText(pagination.template) || pagination.template === "" ||
+      !optionalText(pagination.title)
+    ) return false;
+  }
+  const redirectSources = value.redirects.map((redirect) => (redirect as { from: string }).from);
+  const paginationNames = value.pagination.map((pagination) => (pagination as { name: string }).name);
+  if (new Set(redirectSources).size !== redirectSources.length) return false;
+  if (new Set(paginationNames).size !== paginationNames.length) return false;
+  if (!redirectsAreAcyclic(value.redirects as Array<{ from: string; to: string }>)) return false;
+  return value.feed === undefined || (
+    isRecord(value.feed) &&
+    isText(value.feed.collection) && value.feed.collection !== "" &&
+    isText(value.feed.path) && pathSegments(value.feed.path) !== undefined &&
+    optionalText(value.feed.title) &&
+    optionalText(value.feed.description)
+  );
+}
+
+function deploymentEntries(value: unknown): CollectionEntry[] {
+  if (
+    !isDenseArray(value) ||
+    value.some((entry) => !isRecord(entry) || typeof entry.item !== "string" || !("card" in entry))
+  ) throw new InvalidEntries();
+  try {
+    return structuredClone(value) as CollectionEntry[];
+  } catch {
+    throw new InvalidEntries();
+  }
+}
+
+function sitemapUrls(value: unknown): Array<{ url: string }> {
+  if (!isDenseArray(value) || value.some((entry) => !isRecord(entry) || !webUrl(entry.url))) {
+    throw new InvalidUrls();
+  }
+  return value as Array<{ url: string }>;
 }
 
 function htmlEscape(value: string): string {
@@ -168,6 +352,7 @@ function paginationBody(entries: readonly CollectionEntry[]): string {
 
 export class DeployingConcept {
   #next = 0;
+  #latest: string | undefined;
   #deployments = new Map<string, Deployment>();
   #works = new Map<string, Work>();
 
@@ -176,6 +361,20 @@ export class DeployingConcept {
     const current = state?.works[state.position];
     if (state === undefined || current?.work !== work) throw new WorkNotCurrent();
     return { deployment: state, work: current };
+  }
+
+  #latestWorks(): Work[] {
+    return this.#latest === undefined ? [] : this.#deployments.get(this.#latest)?.works ?? [];
+  }
+
+  #active(work: string, kind?: Work["kind"]): Work {
+    const found = this.#works.get(work);
+    if (found === undefined) throw new WorkNotCurrent();
+    const { work: current } = this.#current(found.deployment, work);
+    if (current.status !== "active" || (kind !== undefined && current.kind !== kind)) {
+      throw new WorkNotActive();
+    }
+    return current;
   }
 
   #result(state: Deployment): { deployment: string; work?: string; completed: boolean } {
@@ -188,6 +387,13 @@ export class DeployingConcept {
   }
 
   start({ policy }: { policy: DeploymentPolicy }): { deployment: string; work?: string; completed: boolean } {
+    if (!isDeploymentPolicy(policy)) throw new InvalidPolicy();
+    if (this.#latest !== undefined) {
+      const latest = this.#deployments.get(this.#latest);
+      if (latest?.works[latest.position] !== undefined) throw new DeploymentActive();
+      this.#deployments.clear();
+      this.#works.clear();
+    }
     const deployment = `deployment:${++this.#next}`;
     const works: Work[] = [];
     const add = (work: Work): void => {
@@ -195,16 +401,17 @@ export class DeployingConcept {
       this.#works.set(work.work, work);
     };
     if (policy.nojekyll) {
-      add({ work: `${deployment}:nojekyll`, deployment, kind: "nojekyll", producer: "deployment:nojekyll", path: ".nojekyll" });
+      add({ work: `${deployment}:nojekyll`, deployment, status: "pending", kind: "nojekyll", producer: "deployment:nojekyll", path: ".nojekyll" });
     }
     for (const redirect of policy.redirects) {
       const owner = `deployment:redirect:${redirect.from}`;
-      add({ work: `${deployment}:redirect:${redirect.from}`, deployment, kind: "redirect", owner, producer: owner, ...redirect });
+      add({ work: `${deployment}:redirect:${redirect.from}`, deployment, status: "pending", kind: "redirect", owner, producer: owner, ...redirect });
     }
     for (const pagination of policy.pagination) {
       add({
         work: `${deployment}:pagination:${pagination.name}`,
         deployment,
+        status: "pending",
         kind: "pagination-plan",
         name: pagination.name,
         collection: pagination.collection,
@@ -215,18 +422,21 @@ export class DeployingConcept {
       });
     }
     if (policy.sitemap) {
-      add({ work: `${deployment}:sitemap`, deployment, kind: "sitemap", producer: "deployment:sitemap", path: "sitemap.xml" });
+      add({ work: `${deployment}:sitemap`, deployment, status: "pending", kind: "sitemap", producer: "deployment:sitemap", path: "sitemap.xml" });
     }
     if (policy.feed !== undefined) {
-      add({ work: `${deployment}:feed`, deployment, kind: "feed", producer: "deployment:feed", ...policy.feed });
+      add({ work: `${deployment}:feed`, deployment, status: "pending", kind: "feed", producer: "deployment:feed", ...policy.feed });
     }
     const state = { deployment, works, position: 0 };
     this.#deployments.set(deployment, state);
+    this.#latest = deployment;
     return this.#result(state);
   }
 
   dispatch({ deployment, work }: { deployment: string; work: string }): { deployment: string; work: string } {
-    this.#current(deployment, work);
+    const current = this.#current(deployment, work).work;
+    if (current.status !== "pending") throw new WorkNotPending();
+    current.status = "active";
     return { deployment, work };
   }
 
@@ -234,20 +444,33 @@ export class DeployingConcept {
     const found = this.#works.get(work);
     if (found === undefined) throw new WorkNotCurrent();
     const current = this.#current(found.deployment, work);
+    if (current.work.status !== "active" && current.work.status !== "prepared") throw new WorkNotActive();
+    if (current.work.kind !== "nojekyll" && current.work.status !== "prepared") throw new WorkNotPrepared();
+    current.work.status = "completed";
     current.deployment.position += 1;
     return this.#result(current.deployment);
   }
 
-  completeOwner({ owner }: { owner: string }): { deployment: string; work?: string; completed: boolean } {
-    const found = [...this.#works.values()].find((work) => "owner" in work && work.owner === owner);
+  reject({ work }: { work: string }): { deployment: string; work?: string; completed: boolean } {
+    const found = this.#works.get(work);
     if (found === undefined) throw new WorkNotCurrent();
-    return this.complete({ work: found.work });
+    const current = this.#current(found.deployment, work);
+    if (current.work.status !== "active" && current.work.status !== "prepared") throw new WorkNotActive();
+    current.work.status = "failed";
+    current.deployment.position += 1;
+    return this.#result(current.deployment);
   }
 
-  completeProducer({ producer }: { producer: string }): { deployment: string; work?: string; completed: boolean } {
-    const found = [...this.#works.values()].find((work) => "producer" in work && work.producer === producer);
+  rejectOwner({ owner }: { owner: string }): { deployment: string; work?: string; completed: boolean } {
+    const found = this.#latestWorks().find((work) => "owner" in work && work.owner === owner);
     if (found === undefined) throw new WorkNotCurrent();
-    return this.complete({ work: found.work });
+    return this.reject({ work: found.work });
+  }
+
+  rejectProducer({ producer }: { producer: string }): { deployment: string; work?: string; completed: boolean } {
+    const found = this.#latestWorks().find((work) => "producer" in work && work.producer === producer);
+    if (found === undefined) throw new WorkNotCurrent();
+    return this.reject({ work: found.work });
   }
 
   divide({
@@ -261,10 +484,10 @@ export class DeployingConcept {
     template: string;
     entries: unknown;
   }): { deployment: string; work: string; pages: number } {
+    const entries = deploymentEntries(rawEntries);
+    const plan = this.#active(work, "pagination-plan") as PaginationPlanWork;
+    if (plan.deployment !== deployment) throw new WorkNotCurrent();
     const current = this.#current(deployment, work);
-    if (current.work.kind !== "pagination-plan") throw new WorkNotCurrent();
-    const plan = current.work;
-    const entries = Array.isArray(rawEntries) ? rawEntries as CollectionEntry[] : [];
     const pages = Math.max(1, Math.ceil(entries.length / plan.perPage));
     const pageWorks: PaginationPageWork[] = [];
     for (let number = 1; number <= pages; number += 1) {
@@ -273,6 +496,7 @@ export class DeployingConcept {
       pageWorks.push({
         work: `${deployment}:pagination:${plan.name}:${number}`,
         deployment,
+        status: "pending",
         kind: "pagination-page",
         owner,
         producer: owner,
@@ -298,47 +522,56 @@ export class DeployingConcept {
   }
 
   redirect({ work, target, canonical }: { work: string; target: string; canonical: string }): { content: string } {
-    const current = this.#works.get(work);
-    if (current?.kind !== "redirect") throw new WorkNotCurrent();
+    const current = this.#active(work, "redirect") as RedirectWork;
+    if (!validRedirectProjection(current.to, target, canonical)) throw new InvalidRedirect();
     const safeTarget = htmlEscape(target);
-    return {
+    const result = {
       content: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=${safeTarget}"><link rel="canonical" href="${htmlEscape(canonical)}"></head><body><p>Moved to <a href="${safeTarget}">${safeTarget}</a>.</p></body></html>\n`,
     };
+    current.status = "prepared";
+    current.preparation = structuredClone(result);
+    return result;
   }
 
   context({ work, site, collections, canonicalUrl }: { work: string; site: unknown; collections: unknown; canonicalUrl?: string }): { owner: string; template: string; context: unknown } {
-    const current = this.#works.get(work);
-    if (current?.kind !== "pagination-page") throw new WorkNotCurrent();
-    return {
-      owner: current.owner,
-      template: current.template,
-      context: {
-        site,
-        collections,
-        page: {
-          data: { section: "Collection page", title: current.title, description: "" },
-          url: current.address,
-          canonicalUrl: canonicalUrl ?? "",
-          source: { path: current.sourcePath },
-          content: current.content,
+    const current = this.#active(work, "pagination-page") as PaginationPageWork;
+    let result: { owner: string; template: string; context: unknown };
+    try {
+      result = structuredClone({
+        owner: current.owner,
+        template: current.template,
+        context: {
+          site,
+          collections,
+          page: {
+            data: { section: "Collection page", title: current.title, description: "" },
+            url: current.address,
+            canonicalUrl: canonicalUrl ?? "",
+            source: { path: current.sourcePath },
+            content: current.content,
+          },
+          pagination: {
+            collection: current.collection,
+            current: current.number,
+            pages: current.pages,
+            items: current.cards,
+            previous: current.previous,
+            next: current.next,
+          },
         },
-        pagination: {
-          collection: current.collection,
-          current: current.number,
-          pages: current.pages,
-          items: structuredClone(current.cards),
-          previous: current.previous,
-          next: current.next,
-        },
-      },
-    };
+      });
+    } catch {
+      throw new InvalidContext();
+    }
+    current.preparation = structuredClone(result);
+    current.status = "prepared";
+    return result;
   }
 
   feed({ work, site, entries: rawEntries }: { work: string; site: unknown; entries: unknown }): { path: string; content: string; invalid: number; valid: boolean; origin: boolean } {
-    const current = this.#works.get(work);
-    if (current?.kind !== "feed") throw new WorkNotCurrent();
+    const entries = deploymentEntries(rawEntries);
+    const current = this.#active(work, "feed") as FeedWork;
     const siteRecord = record(site);
-    const entries = Array.isArray(rawEntries) ? rawEntries as CollectionEntry[] : [];
     const feedUrl = outputUrl(siteRecord, current.path);
     let invalid = 0;
     let updated = "1970-01-01T00:00:00Z";
@@ -360,27 +593,39 @@ export class DeployingConcept {
     const title = current.title ?? text(siteRecord.title, "Syncpress");
     const subtitle = current.description ?? text(siteRecord.description);
     const id = feedUrl ?? "";
-    return {
+    const result = {
       path: current.path,
       invalid,
       valid: invalid === 0,
       origin: feedUrl !== undefined,
       content: `<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom"><id>${xmlEscape(id)}</id><title>${xmlEscape(title)}</title>${subtitle === "" ? "" : `<subtitle>${xmlEscape(subtitle)}</subtitle>`}<updated>${updated}</updated><link href="${xmlEscape(id)}"/>${rendered.join("")}</feed>\n`,
     };
+    current.status = "prepared";
+    current.preparation = structuredClone(result);
+    return result;
   }
 
   sitemap({ work, urls: rawUrls }: { work: string; urls: unknown }): { path: string; content: string } {
-    const current = this.#works.get(work);
-    if (current?.kind !== "sitemap") throw new WorkNotCurrent();
-    const urls = Array.isArray(rawUrls) ? rawUrls as Array<{ url: string }> : [];
-    return {
+    const urls = sitemapUrls(rawUrls);
+    const current = this.#active(work, "sitemap") as SitemapWork;
+    const result = {
       path: current.path,
       content: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map(({ url }) => `<url><loc>${xmlEscape(url)}</loc></url>`).join("")}</urlset>\n`,
     };
+    current.status = "prepared";
+    current.preparation = structuredClone(result);
+    return result;
   }
 
-  outputFailure({ path, detail }: { path: string; detail: string }): { path: string; message: string } {
-    return { path, message: `${path}: ${detail}` };
+  fail({ producer, path, detail }: { producer: string; path: string; detail: string }): { deployment: string; work?: string; completed: boolean; path: string; message: string } {
+    const found = this.#latestWorks().find((work) => "producer" in work && work.producer === producer);
+    if (found === undefined) throw new WorkNotCurrent();
+    const current = this.#current(found.deployment, found.work);
+    if (current.work.status !== "active" && current.work.status !== "prepared") throw new WorkNotActive();
+    current.work.status = "failed";
+    current.work.preparation = { path, detail };
+    current.deployment.position += 1;
+    return { ...this.#result(current.deployment), path, message: `${path}: ${detail}` };
   }
 
   _work({ work }: { work: string }): Work[] {
@@ -389,17 +634,24 @@ export class DeployingConcept {
   }
 
   _forOwner({ owner }: { owner: string }): Work[] {
-    return [...this.#works.values()].filter((work) => "owner" in work && work.owner === owner).map((work) => structuredClone(work));
+    return this.#latestWorks().filter((work) => "owner" in work && work.owner === owner).map((work) => structuredClone(work));
   }
 
   _forProducer({ producer }: { producer: string }): Work[] {
-    return [...this.#works.values()].filter((work) => "producer" in work && work.producer === producer).map((work) => structuredClone(work));
+    return this.#latestWorks().filter((work) => "producer" in work && work.producer === producer).map((work) => structuredClone(work));
   }
 
   _current(): Work[] {
-    return [...this.#deployments.values()]
-      .map((deployment) => deployment.works[deployment.position])
-      .filter((work): work is Work => work !== undefined)
-      .map((work) => structuredClone(work));
+    if (this.#latest === undefined) return [];
+    const deployment = this.#deployments.get(this.#latest);
+    const work = deployment?.works[deployment.position];
+    return work === undefined ? [] : [structuredClone(work)];
+  }
+
+  _outcome(): { state: DeploymentOutcome } {
+    if (this.#latest === undefined) return { state: "absent" };
+    const deployment = this.#deployments.get(this.#latest)!;
+    if (deployment.works[deployment.position] !== undefined) return { state: "active" };
+    return { state: deployment.works.some(({ status }) => status === "failed") ? "failed" : "completed" };
   }
 }

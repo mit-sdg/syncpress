@@ -3,7 +3,7 @@ import { no, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 import { CONFIGURATION_PATH, PHASES, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 
-const { Configuring, Depending, Diagnosing, Emitting, Filing, Governing, Phasing, Routing } = concepts;
+const { Configuring, Depending, Deploying, Diagnosing, Emitting, Filing, Governing, Phasing, Routing } = concepts;
 
 /** Enumerate routed pages whose latest replacement attempt has not settled. */
 export const UnsettledRoutedPages = view(
@@ -30,12 +30,13 @@ export const ConfigureSite = endpoint("/site/configure", ({ destination, project
     .then(respond({ sequence })),
 );
 
-/** Publish only a completed, diagnostically clean build. */
+/** Publish only a completed deployment and diagnostically clean build. */
 export const ReconcileSite = endpoint("/site/reconcile", ({ job, written, replaced, kept, removed }) =>
   receive({ job }).then(
     where(
       Phasing._outcome({ job }).is({ state: "finished" }),
       Diagnosing._clean({}).is({ clean: true }),
+      Deploying._outcome({}).is({ state: "completed" }),
       no(UnsettledRoutedPages({})),
     )
       .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
@@ -54,6 +55,14 @@ export const ReconcileSite = endpoint("/site/reconcile", ({ job, written, replac
     )
       .then(respond({ error: "BUILD_INCOMPLETE" }))
       .named("unsettled"),
+    where(
+      Phasing._outcome({ job }).is({ state: "finished" }),
+      Diagnosing._clean({}).is({ clean: true }),
+      no(UnsettledRoutedPages({})),
+      no(Deploying._outcome({}).is({ state: "completed" })),
+    )
+      .then(respond({ error: "BUILD_INCOMPLETE" }))
+      .named("deployment-incomplete"),
     where(
       Phasing._outcome({ job }).is({ state: "finished" }),
       Diagnosing._clean({}).is({ clean: false }),

@@ -5,7 +5,7 @@
     "": {
       "name": "syncpress",
       "dependencies": {
-        "@mit-sdg/sync-engine": "file:../sync-engine",
+        "@mit-sdg/sync-engine": "1.0.0-beta.3",
         "liquidjs": "^10.27.2",
         "marked": "^18.0.7",
         "parse5": "^8.0.1",
@@ -78,7 +78,7 @@
 
     "@img/sharp-win32-x64": ["@img/sharp-win32-x64@0.35.3", "", { "os": "win32", "cpu": "x64" }, "sha512-D4y1vNeZrIIJCN+uHaWVtH86B+aCrdMYYjicy9pXHvbGZeGYLLSd3wdVuC37FxVXlU1ARsk84eKWfWMXGYEqvA=="],
 
-    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@file:../sync-engine", { "dependencies": { "typescript": ">=6 <7" }, "bin": { "sync-engine": "dist/command/main.js" } }],
+    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@1.0.0-beta.3", "", { "dependencies": { "typescript": ">=6 <7" }, "bin": { "sync-engine": "dist/command/main.js" } }, "sha512-VmUQpsIWmEE8ogHvIdxNgdcSv7nTlRp9Y+w8SjlQzRJX1oNA0qNFdsZzFJ/79loV/KcaeXzJauzHanC5V/htfg=="],
 
     "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 
