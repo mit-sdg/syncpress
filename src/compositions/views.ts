@@ -49,9 +49,10 @@ export const EffectiveConversionProfile = view(
 ).optional();
 
 export const MarkdownSettings = view(
-  "markdown settings of configuration (root)",
-  ({ root }, { extensions, raw, separator }, _bindings) =>
+  "active markdown settings",
+  (_inputs, { extensions, raw, separator }, { root }) =>
     where(
+      Configuring._active({}).is({ root }),
       Configuring._values({
         node: root,
         path: PATHS.markdownExtensions,
@@ -67,9 +68,10 @@ export const MarkdownSettings = view(
 ).one();
 
 export const VerbatimSettings = view(
-  "verbatim settings of configuration (root)",
-  ({ root }, { separator }, _bindings) =>
+  "active verbatim settings",
+  (_inputs, { separator }, { root }) =>
     where(
+      Configuring._active({}).is({ root }),
       Configuring._scalar({ node: root, path: PATHS.markdownExcerptSeparator, otherwise: "" }).is({
         value: separator,
       }),
@@ -77,37 +79,67 @@ export const VerbatimSettings = view(
 ).one();
 
 export const DefaultPatternSetting = view(
-  "default pattern setting of configuration (root)",
-  ({ root }, { rule, text }, { defaults }) =>
+  "active default pattern setting",
+  (_inputs, { rule, text }, { root, defaults }) =>
     where(
+      Configuring._active({}).is({ root }),
       Configuring._at({ node: root, path: PATHS.defaults }).is({ found: defaults }),
       Configuring._items({ node: defaults }).is({ item: rule }),
       Configuring._at({ node: rule, path: PATHS.defaultMatch }).is({ value: text }),
     ),
 ).many();
 
-export const CollectionPatternSetting = view(
-  "collection pattern setting of configuration (root)",
-  ({ root }, { rule, text }, { collections }) =>
+export const CollectionSetting = view(
+  "active collection setting",
+  (_inputs, { name, rule, text, direction, sort }, { root, collections }) =>
     where(
-      Configuring._at({ node: root, path: ["collections"] }).is({ found: collections }),
-      Configuring._entries({ node: collections }).is({ child: rule }),
-      Configuring._at({ node: rule, path: PATHS.collectionMatch }).is({ value: text }),
-    ),
-).many();
-
-export const CollectionDeclarationSetting = view(
-  "collection declaration setting of configuration (root)",
-  ({ root }, { name, rule, direction, sort }, { collections }) =>
-    where(
+      Configuring._active({}).is({ root }),
       Configuring._at({ node: root, path: ["collections"] }).is({ found: collections }),
       Configuring._entries({ node: collections }).is({ key: name, child: rule }),
+      Configuring._at({ node: rule, path: PATHS.collectionMatch }).is({ value: text }),
       Configuring._scalar({ node: rule, path: PATHS.collectionSortOrder, otherwise: "asc" }).is({
         value: direction,
       }),
       Configuring._scalar({ node: rule, path: PATHS.collectionSortBy, otherwise: null }).is({ value: sort }),
     ),
 ).many();
+
+export const ActiveSiteBasePath = view(
+  "active site base path",
+  (_inputs, { base }, { root }) =>
+    where(
+      Configuring._active({}).is({ root }),
+      Configuring._scalar({ node: root, path: PATHS.siteBasePath, otherwise: DEFAULTS.basePath }).is({ value: base }),
+    ),
+).one();
+
+export const DeclaredSiteOrigin = view(
+  "declared site origin",
+  (_inputs, { origin }, { root }) =>
+    where(
+      Configuring._active({}).is({ root }),
+      Configuring._at({ node: root, path: PATHS.siteOrigin }).is({ value: origin }),
+    ),
+).optional();
+
+export const ImageRenditionSettings = view(
+  "active image rendition settings",
+  (_inputs, { widths, formats }, { root }) =>
+    where(
+      Configuring._active({}).is({ root }),
+      Configuring._values({ node: root, path: PATHS.imagesWidths, otherwise: [...DEFAULTS.imageWidths] }).is({ values: widths }),
+      Configuring._values({ node: root, path: PATHS.imagesFormats, otherwise: [...DEFAULTS.imageFormats] }).is({ values: formats }),
+    ),
+).one();
+
+export const ImageAssetPathSetting = view(
+  "active image asset path setting",
+  (_inputs, { assets }, { root }) =>
+    where(
+      Configuring._active({}).is({ root }),
+      Configuring._scalar({ node: root, path: PATHS.pathsAssets, otherwise: DEFAULTS.assetsPath }).is({ value: assets }),
+    ),
+).one();
 
 const SiteRenderFacts = former(
   "the site render facts",

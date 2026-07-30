@@ -590,29 +590,70 @@ Queries (standing questions the state answers):
 _Views name reusable conditions. Multiple `where` blocks are alternatives._
 
 ```view
+active collection setting — inputs (); outputs (name, rule, text, direction, sort); bindings (root, collections) — answers any number of (name, rule, text, direction, sort)
+  where
+    Configuring._active () has (root)
+    Configuring._at (node: root, path: ["collections"]) has (found: collections)
+    Configuring._entries (node: collections) has (child: rule, key: name)
+    Configuring._at (node: rule, path: ["match"]) has (value: text)
+    Configuring._scalar (node: rule, otherwise: "asc", path: ["sort", "order"]) has (value: direction)
+    Configuring._scalar (node: rule, otherwise: null, path: ["sort", "by"]) has (value: sort)
+```
+
+```view
+active default pattern setting — inputs (); outputs (rule, text); bindings (root, defaults) — answers any number of (rule, text)
+  where
+    Configuring._active () has (root)
+    Configuring._at (node: root, path: ["defaults"]) has (found: defaults)
+    Configuring._items (node: defaults) has (item: rule)
+    Configuring._at (node: rule, path: ["match"]) has (value: text)
+```
+
+```view
+active image asset path setting — inputs (); outputs (assets); bindings (root) — answers exactly one (assets)
+  where
+    Configuring._active () has (root)
+    Configuring._scalar (node: root, otherwise: "assets", path: ["paths", "assets"]) has (value: assets)
+```
+
+```view
+active image rendition settings — inputs (); outputs (widths, formats); bindings (root) — answers exactly one (widths, formats)
+  where
+    Configuring._active () has (root)
+    Configuring._values (node: root, otherwise: [480, 960, 1440], path: ["images", "widths"]) has (values: widths)
+    Configuring._values (node: root, otherwise: ["avif", "webp", "original"], path: ["images", "formats"]) has (values: formats)
+```
+
+```view
+active markdown settings — inputs (); outputs (extensions, raw, separator); bindings (root) — answers exactly one (extensions, raw, separator)
+  where
+    Configuring._active () has (root)
+    Configuring._values (node: root, otherwise: ["tables", "footnotes", "strikethrough", "autolinks"], path: ["markdown", "extensions"]) has (values: extensions)
+    Configuring._scalar (node: root, otherwise: true, path: ["markdown", "raw"]) has (value: raw)
+    Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
+```
+
+```view
+active site base path — inputs (); outputs (base); bindings (root) — answers exactly one (base)
+  where
+    Configuring._active () has (root)
+    Configuring._scalar (node: root, otherwise: "/", path: ["site", "basePath"]) has (value: base)
+```
+
+```view
+active verbatim settings — inputs (); outputs (separator); bindings (root) — answers exactly one (separator)
+  where
+    Configuring._active () has (root)
+    Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
+```
+
+```view
 beside-page output for page (page) and name (name) — inputs (page, name); outputs (pageAddress, pagePath, prefix, path); bindings () — answers at most one (pageAddress, pagePath, prefix, path)
   where
     Routing._address (owner: page) has (address: pageAddress)
     Routing._file (address: pageAddress) has (path: pagePath)
     Filing._directory (path: pagePath) has (prefix)
     Filing._join (name, prefix) has (path)
-```
-
-```view
-collection declaration setting of configuration (root) — inputs (root); outputs (name, rule, direction, sort); bindings (collections) — answers any number of (name, rule, direction, sort)
-  where
-    Configuring._at (node: root, path: ["collections"]) has (found: collections)
-    Configuring._entries (node: collections) has (child: rule, key: name)
-    Configuring._scalar (node: rule, otherwise: "asc", path: ["sort", "order"]) has (value: direction)
-    Configuring._scalar (node: rule, otherwise: null, path: ["sort", "by"]) has (value: sort)
-```
-
-```view
-collection pattern setting of configuration (root) — inputs (root); outputs (rule, text); bindings (collections) — answers any number of (rule, text)
-  where
-    Configuring._at (node: root, path: ["collections"]) has (found: collections)
-    Configuring._entries (node: collections) has (child: rule)
-    Configuring._at (node: rule, path: ["match"]) has (value: text)
 ```
 
 ```view
@@ -632,11 +673,10 @@ content document file — inputs (); outputs (root, file, path, text); bindings 
 ```
 
 ```view
-default pattern setting of configuration (root) — inputs (root); outputs (rule, text); bindings (defaults) — answers any number of (rule, text)
+declared site origin — inputs (); outputs (origin); bindings (root) — answers at most one (origin)
   where
-    Configuring._at (node: root, path: ["defaults"]) has (found: defaults)
-    Configuring._items (node: defaults) has (item: rule)
-    Configuring._at (node: rule, path: ["match"]) has (value: text)
+    Configuring._active () has (root)
+    Configuring._at (node: root, path: ["site", "origin"]) has (value: origin)
 ```
 
 ```view
@@ -647,24 +687,13 @@ effective conversion profile of page (page) — inputs (page); outputs (profile)
 ```
 
 ```view
-markdown settings of configuration (root) — inputs (root); outputs (extensions, raw, separator); bindings () — answers exactly one (extensions, raw, separator)
-  where
-    Configuring._values (node: root, otherwise: ["tables", "footnotes", "strikethrough", "autolinks"], path: ["markdown", "extensions"]) has (values: extensions)
-    Configuring._scalar (node: root, otherwise: true, path: ["markdown", "raw"]) has (value: raw)
-    Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
-```
-
-```view
-matching catalog of page (page) — inputs (page); outputs (catalog, path); bindings (root, configuration, collections, name, rule, text, pattern) — answers any number of (catalog, path)
+matching catalog of page (page) — inputs (page); outputs (catalog, path); bindings (root, name, text, pattern) — answers any number of (catalog, path)
   where
     Routing._address (owner: page)
     Filing._named (name: "content") has (root)
     Filing._file (file: page) has (path, root)
-    Configuring._active () has (root: configuration)
-    Configuring._at (node: configuration, path: ["collections"]) has (found: collections)
-    Configuring._entries (node: collections) has (child: rule, key: name)
+    view "active collection setting" has (name, text)
     Cataloging._named (name) has (catalog)
-    Configuring._at (node: rule, path: ["match"]) has (value: text)
     Matching._compiled (text) has (pattern)
     Matching._matches (path, pattern) has (matched: true)
 ```
@@ -728,11 +757,6 @@ unsettled routed page — inputs (); outputs (page); bindings () — answers any
   where
     Routing._claims () has (owner: page)
     no Depending._current (subject: page)
-```
-
-```view
-verbatim settings of configuration (root) — inputs (root); outputs (separator); bindings () — answers exactly one (separator)
-  where Configuring._scalar (node: root, otherwise: "", path: ["markdown", "excerptSeparator"]) has (value: separator)
 ```
 
 ## Formers
@@ -980,9 +1004,7 @@ then
 ```reaction
 when Transcoding.admit (original)
 where
-  Configuring._active () has (root: configuration)
-  Configuring._values (node: configuration, otherwise: [480, 960, 1440], path: ["images", "widths"]) has (values: widths)
-  Configuring._values (node: configuration, otherwise: ["avif", "webp", "original"], path: ["images", "formats"]) has (values: formats)
+  view "active image rendition settings" has (formats, widths)
 then
   Transcoding.render (formats, original, widths)
 ```
@@ -2283,8 +2305,7 @@ where
   earlier, Embedding.declare (embedding)
   view "responsive body image embedding (embedding)" with (embedding) has (original, page)
   Transcoding._renditions (original) has (fallback: false, format, name, order, width)
-  Configuring._active () has (root: configuration)
-  Configuring._scalar (node: configuration, otherwise: "assets", path: ["paths", "assets"]) has (value: assets)
+  view "active image asset path setting" has (assets)
   Filing._join (name, prefix: assets) has (path)
   Routing._locate (path) has (address)
 then
@@ -2298,8 +2319,7 @@ when Embedding.declare (embedding)
 where
   view "responsive body image embedding (embedding)" with (embedding) has (original, page)
   Transcoding._renditions (original) has (content, fallback: false, mediaType, name, rendition)
-  Configuring._active () has (root: configuration)
-  Configuring._scalar (node: configuration, otherwise: "assets", path: ["paths", "assets"]) has (value: assets)
+  view "active image asset path setting" has (assets)
   Filing._join (name, prefix: assets) has (path)
 then
   Emitting.intend (claim: rendition, content, medium: mediaType, path, producer: page)
@@ -2592,8 +2612,7 @@ then
 when refused Matching.compile (text, detail, error)
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "collection pattern setting of configuration (root)" with (root) has (text)
+  view "active collection setting" has (text)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
@@ -2603,8 +2622,7 @@ then
 ```reaction
 when Phasing.start (phase: "settings")
 where
-  Configuring._active () has (root)
-  view "collection pattern setting of configuration (root)" with (root) has (text)
+  view "active collection setting" has (text)
 then
   Matching.compile (text)
 ```
@@ -2614,8 +2632,7 @@ then
 ```reaction
 when Phasing.start (phase: "settings")
 where
-  Configuring._active () has (root)
-  view "default pattern setting of configuration (root)" with (root) has (text)
+  view "active default pattern setting" has (text)
 then
   Matching.compile (text)
 ```
@@ -2626,8 +2643,7 @@ then
 when Cataloging.reset ()
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  view "active collection setting" has (direction, name, rule, sort)
   Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
   Configuring._at (node: rule, path: ["where", "contains"]) has (value)
 then
@@ -2640,8 +2656,7 @@ then
 when Cataloging.reset ()
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  view "active collection setting" has (direction, name, rule, sort)
   Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
   Configuring._at (node: rule, path: ["where", "equals"]) has (value)
 then
@@ -2654,8 +2669,7 @@ then
 when Cataloging.reset ()
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  view "active collection setting" has (direction, name, rule, sort)
   Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
   Configuring._at (node: rule, path: ["where", "exists"]) has (value: true)
 then
@@ -2668,8 +2682,7 @@ then
 when Cataloging.reset ()
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  view "active collection setting" has (direction, name, rule, sort)
   no Configuring._at (node: rule, path: ["where"])
 then
   Cataloging.declare (condition: null, direction, name, sort)
@@ -2680,8 +2693,7 @@ then
 ```reaction
 when Phasing.start (phase: "settings")
 where
-  Configuring._active () has (root)
-  view "markdown settings of configuration (root)" with (root) has (extensions, raw, separator)
+  view "active markdown settings" has (extensions, raw, separator)
 then
   Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator)
 ```
@@ -2691,8 +2703,7 @@ then
 ```reaction
 when Phasing.start (phase: "settings")
 where
-  Configuring._active () has (root)
-  view "verbatim settings of configuration (root)" with (root) has (separator)
+  view "active verbatim settings" has (separator)
 then
   Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator)
 ```
@@ -2703,8 +2714,7 @@ then
 when refused Matching.compile (text, detail, error)
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "default pattern setting of configuration (root)" with (root) has (text)
+  view "active default pattern setting" has (text)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
@@ -2715,8 +2725,7 @@ then
 when refused Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "markdown settings of configuration (root)" with (root) has (extensions, raw, separator)
+  view "active markdown settings" has (extensions, raw, separator)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
@@ -2727,8 +2736,7 @@ then
 when refused Routing.rebase (base, detail, error: "INVALID_BASE")
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  Configuring._scalar (node: root, otherwise: "/", path: ["site", "basePath"]) has (value: base)
+  view "active site base path" has (base)
 then
   Diagnosing.report (code: "INVALID_BASE", message: detail, severity: "error", source: "site.yaml")
 ```
@@ -2738,8 +2746,7 @@ then
 ```reaction
 when Phasing.start (phase: "settings")
 where
-  Configuring._active () has (root)
-  Configuring._scalar (node: root, otherwise: "/", path: ["site", "basePath"]) has (value: base)
+  view "active site base path" has (base)
 then
   Routing.rebase (base)
 ```
@@ -2750,8 +2757,7 @@ then
 when refused Routing.reorigin (origin, detail, error: "INVALID_ORIGIN")
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  Configuring._at (node: root, path: ["site", "origin"]) has (value: origin)
+  view "declared site origin" has (origin)
 then
   Diagnosing.report (code: "INVALID_ORIGIN", message: detail, severity: "error", source: "site.yaml")
 ```
@@ -2761,8 +2767,7 @@ then
 ```reaction
 when Phasing.start (phase: "settings")
 where
-  Configuring._active () has (root)
-  Configuring._at (node: root, path: ["site", "origin"]) has (value: origin)
+  view "declared site origin" has (origin)
 then
   Routing.reorigin (origin)
 ```
@@ -2781,8 +2786,7 @@ then
 when refused Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "verbatim settings of configuration (root)" with (root) has (separator)
+  view "active verbatim settings" has (separator)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```

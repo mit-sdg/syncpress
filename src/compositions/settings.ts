@@ -2,14 +2,14 @@ import { earlier, no, reaction, when, where } from "@mit-sdg/sync-engine/languag
 import { concepts } from "../concept-set.ts";
 import {
   CONFIGURATION_PATH,
-  DEFAULTS,
   PAGE_PATTERNS,
   PATHS,
   PROFILES,
 } from "./shared.ts";
 import {
-  CollectionDeclarationSetting,
-  CollectionPatternSetting,
+  ActiveSiteBasePath,
+  CollectionSetting,
+  DeclaredSiteOrigin,
   DefaultPatternSetting,
   MarkdownSettings,
   VerbatimSettings,
@@ -26,27 +26,17 @@ export const FixedPatternsCompile = reaction(() =>
   ),
 );
 
-export const SettingsRebaseRouting = reaction(({ root, base }) =>
+export const SettingsRebaseRouting = reaction(({ base }) =>
   when(Phasing.start({}).responds({ phase: "settings" }))
-    .where(
-      Configuring._active({}).is({ root }),
-      Configuring._scalar({ node: root, path: PATHS.siteBasePath, otherwise: DEFAULTS.basePath }).is({
-        value: base,
-      }),
-    )
+    .where(ActiveSiteBasePath({}).is({ base }))
     .then(Routing.rebase({ base })),
 );
 
-export const SettingsRebaseFailuresDiagnose = reaction(({ root, base, detail }) =>
+export const SettingsRebaseFailuresDiagnose = reaction(({ base, detail }) =>
   when(Routing.rebase({ base }).refuses({ error: "INVALID_BASE", detail }))
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
-      Configuring._active({}).is({ root }),
-      Configuring._scalar({
-        node: root,
-        path: PATHS.siteBasePath,
-        otherwise: DEFAULTS.basePath,
-      }).is({ value: base }),
+      ActiveSiteBasePath({}).is({ base }),
     )
     .then(
       Diagnosing.report({
@@ -59,11 +49,10 @@ export const SettingsRebaseFailuresDiagnose = reaction(({ root, base, detail }) 
 );
 
 /** Configure canonical URL projection only when the site declares an origin. */
-export const SettingsReoriginRouting = reaction(({ root, origin }) =>
+export const SettingsReoriginRouting = reaction(({ origin }) =>
   when(Phasing.start({}).responds({ phase: "settings" }))
     .where(
-      Configuring._active({}).is({ root }),
-      Configuring._at({ node: root, path: PATHS.siteOrigin }).is({ value: origin }),
+      DeclaredSiteOrigin({}).is({ origin }),
     )
     .then(Routing.reorigin({ origin })),
 );
@@ -78,12 +67,11 @@ export const SettingsClearRoutingOrigin = reaction(({ root }) =>
     .then(Routing.reorigin({})),
 );
 
-export const SettingsReoriginFailuresDiagnose = reaction(({ root, origin, detail }) =>
+export const SettingsReoriginFailuresDiagnose = reaction(({ origin, detail }) =>
   when(Routing.reorigin({ origin }).refuses({ error: "INVALID_ORIGIN", detail }))
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
-      Configuring._active({}).is({ root }),
-      Configuring._at({ node: root, path: PATHS.siteOrigin }).is({ value: origin }),
+      DeclaredSiteOrigin({}).is({ origin }),
     )
     .then(
       Diagnosing.report({
@@ -95,11 +83,10 @@ export const SettingsReoriginFailuresDiagnose = reaction(({ root, origin, detail
     ),
 );
 
-export const SettingsDeclareMarkdownProfile = reaction(({ root, extensions, raw, separator }) =>
+export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, separator }) =>
   when(Phasing.start({}).responds({ phase: "settings" }))
     .where(
-      Configuring._active({}).is({ root }),
-      MarkdownSettings({ root }).is({ extensions, raw, separator }),
+      MarkdownSettings({}).is({ extensions, raw, separator }),
     )
     .then(
       Converting.declare({
@@ -112,7 +99,7 @@ export const SettingsDeclareMarkdownProfile = reaction(({ root, extensions, raw,
     ),
 );
 
-export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ root, extensions, raw, separator, error, detail }) =>
+export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ extensions, raw, separator, error, detail }) =>
   when(
     Converting.declare({
       name: PROFILES.markdown,
@@ -124,17 +111,15 @@ export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ root, extensi
   )
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
-      Configuring._active({}).is({ root }),
-      MarkdownSettings({ root }).is({ extensions, raw, separator }),
+      MarkdownSettings({}).is({ extensions, raw, separator }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
 
-export const SettingsDeclareVerbatimProfile = reaction(({ root, separator }) =>
+export const SettingsDeclareVerbatimProfile = reaction(({ separator }) =>
   when(Phasing.start({}).responds({ phase: "settings" }))
     .where(
-      Configuring._active({}).is({ root }),
-      VerbatimSettings({ root }).is({ separator }),
+      VerbatimSettings({}).is({ separator }),
     )
     .then(
       Converting.declare({
@@ -147,7 +132,7 @@ export const SettingsDeclareVerbatimProfile = reaction(({ root, separator }) =>
     ),
 );
 
-export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ root, separator, error, detail }) =>
+export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ separator, error, detail }) =>
   when(
     Converting.declare({
       name: PROFILES.verbatim,
@@ -159,46 +144,41 @@ export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ root, separat
   )
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
-      Configuring._active({}).is({ root }),
-      VerbatimSettings({ root }).is({ separator }),
+      VerbatimSettings({}).is({ separator }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
 
-export const SettingsCompileDefaultPatterns = reaction(({ root, text }) =>
+export const SettingsCompileDefaultPatterns = reaction(({ text }) =>
   when(Phasing.start({}).responds({ phase: "settings" }))
     .where(
-      Configuring._active({}).is({ root }),
-      DefaultPatternSetting({ root }).is({ text }),
+      DefaultPatternSetting({}).is({ text }),
     )
     .then(Matching.compile({ text })),
 );
 
-export const SettingsDefaultPatternFailuresDiagnose = reaction(({ root, text, error, detail }) =>
+export const SettingsDefaultPatternFailuresDiagnose = reaction(({ text, error, detail }) =>
   when(Matching.compile({ text }).refuses({ error, detail }))
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
-      Configuring._active({}).is({ root }),
-      DefaultPatternSetting({ root }).is({ text }),
+      DefaultPatternSetting({}).is({ text }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
 
-export const SettingsCompileCollectionPatterns = reaction(({ root, text }) =>
+export const SettingsCompileCollectionPatterns = reaction(({ text }) =>
   when(Phasing.start({}).responds({ phase: "settings" }))
     .where(
-      Configuring._active({}).is({ root }),
-      CollectionPatternSetting({ root }).is({ text }),
+      CollectionSetting({}).is({ text }),
     )
     .then(Matching.compile({ text })),
 );
 
-export const SettingsCollectionPatternFailuresDiagnose = reaction(({ root, text, error, detail }) =>
+export const SettingsCollectionPatternFailuresDiagnose = reaction(({ text, error, detail }) =>
   when(Matching.compile({ text }).refuses({ error, detail }))
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
-      Configuring._active({}).is({ root }),
-      CollectionPatternSetting({ root }).is({ text }),
+      CollectionSetting({}).is({ text }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
@@ -207,12 +187,11 @@ export const SettingsResetCatalogs = reaction(() =>
   when(Phasing.start({}).responds({ phase: "settings" })).then(Cataloging.reset({})),
 );
 
-export const SettingsDeclareCatalogs = reaction(({ root, name, rule, direction, sort, field, value }) =>
+export const SettingsDeclareCatalogs = reaction(({ name, rule, direction, sort, field, value }) =>
   when(Cataloging.reset({}).responds({}))
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
-      Configuring._active({}).is({ root }),
-      CollectionDeclarationSetting({ root }).is({ name, rule, direction, sort }),
+      CollectionSetting({}).is({ name, rule, direction, sort }),
     )
     .then(
       where(no(Configuring._at({ node: rule, path: ["where"] })))

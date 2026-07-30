@@ -1,6 +1,7 @@
 import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
-import { DEFAULTS, PAGE_PATTERNS, PARTS, PATHS } from "./shared.ts";
+import { PAGE_PATTERNS, PARTS } from "./shared.ts";
+import { ImageAssetPathSetting, ImageRenditionSettings } from "./views.ts";
 import {
   BesidePageOutput,
   ResolvedLocalBodyReference,
@@ -8,7 +9,6 @@ import {
 } from "./references.ts";
 
 const {
-  Configuring,
   Diagnosing,
   Embedding,
   Emitting,
@@ -66,21 +66,9 @@ export const PrimaryRasterImagesAdmit = reaction(
 );
 
 /** Render the configured rendition set after an image has been admitted. */
-export const AdmittedRasterImagesRender = reaction(({ original, configuration, widths, formats }) =>
+export const AdmittedRasterImagesRender = reaction(({ original, widths, formats }) =>
   when(Transcoding.admit({}).responds({ original }))
-    .where(
-      Configuring._active({}).is({ root: configuration }),
-      Configuring._values({
-        node: configuration,
-        path: PATHS.imagesWidths,
-        otherwise: [...DEFAULTS.imageWidths],
-      }).is({ values: widths }),
-      Configuring._values({
-        node: configuration,
-        path: PATHS.imagesFormats,
-        otherwise: [...DEFAULTS.imageFormats],
-      }).is({ values: formats }),
-    )
+    .where(ImageRenditionSettings({}).is({ widths, formats }))
     .then(Transcoding.render({ original, widths, formats })),
 );
 
@@ -190,7 +178,6 @@ export const RasterRenditionsStage = reaction(
     content,
     mediaType,
     name,
-    configuration,
     assets,
     path,
   }) =>
@@ -204,12 +191,7 @@ export const RasterRenditionsStage = reaction(
           mediaType,
           name,
         }),
-        Configuring._active({}).is({ root: configuration }),
-        Configuring._scalar({
-          node: configuration,
-          path: PATHS.pathsAssets,
-          otherwise: DEFAULTS.assetsPath,
-        }).is({ value: assets }),
+        ImageAssetPathSetting({}).is({ assets }),
         Filing._join({ prefix: assets, name }).is({ path }),
       )
       .then(Emitting.intend({ producer: page, claim: rendition, path, content, medium: mediaType })),
@@ -217,18 +199,13 @@ export const RasterRenditionsStage = reaction(
 
 /** Offer a rendition only after the matching asset intent has been staged. */
 export const RasterRenditionsOffer = reaction(
-  ({ embedding, page, path, original, format, width, order, name, configuration, assets, address }) =>
+  ({ embedding, page, path, original, format, width, order, name, assets, address }) =>
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
         earlier(Embedding.declare, {}, { embedding }),
         ResponsiveBodyImageEmbedding({ embedding }).is({ page, original }),
         Transcoding._renditions({ original }).is({ fallback: false, format, width, order, name }),
-        Configuring._active({}).is({ root: configuration }),
-        Configuring._scalar({
-          node: configuration,
-          path: PATHS.pathsAssets,
-          otherwise: DEFAULTS.assetsPath,
-        }).is({ value: assets }),
+        ImageAssetPathSetting({}).is({ assets }),
         Filing._join({ prefix: assets, name }).is({ path }),
         Routing._locate({ path }).is({ address }),
       )
