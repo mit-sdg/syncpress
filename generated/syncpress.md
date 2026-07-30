@@ -1113,7 +1113,7 @@ then
 ### fullSite.ClaimedRoutesBeginRendering
 
 ```reaction
-when Routing.claim (owner: page)
+when Routing.claim (owner: page, changed: true)
 where
   earlier, Phasing.advance (phase: "route")
   Filing._file (file: page) has (path)
@@ -1950,9 +1950,10 @@ then
 ### fullSite.MissingRenderingProfilesDiagnose
 
 ```reaction
-when Rendering.begin (subject: page, profile)
+when Templating.fill (subject: rendering)
 where
-  no Converting._profile (name: profile)
+  Rendering._attempt (rendering) has (profile: name, subject: page)
+  no Converting._profile (name)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: "PROFILE_NOT_FOUND", message: "The selected body conversion profile is not defined.", severity: "error", source: path)

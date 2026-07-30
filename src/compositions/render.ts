@@ -88,6 +88,22 @@ export const RenderingAttemptsFillAuthoredBodies = reaction(({ page, rendering, 
     ),
 );
 
+/** Diagnose a selected profile only after this render has cleared prior source diagnostics. */
+export const MissingRenderingProfilesDiagnose = reaction(({ rendering, page, name, path }) =>
+  when(Templating.fill({ subject: rendering }).responds({}))
+    .where(
+      Rendering._attempt({ rendering }).is({ subject: page, profile: name }),
+      no(Converting._profile({ name })),
+      Filing._file({ file: page }).is({ path }),
+    )
+    .then(Diagnosing.report({
+      severity: "error",
+      code: "PROFILE_NOT_FOUND",
+      message: "The selected body conversion profile is not defined.",
+      source: path,
+    })),
+);
+
 /** Honor an explicit page conversion profile. */
 export const FilledBodiesConvert = reaction(({ rendering, output, profile, name }) =>
   when(Templating.fill({ subject: rendering }).responds({ output }))

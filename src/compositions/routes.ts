@@ -78,7 +78,7 @@ export const InvalidRouteClaimsDiagnose = reaction(({ page, root, path, detail }
 
 /** A successful route starts one observable rendering attempt and selects its source profile. */
 export const ClaimedRoutesBeginRendering = reaction(({ page, path, data }) =>
-  when(Routing.claim({ owner: page }).responds({}))
+  when(Routing.claim({ owner: page }).responds({ changed: true }))
     .where(
       earlier(Phasing.advance, {}, { phase: "route" }),
       Filing._file({ file: page }).is({ path }),
@@ -91,23 +91,6 @@ export const RenderingBeginningsDiagnose = reaction(({ page, error, detail, path
   when(Rendering.begin({ subject: page }).refuses({ error, detail }))
     .where(Filing._file({ file: page }).is({ path }))
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
-);
-
-/** A selected profile must resolve before excerpt or body conversion can proceed. */
-export const MissingRenderingProfilesDiagnose = reaction(({ page, profile, path }) =>
-  when(Rendering.begin({ subject: page }).responds({ profile }))
-    .where(
-      no(Converting._profile({ name: profile })),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(
-      Diagnosing.report({
-        severity: "error",
-        code: "PROFILE_NOT_FOUND",
-        message: "The selected body conversion profile is not defined.",
-        source: path,
-      }),
-    ),
 );
 
 export const PageExcerptsConvert = reaction(({ page, body, profile }) =>

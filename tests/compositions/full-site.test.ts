@@ -317,6 +317,27 @@ test("reports multiple location-aware configuration errors before staging source
   }
 });
 
+test("reports a missing rendering profile after clearing prior diagnostics", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-missing-profile-"));
+  const destination = join(project, "dist");
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const configurationPath = join(project, "site.yaml");
+    await writeFile(
+      configurationPath,
+      (await readFile(configurationPath, "utf8")).replace("markup: markdown", "markup: missing"),
+    );
+    await mkdir(destination);
+    await writeFile(join(destination, "previous.txt"), "keep this file\n");
+
+    await expect(buildSite(project, "dist")).rejects.toThrow("PROFILE_NOT_FOUND");
+    expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("inspect reports route ownership, template provenance, collection membership, and dependencies", async () => {
   const report = await inspectSite(exampleDirectory, "/posts/first/");
 
