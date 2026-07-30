@@ -159,7 +159,7 @@ Planned work:
   `_latest` and phase-history joins where they only reconstruct identity.
 - [x] Keep `Depending` and `Emitting` keyed by page unless explicit replacement
   and retry semantics justify changing ownership.
-- [ ] Add a test where a superseded attempt finishes late and prove that it
+- [x] Add tests where a superseded attempt finishes late and prove that it
   cannot settle, emit, or diagnose the newer attempt.
 - [x] Add inspection coverage grouping transient operations under the rendering
   identity.
