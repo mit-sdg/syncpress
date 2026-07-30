@@ -49,6 +49,37 @@ export const BesidePageOutput = view(
     ),
 ).optional();
 
+const CopyableBodyAsset = view(
+  "copyable body asset of source (source)",
+  ({ source }, { rendering, page, reference, raw, asset, sourcePath, name, content }, { pattern }) => [
+    where(
+      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, asset, sourcePath, name, content }).is.not({ role: "image" }),
+    ),
+    where(
+      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", asset, sourcePath, name, content }),
+      Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
+      Matching._matches({ pattern, path: sourcePath }).is({ matched: false }),
+    ),
+  ],
+).many();
+
+const HeldBodyReference = view(
+  "held body reference of source (source)",
+  ({ source }, { reference, raw }, _bindings) => [
+    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "absolute" })),
+    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "external" })),
+    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "fragment" })),
+  ],
+).many();
+
+const HeldLayoutReference = view(
+  "held layout reference of source (source)",
+  ({ source }, { reference, raw }, _bindings) => [
+    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "external" })),
+    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "fragment" })),
+  ],
+).many();
+
 /** Retarget relative references that resolve to a page with a claimed address. */
 export const ClaimedBodyReferencesRetarget = reaction(({ source, reference, raw, target, address, value }) =>
   when(Referencing.scan({ part: PARTS.body }).responds({ source }))
@@ -60,12 +91,12 @@ export const ClaimedBodyReferencesRetarget = reaction(({ source, reference, raw,
     .then(Referencing.answer({ reference, form: "address", value })),
 );
 
-/** Copy every non-primary-image local asset beside the page that references it. */
-export const OrdinaryBodyAssetsCopy = reaction(
+/** Copy ordinary and non-raster image assets beside the page that references them. */
+export const CopyableBodyAssetsCopy = reaction(
   ({ source, page, target, name, content, path }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        UnroutedContentBodyAsset({ source }).is({ page, asset: target, name, content }).is.not({ role: "image" }),
+        CopyableBodyAsset({ source }).is({ page, asset: target, name, content }),
         BesidePageOutput({ page, name }).is({ path }),
       )
       .then(
@@ -79,50 +110,13 @@ export const OrdinaryBodyAssetsCopy = reaction(
       ),
 );
 
-/** Answer an ordinary asset only after its bytes are staged in the page attempt. */
-export const CopiedOrdinaryBodyAssetsAnswer = reaction(
+/** Answer a copied asset only after its bytes are staged in the page attempt. */
+export const CopiedBodyAssetsAnswer = reaction(
   ({ page, rendering, path, source, reference, raw, name, address, value }) =>
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
         earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
-        UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, name }).is.not({ role: "image" }),
-        BesidePageOutput({ page, name }).is({ path }),
-        Routing._locate({ path }).is({ address }),
-        Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
-      )
-      .then(Referencing.answer({ reference, form: "address", value })),
-);
-
-/** SVG and other non-raster primary images use the beside-page asset policy. */
-export const NonRasterPrimaryImagesCopy = reaction(
-  ({ source, page, target, sourcePath, name, content, pattern, path }) =>
-    when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-      .where(
-        UnroutedContentBodyAsset({ source }).is({ page, role: "image", asset: target, sourcePath, name, content }),
-        Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-        Matching._matches({ pattern, path: sourcePath }).is({ matched: false }),
-        BesidePageOutput({ page, name }).is({ path }),
-      )
-      .then(
-        Emitting.intend({
-          producer: page,
-          claim: target,
-          path,
-          content,
-          medium: ASSET_MEDIUM,
-        }),
-      ),
-);
-
-/** Keep primary SVG and other non-raster image references behind their staged bytes. */
-export const CopiedNonRasterPrimaryImagesAnswer = reaction(
-  ({ page, rendering, path, source, reference, raw, sourcePath, name, pattern, address, value }) =>
-    when(Emitting.intend({ producer: page, path }).responds({}))
-      .where(
-        earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
-        UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", sourcePath, name }),
-        Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-        Matching._matches({ pattern, path: sourcePath }).is({ matched: false }),
+        CopyableBodyAsset({ source }).is({ rendering, page, reference, raw, name }),
         BesidePageOutput({ page, name }).is({ path }),
         Routing._locate({ path }).is({ address }),
         Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
@@ -153,83 +147,39 @@ export const UnpublishedDocumentBodyReferencesDiagnose = reaction(
 );
 
 /** Body URLs that are already nonlocal are complete without rewriting. */
-export const AbsoluteBodyReferencesHold = reaction(({ source, reference, raw }) =>
+export const NonlocalBodyReferencesHold = reaction(({ source, reference, raw }) =>
   when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-    .where(
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "absolute" }),
-    )
-    .then(Referencing.answer({ reference, form: "address", value: raw })),
-);
-
-export const ExternalBodyReferencesHold = reaction(({ source, reference, raw }) =>
-  when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-    .where(
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "external" }),
-    )
-    .then(Referencing.answer({ reference, form: "address", value: raw })),
-);
-
-export const FragmentBodyReferencesHold = reaction(({ source, reference, raw }) =>
-  when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-    .where(
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "fragment" }),
-    )
+    .where(HeldBodyReference({ source }).is({ reference, raw }))
     .then(Referencing.answer({ reference, form: "address", value: raw })),
 );
 
 /** Invalid local URLs stay unanswered and become source diagnostics. */
-export const MissingBodyReferencesDiagnose = reaction(({ source, page, raw, path }) =>
-  when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-    .where(
-      RelativeBodyReference({ source }).is({ page, raw }),
-      Filing._resolution({ file: page, address: raw }).is({ status: "missing" }),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(
-      Diagnosing.report({
-        severity: "error",
-        code: "MISSING_LOCAL_REFERENCE",
-        message: "This local reference names no staged content file.",
-        source: path,
-      }),
-    ),
-);
+function localReferenceDiagnostic(status: "missing" | "outside" | "invalid", code: string, message: string) {
+  return reaction(({ source, page, raw, path }) =>
+    when(Referencing.scan({ part: PARTS.body }).responds({ source }))
+      .where(
+        RelativeBodyReference({ source }).is({ page, raw }),
+        Filing._resolution({ file: page, address: raw }).is({ status }),
+        Filing._file({ file: page }).is({ path }),
+      )
+      .then(Diagnosing.report({ severity: "error", code, message, source: path })),
+  );
+}
 
-export const OutsideBodyReferencesDiagnose = reaction(({ source, page, raw, path }) =>
-  when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-    .where(
-      RelativeBodyReference({ source }).is({ page, raw }),
-      Filing._resolution({ file: page, address: raw }).is({ status: "outside" }),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(
-      Diagnosing.report({
-        severity: "error",
-        code: "OUTSIDE_LOCAL_REFERENCE",
-        message: "This local reference leaves the content root.",
-        source: path,
-      }),
-    ),
+export const MissingBodyReferencesDiagnose = localReferenceDiagnostic(
+  "missing",
+  "MISSING_LOCAL_REFERENCE",
+  "This local reference names no staged content file.",
 );
-
-export const InvalidBodyReferencesDiagnose = reaction(({ source, page, raw, path }) =>
-  when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-    .where(
-      RelativeBodyReference({ source }).is({ page, raw }),
-      Filing._resolution({ file: page, address: raw }).is({ status: "invalid" }),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(
-      Diagnosing.report({
-        severity: "error",
-        code: "INVALID_LOCAL_REFERENCE",
-        message: "This local reference has an invalid path spelling.",
-        source: path,
-      }),
-    ),
+export const OutsideBodyReferencesDiagnose = localReferenceDiagnostic(
+  "outside",
+  "OUTSIDE_LOCAL_REFERENCE",
+  "This local reference leaves the content root.",
+);
+export const InvalidBodyReferencesDiagnose = localReferenceDiagnostic(
+  "invalid",
+  "INVALID_LOCAL_REFERENCE",
+  "This local reference has an invalid path spelling.",
 );
 
 /** Report local references whose URI spelling cannot preserve its suffix safely. */
@@ -252,33 +202,11 @@ export const UnretargetableClaimedBodyReferencesDiagnose = reaction(
       ),
 );
 
-export const UnretargetableNonRasterPrimaryImagesDiagnose = reaction(
-  ({ source, page, raw, imagePath, name, pattern, outputPath, address, sourcePath }) =>
-    when(Referencing.scan({ part: PARTS.body }).responds({ source }))
-      .where(
-        UnroutedContentBodyAsset({ source }).is({ page, raw, role: "image", sourcePath: imagePath, name }),
-        Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-        Matching._matches({ pattern, path: imagePath }).is({ matched: false }),
-        BesidePageOutput({ page, name }).is({ path: outputPath }),
-        Routing._locate({ path: outputPath }).is({ address }),
-        no(Routing._retarget({ replacement: address, original: raw })),
-        Filing._file({ file: page }).is({ path: sourcePath }),
-      )
-      .then(
-        Diagnosing.report({
-          severity: "error",
-          code: "INVALID_LOCAL_REFERENCE",
-          message: "This local reference cannot be safely retargeted.",
-          source: sourcePath,
-        }),
-      ),
-);
-
-export const UnretargetableAssetBodyReferencesDiagnose = reaction(
+export const UnretargetableCopiedBodyAssetsDiagnose = reaction(
   ({ source, page, raw, name, outputPath, address, sourcePath }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        UnroutedContentBodyAsset({ source }).is({ page, raw, name }).is.not({ role: "image" }),
+        CopyableBodyAsset({ source }).is({ page, raw, name }),
         BesidePageOutput({ page, name }).is({ path: outputPath }),
         Routing._locate({ path: outputPath }).is({ address }),
         no(Routing._retarget({ replacement: address, original: raw })),
@@ -305,21 +233,9 @@ export const AbsoluteLayoutReferencesRebase = reaction(({ source, reference, raw
     .then(Referencing.answer({ reference, form: "address", value: url })),
 );
 
-export const ExternalLayoutReferencesHold = reaction(({ source, reference, raw }) =>
+export const NonlocalLayoutReferencesHold = reaction(({ source, reference, raw }) =>
   when(Referencing.scan({ part: PARTS.layout }).responds({ source }))
-    .where(
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "external" }),
-    )
-    .then(Referencing.answer({ reference, form: "address", value: raw })),
-);
-
-export const FragmentLayoutReferencesHold = reaction(({ source, reference, raw }) =>
-  when(Referencing.scan({ part: PARTS.layout }).responds({ source }))
-    .where(
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "fragment" }),
-    )
+    .where(HeldLayoutReference({ source }).is({ reference, raw }))
     .then(Referencing.answer({ reference, form: "address", value: raw })),
 );
 

@@ -673,32 +673,6 @@ content document file — inputs (); outputs (root, file, path, text); bindings 
 ```
 
 ```view
-declared site origin — inputs (); outputs (origin); bindings (root) — answers at most one (origin)
-  where
-    Configuring._active () has (root)
-    Configuring._at (node: root, path: ["site", "origin"]) has (value: origin)
-```
-
-```view
-effective conversion profile of page (page) — inputs (page); outputs (profile); bindings (name) — answers at most one (profile)
-  where
-    Rendering._latest (subject: page) has (profile: name)
-    Converting._profile (name) has (profile)
-```
-
-```view
-matching catalog of page (page) — inputs (page); outputs (catalog, path); bindings (root, name, text, pattern) — answers any number of (catalog, path)
-  where
-    Routing._address (owner: page)
-    Filing._named (name: "content") has (root)
-    Filing._file (file: page) has (path, root)
-    view "active collection setting" has (name, text)
-    Cataloging._named (name) has (catalog)
-    Matching._compiled (text) has (pattern)
-    Matching._matches (path, pattern) has (matched: true)
-```
-
-```view
 relative body reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, role); bindings () — answers any number of (rendering, page, reference, raw, role)
   where
     Referencing._source (source) has (part: "body", subject: rendering)
@@ -722,6 +696,64 @@ unrouted content body asset of source (source) — inputs (source); outputs (ren
     no Documenting._document (subject: asset)
     Filing._file (file: asset) has (content, name, path: sourcePath, root)
     Filing._root (root) has (name: "content")
+```
+
+```view
+copyable body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, asset, sourcePath, name, content); bindings (pattern) — answers any number of (rendering, page, reference, raw, asset, sourcePath, name, content)
+  where view "unrouted content body asset of source (source)" with (source) has (asset, content, name, page, raw, reference, rendering, sourcePath) and not (role: "image")
+  where
+    view "unrouted content body asset of source (source)" with (source) has (asset, content, name, page, raw, reference, rendering, role: "image", sourcePath)
+    Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
+    Matching._matches (path: sourcePath, pattern) has (matched: false)
+```
+
+```view
+declared site origin — inputs (); outputs (origin); bindings (root) — answers at most one (origin)
+  where
+    Configuring._active () has (root)
+    Configuring._at (node: root, path: ["site", "origin"]) has (value: origin)
+```
+
+```view
+effective conversion profile of page (page) — inputs (page); outputs (profile); bindings (name) — answers at most one (profile)
+  where
+    Rendering._latest (subject: page) has (profile: name)
+    Converting._profile (name) has (profile)
+```
+
+```view
+held body reference of source (source) — inputs (source); outputs (reference, raw); bindings () — answers any number of (reference, raw)
+  where
+    Referencing._references (source) has (raw, reference)
+    Routing._classify (target: raw) has (kind: "absolute")
+  where
+    Referencing._references (source) has (raw, reference)
+    Routing._classify (target: raw) has (kind: "external")
+  where
+    Referencing._references (source) has (raw, reference)
+    Routing._classify (target: raw) has (kind: "fragment")
+```
+
+```view
+held layout reference of source (source) — inputs (source); outputs (reference, raw); bindings () — answers any number of (reference, raw)
+  where
+    Referencing._references (source) has (raw, reference)
+    Routing._classify (target: raw) has (kind: "external")
+  where
+    Referencing._references (source) has (raw, reference)
+    Routing._classify (target: raw) has (kind: "fragment")
+```
+
+```view
+matching catalog of page (page) — inputs (page); outputs (catalog, path); bindings (root, name, text, pattern) — answers any number of (catalog, path)
+  where
+    Routing._address (owner: page)
+    Filing._named (name: "content") has (root)
+    Filing._file (file: page) has (path, root)
+    view "active collection setting" has (name, text)
+    Cataloging._named (name) has (catalog)
+    Matching._compiled (text) has (pattern)
+    Matching._matches (path, pattern) has (matched: true)
 ```
 
 ```view
@@ -962,17 +994,6 @@ where
   earlier, RequestBoundary.request (requestId)
 then
   RequestBoundary.respond (error: message, requestId)
-```
-
-### fullSite.AbsoluteBodyReferencesHold
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  Referencing._references (source) has (raw, reference)
-  Routing._classify (target: raw) has (kind: "absolute")
-then
-  Referencing.answer (form: "address", reference, value: raw)
 ```
 
 ### fullSite.AbsoluteDeploymentLayoutReferencesRebase
@@ -1291,15 +1312,13 @@ then
   Referencing.scan (part: "body", subject: rendering, text: output)
 ```
 
-### fullSite.CopiedNonRasterPrimaryImagesAnswer
+### fullSite.CopiedBodyAssetsAnswer
 
 ```reaction
 when Emitting.intend (path, producer: page)
 where
   earlier, Referencing.scan (part: "body", subject: rendering, source)
-  view "unrouted content body asset of source (source)" with (source) has (name, page, raw, reference, rendering, role: "image", sourcePath)
-  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
-  Matching._matches (path: sourcePath, pattern) has (matched: false)
+  view "copyable body asset of source (source)" with (source) has (name, page, raw, reference, rendering)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
   Routing._locate (path) has (address)
   Routing._retarget (original: raw, replacement: address) has (target: value)
@@ -1307,18 +1326,15 @@ then
   Referencing.answer (form: "address", reference, value)
 ```
 
-### fullSite.CopiedOrdinaryBodyAssetsAnswer
+### fullSite.CopyableBodyAssetsCopy
 
 ```reaction
-when Emitting.intend (path, producer: page)
+when Referencing.scan (part: "body", source)
 where
-  earlier, Referencing.scan (part: "body", subject: rendering, source)
-  view "unrouted content body asset of source (source)" with (source) has (name, page, raw, reference, rendering) and not (role: "image")
+  view "copyable body asset of source (source)" with (source) has (asset: target, content, name, page)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
-  Routing._locate (path) has (address)
-  Routing._retarget (original: raw, replacement: address) has (target: value)
 then
-  Referencing.answer (form: "address", reference, value)
+  Emitting.intend (claim: target, content, medium: "application/octet-stream", path, producer: page)
 ```
 
 ### fullSite.DeclaredEmbeddingsAnswer
@@ -1552,28 +1568,6 @@ then
   Routing.claim (address, owner: page)
 ```
 
-### fullSite.ExternalBodyReferencesHold
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  Referencing._references (source) has (raw, reference)
-  Routing._classify (target: raw) has (kind: "external")
-then
-  Referencing.answer (form: "address", reference, value: raw)
-```
-
-### fullSite.ExternalLayoutReferencesHold
-
-```reaction
-when Referencing.scan (part: "layout", source)
-where
-  Referencing._references (source) has (raw, reference)
-  Routing._classify (target: raw) has (kind: "external")
-then
-  Referencing.answer (form: "address", reference, value: raw)
-```
-
 ### fullSite.FailedDeploymentsDispatch
 
 ```reaction
@@ -1670,32 +1664,10 @@ then
   Matching.compile (text: "**/*.{avif,gif,jpeg,jpg,png,webp}")
 ```
 
-### fullSite.FragmentBodyReferencesHold
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  Referencing._references (source) has (raw, reference)
-  Routing._classify (target: raw) has (kind: "fragment")
-then
-  Referencing.answer (form: "address", reference, value: raw)
-```
-
 ### fullSite.FragmentDeploymentLayoutReferencesHold
 
 ```reaction
 when Referencing.scan (part: "deployment-layout", source)
-where
-  Referencing._references (source) has (raw, reference)
-  Routing._classify (target: raw) has (kind: "fragment")
-then
-  Referencing.answer (form: "address", reference, value: raw)
-```
-
-### fullSite.FragmentLayoutReferencesHold
-
-```reaction
-when Referencing.scan (part: "layout", source)
 where
   Referencing._references (source) has (raw, reference)
   Routing._classify (target: raw) has (kind: "fragment")
@@ -2021,17 +1993,14 @@ then
   Emitting.begin (producer)
 ```
 
-### fullSite.NonRasterPrimaryImagesCopy
+### fullSite.NonlocalBodyReferencesHold
 
 ```reaction
 when Referencing.scan (part: "body", source)
 where
-  view "unrouted content body asset of source (source)" with (source) has (asset: target, content, name, page, role: "image", sourcePath)
-  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
-  Matching._matches (path: sourcePath, pattern) has (matched: false)
-  view "beside-page output for page (page) and name (name)" with (name, page) has (path)
+  view "held body reference of source (source)" with (source) has (raw, reference)
 then
-  Emitting.intend (claim: target, content, medium: "application/octet-stream", path, producer: page)
+  Referencing.answer (form: "address", reference, value: raw)
 ```
 
 ### fullSite.NonlocalDeploymentLayoutReferencesHold
@@ -2045,15 +2014,14 @@ then
   Referencing.answer (form: "address", reference, value: raw)
 ```
 
-### fullSite.OrdinaryBodyAssetsCopy
+### fullSite.NonlocalLayoutReferencesHold
 
 ```reaction
-when Referencing.scan (part: "body", source)
+when Referencing.scan (part: "layout", source)
 where
-  view "unrouted content body asset of source (source)" with (source) has (asset: target, content, name, page) and not (role: "image")
-  view "beside-page output for page (page) and name (name)" with (name, page) has (path)
+  view "held layout reference of source (source)" with (source) has (raw, reference)
 then
-  Emitting.intend (claim: target, content, medium: "application/octet-stream", path, producer: page)
+  Referencing.answer (form: "address", reference, value: raw)
 ```
 
 ### fullSite.OriginlessFeedsDiagnose
@@ -2957,20 +2925,6 @@ then
   Routing.release (owner: page)
 ```
 
-### fullSite.UnretargetableAssetBodyReferencesDiagnose
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  view "unrouted content body asset of source (source)" with (source) has (name, page, raw) and not (role: "image")
-  view "beside-page output for page (page) and name (name)" with (name, page) has (path: outputPath)
-  Routing._locate (path: outputPath) has (address)
-  no Routing._retarget (original: raw, replacement: address)
-  Filing._file (file: page) has (path: sourcePath)
-then
-  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", severity: "error", source: sourcePath)
-```
-
 ### fullSite.UnretargetableClaimedBodyReferencesDiagnose
 
 ```reaction
@@ -2984,14 +2938,12 @@ then
   Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", severity: "error", source: path)
 ```
 
-### fullSite.UnretargetableNonRasterPrimaryImagesDiagnose
+### fullSite.UnretargetableCopiedBodyAssetsDiagnose
 
 ```reaction
 when Referencing.scan (part: "body", source)
 where
-  view "unrouted content body asset of source (source)" with (source) has (name, page, raw, role: "image", sourcePath: imagePath)
-  Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
-  Matching._matches (path: imagePath, pattern) has (matched: false)
+  view "copyable body asset of source (source)" with (source) has (name, page, raw)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path: outputPath)
   Routing._locate (path: outputPath) has (address)
   no Routing._retarget (original: raw, replacement: address)
