@@ -1,6 +1,6 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { no, view, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../../concept-set.ts";
+import { concepts } from "../concept-set.ts";
 import { CONFIGURATION_PATH, PHASES, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 
 const { Composing, Configuring, Depending, Diagnosing, Emitting, Filing, Phasing, Routing } = concepts;

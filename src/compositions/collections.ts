@@ -1,5 +1,5 @@
 import { earlier, no, reaction, view, when, where, whether } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../../concept-set.ts";
+import { concepts } from "../concept-set.ts";
 import {
   CARD_PATHS,
   PARTS,

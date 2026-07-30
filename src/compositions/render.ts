@@ -1,6 +1,6 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../../concept-set.ts";
-import { TRUSTED_COLLECTION_EXCERPTS } from "../../concepts/templating/templating.ts";
+import { concepts } from "../concept-set.ts";
+import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.ts";
 import {
   CONTEXT_PATHS,
   DEFAULTS,

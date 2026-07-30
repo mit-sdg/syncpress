@@ -1,1 +1,1 @@
-export * as fullSite from "./full-site/index.ts";
+export * as fullSite from "./full-site.ts";

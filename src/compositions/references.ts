@@ -1,5 +1,5 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../../concept-set.ts";
+import { concepts } from "../concept-set.ts";
 import { PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
 const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Routing } = concepts;

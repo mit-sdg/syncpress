@@ -36,8 +36,8 @@ bun run site build ./example ./dist
 `index.md` becomes `dist/index.html`; `about.md` becomes
 `dist/about/index.html`. Local routes, assets, and responsive raster images are
 rewritten after layouts render, so a configured base path is applied once.
-`src/compositions/full-site/` contains the phase-oriented composition; `example/`
-is its executable source fixture.
+`src/compositions/` contains the phase-oriented site composition; `example/` is
+its executable source fixture.
 
 A concept's State section is optional uninterpreted human notation. It is not a
 schema, is not compared with class fields or storage, and does not enter

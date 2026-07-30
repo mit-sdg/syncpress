@@ -545,7 +545,7 @@ output independent of the host timezone.
 
 | Area | Status | Evidence or next step |
 | --- | --- | --- |
-| Configured strict batch publication | Implemented | `src/edge.ts`, `src/compositions/full-site/` |
+| Configured strict batch publication | Implemented | `src/edge/`, `src/compositions/` |
 | Markdown and verbatim HTML pages | Implemented | `example/content/`, golden output |
 | Defaults, page controls, and routing | Implemented | Full-site composition tests |
 | Liquid layouts/includes and escaping | Implemented | Example templates and direct concept coverage |

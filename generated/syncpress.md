@@ -628,6 +628,16 @@ then
   Templating.fill (context, source: body, sourceLine: bodyLine, sourceName: path, subject: page, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
+### fullSite.BegunNojekyllArtifactsIntend
+
+```reaction
+when Emitting.begin (producer: "deployment:nojekyll")
+where
+  earlier, Phasing.advance (phase: "emit")
+then
+  Emitting.intend (content: "", medium: "text/plain", path: ".nojekyll", producer: "deployment:nojekyll")
+```
+
 ### fullSite.BodyConversionFailuresDiagnose
 
 ```reaction
@@ -993,6 +1003,17 @@ then
   Depending.settle (subject: page)
 ```
 
+### fullSite.EnabledNojekyllArtifactsBegin
+
+```reaction
+when Phasing.advance (phase: "emit")
+where
+  Configuring._active () has (root: configuration)
+  Configuring._scalar (node: configuration, otherwise: false, path: ["deploy", "nojekyll"]) has (value: true)
+then
+  Emitting.begin (producer: "deployment:nojekyll")
+```
+
 ### fullSite.ExcerptConversionFailuresDiagnose
 
 ```reaction
@@ -1218,6 +1239,16 @@ then
   Templating.define (name: path, source: text)
 ```
 
+### fullSite.IntendedNojekyllArtifactsCommit
+
+```reaction
+when Emitting.intend (path: ".nojekyll", producer: "deployment:nojekyll")
+where
+  earlier, Phasing.advance (phase: "emit")
+then
+  Emitting.commit (producer: "deployment:nojekyll")
+```
+
 ### fullSite.InvalidBodyReferencesDiagnose
 
 ```reaction
@@ -1351,6 +1382,48 @@ where
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.MissingRequiredNotFoundPagesDiagnose
+
+```reaction
+when Phasing.advance (phase: "emit")
+where
+  Configuring._active () has (root: configuration)
+  Configuring._scalar (node: configuration, otherwise: false, path: ["deploy", "requireNotFound"]) has (value: true)
+  no Routing._owner (address: "/404.html")
+then
+  Diagnosing.report (code: "MISSING_NOT_FOUND", message: "deploy.requireNotFound requires an authored /404.html page.", severity: "error", source: "site.yaml")
+```
+
+### fullSite.NojekyllArtifactBeginFailuresDiagnose
+
+```reaction
+when refused Emitting.begin (producer: "deployment:nojekyll", detail, error)
+where
+  earlier, Phasing.advance (phase: "emit")
+then
+  Diagnosing.report (code: "OUTPUT_COLLISION", message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.NojekyllArtifactCommitFailuresDiagnose
+
+```reaction
+when refused Emitting.commit (producer: "deployment:nojekyll", detail, error)
+where
+  earlier, Phasing.advance (phase: "emit")
+then
+  Diagnosing.report (code: "OUTPUT_COLLISION", message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.NojekyllArtifactIntentFailuresDiagnose
+
+```reaction
+when refused Emitting.intend (path: ".nojekyll", producer: "deployment:nojekyll", detail, error)
+where
+  earlier, Phasing.advance (phase: "emit")
+then
+  Diagnosing.report (code: "OUTPUT_COLLISION", message: detail, severity: "error", source: "site.yaml")
 ```
 
 ### fullSite.NonRasterPrimaryImagesCopy

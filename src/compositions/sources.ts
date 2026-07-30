@@ -1,5 +1,5 @@
 import { earlier, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../../concept-set.ts";
+import { concepts } from "../concept-set.ts";
 import { MAX_PAGE_LAYER_RANK, PAGE_PATTERNS, PARTS, PATHS, ROOTS } from "./shared.ts";
 
 const { Configuring, Diagnosing, Documenting, Emitting, Filing, Layering, Matching, Phasing, Templating } = concepts;

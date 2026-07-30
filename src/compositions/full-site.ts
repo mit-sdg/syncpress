@@ -1,4 +1,5 @@
 export * from "./collections.ts";
+export * from "./deployment.ts";
 export * from "./endpoints.ts";
 export * from "./images.ts";
 export * from "./references.ts";
