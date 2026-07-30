@@ -1,10 +1,10 @@
 # Syncpress
 
 Syncpress is a deterministic static publishing generator built from independently
-specified sync-engine concepts and composition reactions. The [progress
-tracker](docs/static-publishing-generator.md) records the composed batch build
-and remaining delivery work. Current concept specifications and generated
-assembly documentation define behavior contracts.
+specified sync-engine concepts and composition reactions. The [executable
+documentation](example/content/index.md) covers site authoring and the current
+design. Concept specifications and generated assembly documentation define
+low-level behavior contracts.
 
 ## Install and run
 
