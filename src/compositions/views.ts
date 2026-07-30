@@ -215,10 +215,12 @@ export const PageOperationalInspection = former(
       index,
       rendering,
       renderingPath,
-      renderingProfile,
-      renderingTemplate,
-      renderingStage,
-      state,
+       renderingProfile,
+       renderingTemplate,
+       renderingStage,
+       bodySource,
+       layoutSource,
+       state,
       reason,
       input,
       outputPath,
@@ -256,6 +258,12 @@ export const PageOperationalInspection = former(
         profile: renderingProfile,
         template: renderingTemplate,
         stage: renderingStage,
+        body: where(
+          whether(Referencing._finished({ subject: rendering, part: PARTS.body }).is({ source: bodySource })),
+        ).form({ source: bodySource }),
+        layout: where(
+          whether(Referencing._finished({ subject: rendering, part: PARTS.layout }).is({ source: layoutSource })),
+        ).form({ source: layoutSource }),
       }),
       memberships: each(Cataloging._membership({ item: owner }).is({ catalog, name }))
         .where(Cataloging._position({ catalog, item: owner }).is({ index }))

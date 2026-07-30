@@ -32,6 +32,8 @@ type OperationalInspection = {
     profile: string | null;
     template: string | null;
     stage: string | null;
+    body: { source: string } | null;
+    layout: { source: string } | null;
   };
   memberships: Array<{ collection: string; name: string; index: number }>;
   dependencies: {
@@ -569,7 +571,13 @@ export async function inspectSite(projectDirectory: string, target: string) {
         : { name: templateName, digest: template.digest, tree: await application.concepts.Templating._tree({ owner: template.template }) },
       layers,
       origins,
-      rendering: operational.rendering.attempt === null ? undefined : operational.rendering,
+      rendering: operational.rendering.attempt === null
+        ? undefined
+        : {
+            ...operational.rendering,
+            body: operational.rendering.body ?? undefined,
+            layout: operational.rendering.layout ?? undefined,
+          },
       memberships: operational.memberships,
       dependencies: {
         state: [{ state: operational.dependencies.state }],

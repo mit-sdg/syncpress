@@ -329,6 +329,8 @@ test("inspect reports route ownership, template provenance, collection membershi
       profile: "markdown",
       template: "post.html",
       stage: "completed",
+      body: { source: expect.any(String) },
+      layout: { source: expect.any(String) },
     },
   });
   expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 1 }));

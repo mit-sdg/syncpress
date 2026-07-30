@@ -161,7 +161,7 @@ Planned work:
   and retry semantics justify changing ownership.
 - [ ] Add a test where a superseded attempt finishes late and prove that it
   cannot settle, emit, or diagnose the newer attempt.
-- [ ] Add inspection coverage grouping transient operations under the rendering
+- [x] Add inspection coverage grouping transient operations under the rendering
   identity.
 
 Success criteria:

@@ -748,7 +748,7 @@ Former "the deployment entries of catalog (catalog)" — inputs (catalog); bindi
 ```
 
 ```former
-Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, rendering, renderingPath, renderingProfile, renderingTemplate, renderingStage, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
+Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, rendering, renderingPath, renderingProfile, renderingTemplate, renderingStage, bodySource, layoutSource, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
   a record of
     claims: each Routing._claims () has (address, owner: claimOwner)
       form a record of
@@ -791,6 +791,12 @@ Former "the operational inspection of page (owner)" — inputs (owner); bindings
     rendering: a record of
       where whether Rendering._latest (subject: owner) has (path: renderingPath, profile: renderingProfile, rendering, stage: renderingStage, template: renderingTemplate)
       attempt: rendering
+      body: a record of
+        where whether Referencing._finished (part: "body", subject: rendering) has (source: bodySource)
+        source: bodySource
+      layout: a record of
+        where whether Referencing._finished (part: "layout", subject: rendering) has (source: layoutSource)
+        source: layoutSource
       path: renderingPath
       profile: renderingProfile
       stage: renderingStage
