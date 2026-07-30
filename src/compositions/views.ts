@@ -122,6 +122,15 @@ export const DeclaredSiteOrigin = view(
     ),
 ).optional();
 
+export const ActiveSiteSettings = view(
+  "active site settings",
+  (_inputs, { site }, { root }) =>
+    where(
+      Configuring._active({}).is({ root }),
+      Configuring._values({ node: root, path: PATHS.site, otherwise: {} }).is({ values: site }),
+    ),
+).one();
+
 export const ImageRenditionSettings = view(
   "active image rendition settings",
   (_inputs, { widths, formats }, { root }) =>
@@ -143,10 +152,9 @@ export const ImageAssetPathSetting = view(
 
 const SiteRenderFacts = former(
   "the site render facts",
-  (_inputs, { configuration, site, collections }) =>
+  (_inputs, { site, collections }) =>
     where(
-      Configuring._active({}).is({ root: configuration }),
-      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
+      ActiveSiteSettings({}).is({ site }),
       Cataloging._record({}).is({ catalogs: collections }),
     ).form({ collections, site }),
 );

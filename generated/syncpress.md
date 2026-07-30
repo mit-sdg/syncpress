@@ -641,6 +641,13 @@ active site base path — inputs (); outputs (base); bindings (root) — answers
 ```
 
 ```view
+active site settings — inputs (); outputs (site); bindings (root) — answers exactly one (site)
+  where
+    Configuring._active () has (root)
+    Configuring._values (node: root, otherwise: (), path: ["site"]) has (values: site)
+```
+
+```view
 active verbatim settings — inputs (); outputs (separator); bindings (root) — answers exactly one (separator)
   where
     Configuring._active () has (root)
@@ -735,6 +742,16 @@ held body reference of source (source) — inputs (source); outputs (reference, 
 ```
 
 ```view
+held deployment layout reference of source (source) — inputs (source); outputs (reference, raw); bindings () — answers any number of (reference, raw)
+  where
+    Referencing._references (source) has (raw, reference)
+    Routing._classify (target: raw) has (kind: "external")
+  where
+    Referencing._references (source) has (raw, reference)
+    Routing._classify (target: raw) has (kind: "fragment")
+```
+
+```view
 held layout reference of source (source) — inputs (source); outputs (reference, raw); bindings () — answers any number of (reference, raw)
   where
     Referencing._references (source) has (raw, reference)
@@ -774,6 +791,12 @@ responsive body image embedding (embedding) — inputs (embedding); outputs (ren
     Routing._classify (target: raw) has (kind: "relative")
     Filing._resolve (address: raw, file: page) has (target: image)
     Transcoding._original (subject: image) has (original)
+```
+
+```view
+routed deployment work (work) — inputs (work); outputs (owner, address); bindings () — answers at most one (owner, address)
+  where Deploying._work (work) has (from: address, kind: "redirect", owner)
+  where Deploying._work (work) has (address, kind: "pagination-page", owner)
 ```
 
 ```view
@@ -897,10 +920,9 @@ Former "the page render facts of rendering (rendering)" — inputs (rendering); 
 ```
 
 ```former
-Former "the site render facts" — inputs (); bindings (configuration, site, collections); promises exactly one record — forms:
+Former "the site render facts" — inputs (); bindings (site, collections); promises exactly one record — forms:
   a record of
-    where Configuring._active () has (root: configuration)
-    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+    where view "active site settings" has (site)
     where Cataloging._record () has (catalogs: collections)
     collections
     site
@@ -1152,8 +1174,7 @@ then
 when Routing.claim (owner)
 where
   Deploying._forOwner (owner) has (address, kind: "pagination-page", work)
-  Configuring._active () has (root: configuration)
-  Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+  view "active site settings" has (site)
   Cataloging._record () has (catalogs: collections)
   whether Routing._absolute (address) has (url: canonicalUrl)
 then
@@ -1583,8 +1604,7 @@ when Deploying.dispatch (deployment, work)
 where
   Deploying._work (work) has (collection: collectionName, kind: "feed")
   Cataloging._named (name: collectionName) has (catalog)
-  Configuring._active () has (root: configuration)
-  Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+  view "active site settings" has (site)
 then
   Deploying.feed (entries: former "the deployment entries of catalog (catalog)" with (catalog), site, work)
 ```
@@ -1662,17 +1682,6 @@ then
 when Phasing.start (phase: "settings")
 then
   Matching.compile (text: "**/*.{avif,gif,jpeg,jpg,png,webp}")
-```
-
-### fullSite.FragmentDeploymentLayoutReferencesHold
-
-```reaction
-when Referencing.scan (part: "deployment-layout", source)
-where
-  Referencing._references (source) has (raw, reference)
-  Routing._classify (target: raw) has (kind: "fragment")
-then
-  Referencing.answer (form: "address", reference, value: raw)
 ```
 
 ### fullSite.GeneratedClaimsBeginDependencies
@@ -2008,8 +2017,7 @@ then
 ```reaction
 when Referencing.scan (part: "deployment-layout", source)
 where
-  Referencing._references (source) has (raw, reference)
-  Routing._classify (target: raw) has (kind: "external")
+  view "held deployment layout reference of source (source)" with (source) has (raw, reference)
 then
   Referencing.answer (form: "address", reference, value: raw)
 ```
@@ -2083,16 +2091,6 @@ then
 when Deploying.context (work, context, owner, template)
 then
   Templating.render (context, subject: owner, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.PaginationPageWorkClaims
-
-```reaction
-when Deploying.dispatch (deployment, work)
-where
-  Deploying._work (work) has (address, kind: "pagination-page", owner)
-then
-  Routing.claim (address, owner)
 ```
 
 ### fullSite.PaginationPlansDivide
@@ -2537,7 +2535,7 @@ then
 ```reaction
 when Deploying.dispatch (deployment, work)
 where
-  Deploying._work (work) has (from: address, kind: "redirect", owner)
+  view "routed deployment work (work)" with (work) has (address, owner)
 then
   Routing.claim (address, owner)
 ```

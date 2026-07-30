@@ -1,11 +1,11 @@
 import { earlier, each, former, no, reaction, view, when, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.ts";
-import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PARTS, PATHS } from "./shared.ts";
+import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PARTS } from "./shared.ts";
+import { ActiveSiteSettings } from "./views.ts";
 
 const {
   Cataloging,
-  Configuring,
   Depending,
   Deploying,
   Diagnosing,
@@ -33,6 +33,22 @@ const SitemapPage = view(
       no(Deploying._forOwner({ owner }).is({ kind: "redirect" })),
       Routing._absolute({ address }).is({ url }),
     ),
+).many();
+
+const RoutedDeploymentWork = view(
+  "routed deployment work (work)",
+  ({ work }, { owner, address }, _bindings) => [
+    where(Deploying._work({ work }).is({ kind: "redirect", owner, from: address })),
+    where(Deploying._work({ work }).is({ kind: "pagination-page", owner, address })),
+  ],
+).optional();
+
+const HeldDeploymentLayoutReference = view(
+  "held deployment layout reference of source (source)",
+  ({ source }, { reference, raw }, _bindings) => [
+    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "external" })),
+    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "fragment" })),
+  ],
 ).many();
 
 const SitemapUrls = former(
@@ -108,15 +124,7 @@ export const BegunNojekyllWorkIntends = reaction(({ producer, path }) =>
 /** Redirect and pagination routes are claimed in queue order. */
 export const RoutedDeploymentWorkClaims = reaction(({ deployment, work, owner, address }) =>
   when(Deploying.dispatch({ deployment, work }).responds({}))
-    .where(
-      Deploying._work({ work }).is({ kind: "redirect", owner, from: address }),
-    )
-    .then(Routing.claim({ owner, address })),
-);
-
-export const PaginationPageWorkClaims = reaction(({ deployment, work, owner, address }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
-    .where(Deploying._work({ work }).is({ kind: "pagination-page", owner, address }))
+    .where(RoutedDeploymentWork({ work }).is({ owner, address }))
     .then(Routing.claim({ owner, address })),
 );
 
@@ -228,12 +236,11 @@ export const MissingPaginationTemplatesDiagnose = reaction(({ deployment, work, 
 );
 
 export const ClaimedPaginationPagesFormContext = reaction(
-  ({ owner, work, configuration, site, collections, address, canonicalUrl }) =>
+  ({ owner, work, site, collections, address, canonicalUrl }) =>
     when(Routing.claim({ owner }).responds({}))
       .where(
         Deploying._forOwner({ owner }).is({ work, kind: "pagination-page", address }),
-        Configuring._active({}).is({ root: configuration }),
-        Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
+        ActiveSiteSettings({}).is({ site }),
         Cataloging._record({}).is({ catalogs: collections }),
         whether(Routing._absolute({ address }).is({ url: canonicalUrl })),
       )
@@ -269,19 +276,7 @@ export const AbsoluteDeploymentLayoutReferencesRebase = reaction(({ source, refe
 
 export const NonlocalDeploymentLayoutReferencesHold = reaction(({ source, reference, raw }) =>
   when(Referencing.scan({ part: DEPLOYMENT_LAYOUT }).responds({ source }))
-    .where(
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "external" }),
-    )
-    .then(Referencing.answer({ reference, form: "address", value: raw })),
-);
-
-export const FragmentDeploymentLayoutReferencesHold = reaction(({ source, reference, raw }) =>
-  when(Referencing.scan({ part: DEPLOYMENT_LAYOUT }).responds({ source }))
-    .where(
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "fragment" }),
-    )
+    .where(HeldDeploymentLayoutReference({ source }).is({ reference, raw }))
     .then(Referencing.answer({ reference, form: "address", value: raw })),
 );
 
@@ -400,13 +395,12 @@ export const BegunSitemapsIntend = reaction(({ producer, work, path, content }) 
     .then(Emitting.intend({ producer, path, content, medium: "text/plain" })),
 );
 
-export const FeedWorkPrepares = reaction(({ deployment, work, collectionName, catalog, configuration, site }) =>
+export const FeedWorkPrepares = reaction(({ deployment, work, collectionName, catalog, site }) =>
   when(Deploying.dispatch({ deployment, work }).responds({}))
     .where(
       Deploying._work({ work }).is({ kind: "feed", collection: collectionName }),
       Cataloging._named({ name: collectionName }).is({ catalog }),
-      Configuring._active({}).is({ root: configuration }),
-      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
+      ActiveSiteSettings({}).is({ site }),
     )
     .then(Deploying.feed({ work, site, entries: CatalogEntries({ catalog }) })),
 );
