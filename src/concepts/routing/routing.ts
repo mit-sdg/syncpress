@@ -50,84 +50,16 @@ export class NotClaimed extends Error {
 export type AddressKind = "relative" | "absolute" | "external" | "fragment";
 
 type Claim = { claim: string; owner: string; address: string };
-type ParsedAddress = { address: string; segments: string[]; directory: boolean };
-
 const encoder = new TextEncoder();
 const scheme = /^[a-z][a-z\d+.-]*:/i;
-const literalAddressCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@-]$/;
 const literalReferenceCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@/?#-]$/;
 const hexadecimalDigit = /^[A-Fa-f0-9]$/;
-const forbiddenPathCharacter = /[\\/\u0000-\u001f\u007f]/u;
 const unsafeUnicodeReferenceCharacter = /[\p{Cc}\p{Cf}\p{Zs}\p{Zl}\p{Zp}]/u;
-
-function isText(value: unknown): value is string {
-  return typeof value === "string" && value.isWellFormed();
-}
 
 function requireOwner(value: unknown): asserts value is string {
   if (!isText(value)) throw new InvalidOwner();
 }
 
-function isPathSegment(segment: string): boolean {
-  return (
-    segment !== "" &&
-    segment !== "." &&
-    segment !== ".." &&
-    segment.normalize("NFC") === segment &&
-    !forbiddenPathCharacter.test(segment)
-  );
-}
-
-function pathSegments(path: unknown): string[] | undefined {
-  if (!isText(path) || path === "" || path.startsWith("/")) return undefined;
-  const segments = path.split("/");
-  return segments.every(isPathSegment) ? segments : undefined;
-}
-
-function encodeSegment(segment: string): string {
-  let encoded = "";
-  for (const character of segment) {
-    if (literalAddressCharacter.test(character)) {
-      encoded += character;
-      continue;
-    }
-    for (const byte of encoder.encode(character)) encoded += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
-  }
-  return encoded;
-}
-
-function decodeSegment(segment: string): string | undefined {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(segment);
-  } catch {
-    return undefined;
-  }
-  return isPathSegment(decoded) && encodeSegment(decoded) === segment ? decoded : undefined;
-}
-
-function parseAddress(address: unknown): ParsedAddress | undefined {
-  if (!isText(address) || !address.startsWith("/") || address.startsWith("//")) return undefined;
-  if (address === "/") return { address, segments: [], directory: true };
-
-  const directory = address.endsWith("/");
-  const body = address.slice(1, directory ? -1 : address.length);
-  if (body === "") return undefined;
-
-  const segments: string[] = [];
-  for (const encoded of body.split("/")) {
-    const decoded = decodeSegment(encoded);
-    if (decoded === undefined) return undefined;
-    segments.push(decoded);
-  }
-  if (!directory && segments.at(-1) === "index.html") return undefined;
-  return { address, segments, directory };
-}
-
-/** Test whether text is a canonical address accepted by route claims. */
-export function isCanonicalAddress(address: unknown): address is string {
-  return parseAddress(address) !== undefined;
-}
 
 function stripExtension(name: string): string {
   const dot = name.lastIndexOf(".");
@@ -366,3 +298,13 @@ export class RoutingConcept {
       .map(({ owner, address }) => ({ owner, address }));
   }
 }
+import {
+  encodeSegment,
+  isCanonicalAddress,
+  isPathSegment,
+  isText,
+  parseAddress,
+  pathSegments,
+} from "../../address.ts";
+
+export { isCanonicalAddress } from "../../address.ts";

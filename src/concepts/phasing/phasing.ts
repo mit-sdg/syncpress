@@ -139,7 +139,7 @@ export class PhasingConcept {
       .map((record) => ({ job: record.job, phase: currentPhase(record), mode: record.mode }));
   }
 
-  _outcome({ job }: { job: unknown }): { state: Exclude<JobState, "running">; reason?: string }[] {
+  _outcome({ job }: { job: string }): { state: Exclude<JobState, "running">; reason?: string }[] {
     if (!isText(job)) return [];
     const record = this.#jobs.get(job);
     if (record === undefined || record.state === "running") return [];

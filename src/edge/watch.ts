@@ -1,7 +1,7 @@
 import { readFile, watch } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { CONFIGURATION_PATH } from "../compositions/shared.ts";
-import { parseSitePolicy } from "../site-policy.ts";
+import { GoverningConcept } from "../concepts/governing/governing.ts";
 import { buildSite, canonicalPath, containsPath, type BuildResult } from "./site.ts";
 
 type WatchedOutput = { directory: string; target: string };
@@ -23,8 +23,8 @@ async function configuredWatchOutputDirectory(siteDirectory: string, destination
   if (destination !== undefined) return resolve(siteDirectory, destination);
   try {
     const source = await readFile(join(siteDirectory, CONFIGURATION_PATH), "utf8");
-    const { policy, problems } = parseSitePolicy(source);
-    return problems.length === 0 ? resolve(siteDirectory, policy.outputPath) : undefined;
+    const assessed = new GoverningConcept().assess({ source });
+    return assessed.valid ? resolve(siteDirectory, assessed.policy.outputPath) : undefined;
   } catch {
     return undefined;
   }

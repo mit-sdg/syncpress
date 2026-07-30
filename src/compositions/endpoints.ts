@@ -3,7 +3,7 @@ import { no, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 import { CONFIGURATION_PATH, PHASES, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 
-const { Composing, Configuring, Depending, Diagnosing, Emitting, Filing, Phasing, Routing } = concepts;
+const { Configuring, Depending, Diagnosing, Emitting, Filing, Governing, Phasing, Routing } = concepts;
 
 /** Enumerate routed pages whose latest replacement attempt has not settled. */
 export const UnsettledRoutedPages = view(
@@ -24,6 +24,7 @@ export const ConfigureSite = endpoint("/site/configure", ({ destination, project
       Filing._text({ file: settings }).is({ text: source }),
     )
     .then(Configuring.load({ source, notation: "yaml" }).responds({}))
+    .then(Governing.assess({ source }).responds({}))
     .then(Emitting.direct({ destination }).responds({}))
     .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
     .then(respond({ sequence })),
@@ -31,9 +32,7 @@ export const ConfigureSite = endpoint("/site/configure", ({ destination, project
 
 /** Publish only a completed, diagnostically clean build. */
 export const ReconcileSite = endpoint("/site/reconcile", ({ job, written, replaced, kept, removed }) =>
-  // `_outcome` accepts unknown so it can answer no row for malformed jobs. The
-  // total Composing query also pins this boundary input to the public Text type.
-  receive({ job }).where(Composing._record({ subject: job, part: "reconcile" })).then(
+  receive({ job }).then(
     where(
       Phasing._outcome({ job }).is({ state: "finished" }),
       Diagnosing._clean({}).is({ clean: true }),

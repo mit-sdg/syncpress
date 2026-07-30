@@ -1,8 +1,9 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
-import { PAGE_PATTERNS, PARTS, PATHS, PROFILES, ROOTS } from "./shared.ts";
+import { PARTS, PATHS, ROOTS } from "./shared.ts";
+import { EffectiveConversionProfile } from "./views.ts";
 
-const { Converting, Diagnosing, Documenting, Filing, Layering, Matching, Phasing, Routing } = concepts;
+const { Converting, Diagnosing, Documenting, Filing, Layering, Phasing, Routing } = concepts;
 
 export const ExplicitRoutesClaim = reaction(({ page, root, address }) =>
   when(Phasing.advance({}).responds({ phase: "route" }))
@@ -75,41 +76,12 @@ export const InvalidRouteClaimsDiagnose = reaction(({ page, root, path, detail }
     ),
 );
 
-export const ExplicitMarkupExcerptsConvert = reaction(({ page, body, name, profile }) =>
+export const PageExcerptsConvert = reaction(({ page, body, profile }) =>
   when(Phasing.advance({}).responds({ phase: "excerpt" }))
     .where(
       Routing._claims({}).is({ owner: page }),
       Documenting._document({ subject: page }).is({ body }),
-      Layering._value({ subject: page, path: PATHS.buildMarkup }).is({ value: name }),
-      Converting._profile({ name }).is({ profile }),
-    )
-    .then(Converting.convert({ subject: page, part: PARTS.excerpt, profile, source: body })),
-);
-
-export const MarkdownExcerptsConvert = reaction(({ page, body, path, pattern, profile }) =>
-  when(Phasing.advance({}).responds({ phase: "excerpt" }))
-    .where(
-      Routing._claims({}).is({ owner: page }),
-      Documenting._document({ subject: page }).is({ body }),
-      no(Layering._value({ subject: page, path: PATHS.buildMarkup })),
-      Filing._file({ file: page }).is({ path }),
-      Matching._compiled({ text: PAGE_PATTERNS.markdown }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Converting._profile({ name: PROFILES.markdown }).is({ profile }),
-    )
-    .then(Converting.convert({ subject: page, part: PARTS.excerpt, profile, source: body })),
-);
-
-export const HtmlExcerptsConvert = reaction(({ page, body, path, pattern, profile }) =>
-  when(Phasing.advance({}).responds({ phase: "excerpt" }))
-    .where(
-      Routing._claims({}).is({ owner: page }),
-      Documenting._document({ subject: page }).is({ body }),
-      no(Layering._value({ subject: page, path: PATHS.buildMarkup })),
-      Filing._file({ file: page }).is({ path }),
-      Matching._compiled({ text: PAGE_PATTERNS.html }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Converting._profile({ name: PROFILES.verbatim }).is({ profile }),
+      EffectiveConversionProfile({ page }).is({ profile }),
     )
     .then(Converting.convert({ subject: page, part: PARTS.excerpt, profile, source: body })),
 );

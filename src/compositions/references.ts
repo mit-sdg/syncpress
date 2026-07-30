@@ -1,4 +1,4 @@
-import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
+import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 import { PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
@@ -6,14 +6,53 @@ const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Routin
 
 const ASSET_MEDIUM = "application/octet-stream";
 
+export const RelativeBodyReference = view(
+  "relative body reference of source (source)",
+  ({ source }, { page, reference, raw, role }, _bindings) =>
+    where(
+      Referencing._source({ source }).is({ subject: page, part: PARTS.body }),
+      Referencing._references({ source }).is({ reference, raw, role }),
+      Routing._classify({ target: raw }).is({ kind: "relative" }),
+    ),
+).many();
+
+export const ResolvedLocalBodyReference = view(
+  "resolved local body reference of source (source)",
+  ({ source }, { page, reference, raw, role, target }, _bindings) =>
+    where(
+      RelativeBodyReference({ source }).is({ page, reference, raw, role }),
+      Filing._resolve({ file: page, address: raw }).is({ target }),
+    ),
+).many();
+
+export const UnroutedContentBodyAsset = view(
+  "unrouted content body asset of source (source)",
+  ({ source }, { page, reference, raw, role, asset, root, sourcePath, name, content }, _bindings) =>
+    where(
+      ResolvedLocalBodyReference({ source }).is({ page, reference, raw, role, target: asset }),
+      no(Routing._address({ owner: asset })),
+      no(Documenting._document({ subject: asset })),
+      Filing._file({ file: asset }).is({ root, path: sourcePath, name, content }),
+      Filing._root({ root }).is({ name: ROOTS.content }),
+    ),
+).many();
+
+export const BesidePageOutput = view(
+  "beside-page output for page (page) and name (name)",
+  ({ page, name }, { pageAddress, pagePath, prefix, path }, _bindings) =>
+    where(
+      Routing._address({ owner: page }).is({ address: pageAddress }),
+      Routing._file({ address: pageAddress }).is({ path: pagePath }),
+      Filing._directory({ path: pagePath }).is({ prefix }),
+      Filing._join({ prefix, name }).is({ path }),
+    ),
+).optional();
+
 /** Retarget relative references that resolve to a page with a claimed address. */
-export const ClaimedBodyReferencesRetarget = reaction(({ source, page, reference, raw, target, address, value }) =>
+export const ClaimedBodyReferencesRetarget = reaction(({ source, reference, raw, target, address, value }) =>
   when(Referencing.scan({ part: PARTS.body }).responds({ source }))
     .where(
-      Referencing._source({ source }).is({ subject: page }),
-      Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
-      Filing._resolve({ file: page, address: raw }).is({ target }),
+      ResolvedLocalBodyReference({ source }).is({ reference, raw, target }),
       Routing._address({ owner: target }).is({ address }),
       Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
     )
@@ -22,21 +61,11 @@ export const ClaimedBodyReferencesRetarget = reaction(({ source, page, reference
 
 /** Copy every non-primary-image local asset beside the page that references it. */
 export const OrdinaryBodyAssetsCopy = reaction(
-  ({ source, page, raw, target, root, name, content, pageAddress, pagePath, prefix, path }) =>
+  ({ source, page, target, name, content, path }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        Referencing._source({ source }).is({ subject: page }),
-        Referencing._references({ source }).is({ raw }).is.not({ role: "image" }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
-        no(Routing._address({ owner: target })),
-        no(Documenting._document({ subject: target })),
-        Filing._file({ file: target }).is({ root, name, content }),
-        Filing._root({ root }).is({ name: ROOTS.content }),
-        Routing._address({ owner: page }).is({ address: pageAddress }),
-        Routing._file({ address: pageAddress }).is({ path: pagePath }),
-        Filing._directory({ path: pagePath }).is({ prefix }),
-        Filing._join({ prefix, name }).is({ path }),
+        UnroutedContentBodyAsset({ source }).is({ page, asset: target, name, content }).is.not({ role: "image" }),
+        BesidePageOutput({ page, name }).is({ path }),
       )
       .then(
         Emitting.intend({
@@ -51,21 +80,12 @@ export const OrdinaryBodyAssetsCopy = reaction(
 
 /** Answer an ordinary asset only after its bytes are staged in the page attempt. */
 export const CopiedOrdinaryBodyAssetsAnswer = reaction(
-  ({ page, path, source, reference, raw, target, root, name, pageAddress, pagePath, prefix, address, value }) =>
+  ({ page, path, source, reference, raw, name, address, value }) =>
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
         earlier(Referencing.scan, { subject: page, part: PARTS.body }, { source }),
-        Referencing._references({ source }).is({ reference, raw }).is.not({ role: "image" }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
-        no(Routing._address({ owner: target })),
-        no(Documenting._document({ subject: target })),
-        Filing._file({ file: target }).is({ root, name }),
-        Filing._root({ root }).is({ name: ROOTS.content }),
-        Routing._address({ owner: page }).is({ address: pageAddress }),
-        Routing._file({ address: pageAddress }).is({ path: pagePath }),
-        Filing._directory({ path: pagePath }).is({ prefix }),
-        Filing._join({ prefix, name }).is({ path }),
+        UnroutedContentBodyAsset({ source }).is({ page, reference, raw, name }).is.not({ role: "image" }),
+        BesidePageOutput({ page, name }).is({ path }),
         Routing._locate({ path }).is({ address }),
         Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
       )
@@ -74,23 +94,13 @@ export const CopiedOrdinaryBodyAssetsAnswer = reaction(
 
 /** SVG and other non-raster primary images use the beside-page asset policy. */
 export const NonRasterPrimaryImagesCopy = reaction(
-  ({ source, page, raw, target, root, sourcePath, name, content, pattern, pageAddress, pagePath, prefix, path }) =>
+  ({ source, page, target, sourcePath, name, content, pattern, path }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        Referencing._source({ source }).is({ subject: page }),
-        Referencing._references({ source }).is({ raw, role: "image" }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
-        no(Routing._address({ owner: target })),
-        no(Documenting._document({ subject: target })),
-        Filing._file({ file: target }).is({ root, path: sourcePath, name, content }),
-        Filing._root({ root }).is({ name: ROOTS.content }),
+        UnroutedContentBodyAsset({ source }).is({ page, role: "image", asset: target, sourcePath, name, content }),
         Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
         Matching._matches({ pattern, path: sourcePath }).is({ matched: false }),
-        Routing._address({ owner: page }).is({ address: pageAddress }),
-        Routing._file({ address: pageAddress }).is({ path: pagePath }),
-        Filing._directory({ path: pagePath }).is({ prefix }),
-        Filing._join({ prefix, name }).is({ path }),
+        BesidePageOutput({ page, name }).is({ path }),
       )
       .then(
         Emitting.intend({
@@ -105,23 +115,14 @@ export const NonRasterPrimaryImagesCopy = reaction(
 
 /** Keep primary SVG and other non-raster image references behind their staged bytes. */
 export const CopiedNonRasterPrimaryImagesAnswer = reaction(
-  ({ page, path, source, reference, raw, target, root, sourcePath, name, pattern, pageAddress, pagePath, prefix, address, value }) =>
+  ({ page, path, source, reference, raw, sourcePath, name, pattern, address, value }) =>
     when(Emitting.intend({ producer: page, path }).responds({}))
       .where(
         earlier(Referencing.scan, { subject: page, part: PARTS.body }, { source }),
-        Referencing._references({ source }).is({ reference, raw, role: "image" }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
-        no(Routing._address({ owner: target })),
-        no(Documenting._document({ subject: target })),
-        Filing._file({ file: target }).is({ root, path: sourcePath, name }),
-        Filing._root({ root }).is({ name: ROOTS.content }),
+        UnroutedContentBodyAsset({ source }).is({ page, reference, raw, role: "image", sourcePath, name }),
         Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
         Matching._matches({ pattern, path: sourcePath }).is({ matched: false }),
-        Routing._address({ owner: page }).is({ address: pageAddress }),
-        Routing._file({ address: pageAddress }).is({ path: pagePath }),
-        Filing._directory({ path: pagePath }).is({ prefix }),
-        Filing._join({ prefix, name }).is({ path }),
+        BesidePageOutput({ page, name }).is({ path }),
         Routing._locate({ path }).is({ address }),
         Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
       )
@@ -130,13 +131,10 @@ export const CopiedNonRasterPrimaryImagesAnswer = reaction(
 
 /** Parsed documents without a route are pages, not copyable local assets. */
 export const UnpublishedDocumentBodyReferencesDiagnose = reaction(
-  ({ source, page, raw, target, root, path }) =>
+  ({ source, page, target, root, path }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        Referencing._source({ source }).is({ subject: page }),
-        Referencing._references({ source }).is({ raw }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
+        ResolvedLocalBodyReference({ source }).is({ page, target }),
         no(Routing._address({ owner: target })),
         Documenting._document({ subject: target }).is({}),
         Filing._file({ file: target }).is({ root }),
@@ -185,9 +183,7 @@ export const FragmentBodyReferencesHold = reaction(({ source, reference, raw }) 
 export const MissingBodyReferencesDiagnose = reaction(({ source, page, raw, path }) =>
   when(Referencing.scan({ part: PARTS.body }).responds({ source }))
     .where(
-      Referencing._source({ source }).is({ subject: page }),
-      Referencing._references({ source }).is({ raw }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
+      RelativeBodyReference({ source }).is({ page, raw }),
       Filing._resolution({ file: page, address: raw }).is({ status: "missing" }),
       Filing._file({ file: page }).is({ path }),
     )
@@ -204,9 +200,7 @@ export const MissingBodyReferencesDiagnose = reaction(({ source, page, raw, path
 export const OutsideBodyReferencesDiagnose = reaction(({ source, page, raw, path }) =>
   when(Referencing.scan({ part: PARTS.body }).responds({ source }))
     .where(
-      Referencing._source({ source }).is({ subject: page }),
-      Referencing._references({ source }).is({ raw }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
+      RelativeBodyReference({ source }).is({ page, raw }),
       Filing._resolution({ file: page, address: raw }).is({ status: "outside" }),
       Filing._file({ file: page }).is({ path }),
     )
@@ -223,9 +217,7 @@ export const OutsideBodyReferencesDiagnose = reaction(({ source, page, raw, path
 export const InvalidBodyReferencesDiagnose = reaction(({ source, page, raw, path }) =>
   when(Referencing.scan({ part: PARTS.body }).responds({ source }))
     .where(
-      Referencing._source({ source }).is({ subject: page }),
-      Referencing._references({ source }).is({ raw }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
+      RelativeBodyReference({ source }).is({ page, raw }),
       Filing._resolution({ file: page, address: raw }).is({ status: "invalid" }),
       Filing._file({ file: page }).is({ path }),
     )
@@ -244,10 +236,7 @@ export const UnretargetableClaimedBodyReferencesDiagnose = reaction(
   ({ source, page, raw, target, address, path }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        Referencing._source({ source }).is({ subject: page }),
-        Referencing._references({ source }).is({ raw }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
+        ResolvedLocalBodyReference({ source }).is({ page, raw, target }),
         Routing._address({ owner: target }).is({ address }),
         no(Routing._retarget({ replacement: address, original: raw })),
         Filing._file({ file: page }).is({ path }),
@@ -263,23 +252,13 @@ export const UnretargetableClaimedBodyReferencesDiagnose = reaction(
 );
 
 export const UnretargetableNonRasterPrimaryImagesDiagnose = reaction(
-  ({ source, page, raw, target, root, imagePath, name, pattern, pageAddress, pagePath, prefix, outputPath, address, sourcePath }) =>
+  ({ source, page, raw, imagePath, name, pattern, outputPath, address, sourcePath }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        Referencing._source({ source }).is({ subject: page }),
-        Referencing._references({ source }).is({ raw, role: "image" }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
-        no(Routing._address({ owner: target })),
-        no(Documenting._document({ subject: target })),
-        Filing._file({ file: target }).is({ root, path: imagePath, name }),
-        Filing._root({ root }).is({ name: ROOTS.content }),
+        UnroutedContentBodyAsset({ source }).is({ page, raw, role: "image", sourcePath: imagePath, name }),
         Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
         Matching._matches({ pattern, path: imagePath }).is({ matched: false }),
-        Routing._address({ owner: page }).is({ address: pageAddress }),
-        Routing._file({ address: pageAddress }).is({ path: pagePath }),
-        Filing._directory({ path: pagePath }).is({ prefix }),
-        Filing._join({ prefix, name }).is({ path: outputPath }),
+        BesidePageOutput({ page, name }).is({ path: outputPath }),
         Routing._locate({ path: outputPath }).is({ address }),
         no(Routing._retarget({ replacement: address, original: raw })),
         Filing._file({ file: page }).is({ path: sourcePath }),
@@ -295,21 +274,11 @@ export const UnretargetableNonRasterPrimaryImagesDiagnose = reaction(
 );
 
 export const UnretargetableAssetBodyReferencesDiagnose = reaction(
-  ({ source, page, raw, target, root, name, pageAddress, pagePath, prefix, outputPath, address, sourcePath }) =>
+  ({ source, page, raw, name, outputPath, address, sourcePath }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        Referencing._source({ source }).is({ subject: page }),
-        Referencing._references({ source }).is({ raw }).is.not({ role: "image" }),
-        Routing._classify({ target: raw }).is({ kind: "relative" }),
-        Filing._resolve({ file: page, address: raw }).is({ target }),
-        no(Routing._address({ owner: target })),
-        no(Documenting._document({ subject: target })),
-        Filing._file({ file: target }).is({ root, name }),
-        Filing._root({ root }).is({ name: ROOTS.content }),
-        Routing._address({ owner: page }).is({ address: pageAddress }),
-        Routing._file({ address: pageAddress }).is({ path: pagePath }),
-        Filing._directory({ path: pagePath }).is({ prefix }),
-        Filing._join({ prefix, name }).is({ path: outputPath }),
+        UnroutedContentBodyAsset({ source }).is({ page, raw, name }).is.not({ role: "image" }),
+        BesidePageOutput({ page, name }).is({ path: outputPath }),
         Routing._locate({ path: outputPath }).is({ address }),
         no(Routing._retarget({ replacement: address, original: raw })),
         Filing._file({ file: page }).is({ path: sourcePath }),

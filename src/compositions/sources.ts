@@ -1,30 +1,13 @@
 import { earlier, reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
-import { MAX_PAGE_LAYER_RANK, PAGE_PATTERNS, PARTS, PATHS, ROOTS } from "./shared.ts";
+import { MAX_PAGE_LAYER_RANK, PARTS, PATHS, ROOTS } from "./shared.ts";
+import { ContentDocumentFile } from "./views.ts";
 
 const { Configuring, Diagnosing, Documenting, Emitting, Filing, Layering, Matching, Phasing, Templating } = concepts;
 
-export const MarkdownDocumentsParse = reaction(({ root, file, path, pattern, text }) =>
+export const ContentDocumentsParse = reaction(({ file, text }) =>
   when(Phasing.advance({}).responds({ phase: "read" }))
-    .where(
-      Filing._named({ name: ROOTS.content }).is({ root }),
-      Filing._under({ root, prefix: "" }).is({ file, path }),
-      Matching._compiled({ text: PAGE_PATTERNS.markdown }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Filing._text({ file }).is({ text }),
-    )
-    .then(Documenting.parse({ subject: file, text })),
-);
-
-export const HtmlDocumentsParse = reaction(({ root, file, path, pattern, text }) =>
-  when(Phasing.advance({}).responds({ phase: "read" }))
-    .where(
-      Filing._named({ name: ROOTS.content }).is({ root }),
-      Filing._under({ root, prefix: "" }).is({ file, path }),
-      Matching._compiled({ text: PAGE_PATTERNS.html }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Filing._text({ file }).is({ text }),
-    )
+    .where(ContentDocumentFile({}).is({ file, text }))
     .then(Documenting.parse({ subject: file, text })),
 );
 

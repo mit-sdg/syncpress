@@ -541,6 +541,14 @@ and output collision checks; redirect cycles are rejected. Feed entry dates are
 either `YYYY-MM-DD` or timezone-qualified RFC 3339 timestamps, keeping Atom
 output independent of the host timezone.
 
+`Governing` owns the product-specific configuration assessment and its
+source-located policy problems; generic YAML storage remains in `Configuring`.
+The emit phase starts one ordered `Deploying` queue. Reactions connect each
+current item to `Routing`, `Templating`, `Referencing`, `Depending`, and
+`Emitting`, so pagination routes exist before sitemap formation and deployment
+collisions retain deterministic priority. The filesystem edge only imports
+source facts, advances phases, and reconciles the completed application model.
+
 ## 14. Delivery Status
 
 | Area | Status | Evidence or next step |
@@ -554,15 +562,15 @@ output independent of the host timezone.
 | Responsive raster images | Implemented | Golden `<picture>`, rendition hashes, and preserved safe attributes |
 | Watch/dev | Implemented | Filesystem watcher, reconciled output server, and live reload |
 | Inspect/report endpoint | Implemented | Isolated provenance report from current concept state |
-| Configuration schema diagnostics | Implemented | Host policy parser with independent YAML-node diagnostics |
+| Configuration schema diagnostics | Implemented | `Governing` concept with independent YAML-node diagnostics |
 | Template-location diagnostics | Implemented | Liquid source coordinates, including authored body offsets past front matter |
-| Deployment markers, feeds, sitemaps, redirects, pagination | Implemented | Explicit deployment policy and example output |
+| Deployment markers, feeds, sitemaps, redirects, pagination | Implemented | Emit-phase `Deploying` queue and byte-exact golden output |
 
 ## 15. Verification Gate
 
 Every completed delivery item must:
 
-1. Be represented by explicit composition reactions or host policy.
+1. Be represented by explicit concepts, views, formers, and composition reactions; only external resource access remains at the host boundary.
 2. Appear correctly in regenerated `generated/syncpress.md` and `generated/wire.ts`
    when it changes the assembly.
 3. Have behavior-oriented tests, with byte-exact golden coverage where practical.

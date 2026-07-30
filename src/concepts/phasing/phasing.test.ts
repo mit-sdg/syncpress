@@ -143,7 +143,7 @@ test("unknown jobs are refused by actions and absent from optional queries", () 
   expect(phasing._job({ job: "missing" })).toEqual([]);
   expect(phasing._job({ job: null })).toEqual([]);
   expect(phasing._outcome({ job: "missing" })).toEqual([]);
-  expect(phasing._outcome({ job: null })).toEqual([]);
+  expect(phasing._outcome({ job: null as never })).toEqual([]);
 });
 
 test("running jobs are returned in start order and terminal jobs are excluded", () => {

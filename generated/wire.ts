@@ -20,11 +20,11 @@ export type SyncpressWire = {
     output: {
       "sequence": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Phasing"]["declare"]>>, ["sequence"]>>;
     };
-    error: { error: AppWideError | "DESTINATION_UNAVAILABLE" | "INCOMPATIBLE_PROFILE" | "INVALID_BASE" | "INVALID_DESTINATION" | "INVALID_DIRECTION" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_ORIGIN" | "INVALID_PHASES" | "INVALID_PROFILE" | "INVALID_TEXT" | "MALFORMED_CONFIGURATION" | "MALFORMED_PATTERN" | "NO_PHASES" | "PHASE_REPEATED" | "UNKNOWN_SEVERITY" | "UNSUPPORTED_EXTENSION" | "UNSUPPORTED_NOTATION" | "UNSUPPORTED_PROFILE_KIND" };
+    error: { error: AppWideError | "DESTINATION_UNAVAILABLE" | "INVALID_DESTINATION" | "INVALID_INPUT" | "INVALID_PHASES" | "INVALID_TEXT" | "MALFORMED_CONFIGURATION" | "NO_PHASES" | "PHASE_REPEATED" | "UNSUPPORTED_NOTATION" };
   };
   "/site/reconcile": {
     input: {
-      "job": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Composing"]["_record"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Phasing"]["_outcome"]>[0], ["job"]>]>>;
+      "job": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Phasing"]["_outcome"]>[0], ["job"]>>;
     };
     output: {
       "kept": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["kept"]>>;

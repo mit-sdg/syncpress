@@ -3,14 +3,14 @@ import { lstat, mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { SyncpressWire } from "../../generated/wire.ts";
-import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.ts";
 import {
   CONFIGURATION_PATH,
   DEFAULTS,
   PATHS,
   ROOTS,
 } from "../compositions/shared.ts";
-import { parseSitePolicy, type PaginationPolicy, type SitePolicy } from "../site-policy.ts";
+import { PageOperationalInspection } from "../compositions/views.ts";
+import type { SitePolicy } from "../concepts/governing/governing.ts";
 import { buildSyncpress, type Application } from "./application.ts";
 
 type Configuring = Application["concepts"]["Configuring"];
@@ -25,6 +25,31 @@ type Diagnostic = {
 };
 type ActionFailure = { readonly error: string; readonly detail?: unknown };
 type ActionValue<T> = T extends { readonly error: string } ? never : T;
+type OperationalInspection = {
+  memberships: Array<{ collection: string; name: string; index: number }>;
+  dependencies: {
+    state: string;
+    reason: string | null;
+    inputs: Array<{ input: string }>;
+  };
+  outputs: Array<{ path: string; digest: string; medium: string }>;
+  claims: Array<{ owner: string; address: string }>;
+  diagnostics: Array<{
+    diagnostic: string;
+    severity: "error" | "warning";
+    code: string;
+    message: string;
+    source: string | null;
+    line: number | null;
+    column: number | null;
+    related: Array<{
+      source: string;
+      line: number | null;
+      column: number | null;
+      note: string;
+    }>;
+  }>;
+};
 
 function errorCode(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
@@ -276,8 +301,12 @@ async function validateProjectPolicy(application: Application, configuration: Ui
     await application.concepts.Configuring.load({ source, notation: "yaml" }),
     `Could not parse ${CONFIGURATION_PATH}`,
   );
-  const parsed = parseSitePolicy(source);
-  for (const diagnostic of parsed.problems) {
+  const assessed = actionValue(
+    await application.concepts.Governing.assess({ source }),
+    `Could not assess ${CONFIGURATION_PATH}`,
+  );
+  const problems = await application.concepts.Governing._problems();
+  for (const diagnostic of problems) {
     actionValue(
       await application.concepts.Diagnosing.report({
         severity: "error",
@@ -290,344 +319,10 @@ async function validateProjectPolicy(application: Application, configuration: Ui
       `Could not record a ${CONFIGURATION_PATH} diagnostic`,
     );
   }
-  if (parsed.problems.length > 0) {
+  if (!assessed.valid) {
     throw new Error(`Invalid ${CONFIGURATION_PATH}:\n\n${formatDiagnostics(await application.concepts.Diagnosing._all())}`);
   }
-  return parsed.policy;
-}
-
-function isXmlCharacter(codePoint: number): boolean {
-  return codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd ||
-    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
-    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
-    codePoint >= 0x10000;
-}
-
-function xmlEscape(value: string): string {
-  const xmlText = [...value].map((character) =>
-    isXmlCharacter(character.codePointAt(0)!) ? character : "\uFFFD").join("");
-  return xmlText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&apos;");
-}
-
-function htmlEscape(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function textValue(value: unknown, otherwise = ""): string {
-  return typeof value === "string" ? value : otherwise;
-}
-
-function cardData(card: unknown): Record<string, unknown> {
-  return recordValue(recordValue(card).data);
-}
-
-async function reportDiagnostic(
-  application: Application,
-  code: string,
-  message: string,
-  source = CONFIGURATION_PATH,
-): Promise<string | undefined> {
-  const reported = await application.concepts.Diagnosing.report({ severity: "error", code, message, source });
-  if (isActionFailure(reported)) throw new Error(`Could not record ${code}: ${reported.detail ?? reported.error}`);
-  return typeof reported.diagnostic === "string" ? reported.diagnostic : undefined;
-}
-
-async function reportOutputFailure(application: Application, path: string, detail: string, source = CONFIGURATION_PATH): Promise<void> {
-  const diagnostic = await reportDiagnostic(application, "OUTPUT_COLLISION", `${path}: ${detail}`, source);
-  if (diagnostic === undefined) return;
-  for (const { producer } of await application.concepts.Emitting._producers({ path })) {
-    const related = await application.concepts.Diagnosing.relate({
-      diagnostic,
-      source: producer,
-      note: "Competing output producer.",
-    });
-    if (isActionFailure(related)) throw new Error(`Could not relate output collision: ${related.detail ?? related.error}`);
-  }
-}
-
-async function stageArtifact(
-  application: Application,
-  producer: string,
-  path: string,
-  content: string,
-  source = CONFIGURATION_PATH,
-): Promise<boolean> {
-  const begun = await application.concepts.Emitting.begin({ producer });
-  if (isActionFailure(begun)) {
-    await reportOutputFailure(application, path, begun.detail === undefined ? begun.error : String(begun.detail), source);
-    return false;
-  }
-  const intended = await application.concepts.Emitting.intend({ producer, path, content, medium: "text/plain" });
-  if (isActionFailure(intended)) {
-    await reportOutputFailure(application, path, intended.detail === undefined ? intended.error : String(intended.detail), source);
-    const aborted = await application.concepts.Emitting.abort({ producer });
-    if (isActionFailure(aborted)) throw new Error(`Could not abort ${producer}: ${aborted.detail ?? aborted.error}`);
-    return false;
-  }
-  const committed = await application.concepts.Emitting.commit({ producer });
-  if (isActionFailure(committed)) {
-    await reportOutputFailure(application, path, committed.detail === undefined ? committed.error : String(committed.detail), source);
-    return false;
-  }
-  return true;
-}
-
-async function claimGeneratedRoute(application: Application, owner: string, address: string, source = CONFIGURATION_PATH): Promise<boolean> {
-  const claimed = await application.concepts.Routing.claim({ owner, address });
-  if (isActionFailure(claimed)) {
-    await reportDiagnostic(application, claimed.error === "ADDRESS_TAKEN" ? "ROUTE_COLLISION" : claimed.error, claimed.detail === undefined ? claimed.error : String(claimed.detail), source);
-    return false;
-  }
-  actionValue(await application.concepts.Depending.begin({ subject: owner }), `Could not start generated page ${address}`);
-  actionValue(await application.concepts.Depending.use({ subject: owner, input: CONFIGURATION_PATH }), `Could not track generated page ${address}`);
-  actionValue(await application.concepts.Depending.settle({ subject: owner }), `Could not settle generated page ${address}`);
-  return true;
-}
-
-async function projectDeploymentTarget(application: Application, target: string): Promise<string | undefined> {
-  if (!target.startsWith("/")) return target;
-  return (await application.concepts.Routing._url({ target }))[0]?.url;
-}
-
-async function deploymentAbsoluteUrl(
-  application: Application,
-  site: Record<string, unknown>,
-  path: string,
-): Promise<string | undefined> {
-  const origin = textValue(site.origin);
-  const encodedPath = path.split("/").map((segment) => encodeURIComponent(segment)).join("/");
-  const projected = (await application.concepts.Routing._url({ target: `/${encodedPath}` }))[0]?.url;
-  if (origin === "" || projected === undefined) return undefined;
-  try {
-    const url = new URL(projected, origin);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function resolveVirtualLayout(application: Application, subject: string, text: string): Promise<string | undefined> {
-  const scanned = await application.concepts.Referencing.scan({ subject, part: "deployment-layout", text });
-  if (isActionFailure(scanned)) {
-    await reportDiagnostic(application, scanned.error, scanned.detail === undefined ? scanned.error : String(scanned.detail));
-    return undefined;
-  }
-  if (typeof scanned.source !== "string") {
-    await reportDiagnostic(application, "REFERENCE_SCAN_FAILED", "A generated layout scan produced no source identity.");
-    return undefined;
-  }
-
-  let complete = true;
-  for (const reference of await application.concepts.Referencing._references({ source: scanned.source })) {
-    const classification = (await application.concepts.Routing._classify({ target: reference.raw }))[0]?.kind;
-    let value: string | undefined;
-    if (classification === "absolute") value = (await application.concepts.Routing._url({ target: reference.raw }))[0]?.url;
-    else if (classification === "external" || classification === "fragment") value = reference.raw;
-    else {
-      complete = false;
-      await reportDiagnostic(application, "RELATIVE_LAYOUT_REFERENCE", "A generated layout reference must be site-absolute, external, or fragment-only.");
-      continue;
-    }
-    if (value === undefined) {
-      complete = false;
-      await reportDiagnostic(application, "INVALID_LOCAL_REFERENCE", "A generated layout reference could not be projected.");
-      continue;
-    }
-    const answered = await application.concepts.Referencing.answer({ reference: reference.reference, form: "address", value });
-    if (isActionFailure(answered)) {
-      complete = false;
-      await reportDiagnostic(application, answered.error, answered.detail === undefined ? answered.error : String(answered.detail));
-    }
-  }
-  if (!complete) return undefined;
-  return (await application.concepts.Referencing._finished({ subject, part: "deployment-layout" }))[0]?.text;
-}
-
-function paginationBody(items: readonly { card: unknown }[]): string {
-  const entries = items
-    .map(({ card }) => {
-      const values = recordValue(card);
-      const data = cardData(card);
-      const url = textValue(values.url, "#");
-      const title = textValue(data.title, "Untitled page");
-      const excerpt = textValue(values.excerpt);
-      return `<li><a href="${htmlEscape(url)}">${htmlEscape(title)}</a>${excerpt === "" ? "" : `<div>${excerpt}</div>`}</li>`;
-    })
-    .join("");
-  return `<ul class="syncpress-pagination-items">${entries}</ul>`;
-}
-
-async function renderPagination(application: Application, policy: PaginationPolicy, site: Record<string, unknown>, collections: Record<string, unknown>): Promise<void> {
-  const named = (await application.concepts.Collecting._named({ name: policy.collection }))[0];
-  if (named === undefined) {
-    await reportDiagnostic(application, "PAGINATION_COLLECTION_NOT_FOUND", `Pagination ${policy.name} names no configured collection.`);
-    return;
-  }
-  const template = (await application.concepts.Templating._template({ name: policy.template }))[0];
-  if (template === undefined) {
-    await reportDiagnostic(application, "TEMPLATE_NOT_FOUND", `Pagination ${policy.name} selects an undefined template.`);
-    return;
-  }
-  const allItems = await application.concepts.Collecting._items({ collection: named.collection });
-  const pages = Math.max(1, Math.ceil(allItems.length / policy.perPage));
-  for (let number = 1; number <= pages; number += 1) {
-    const owner = `deployment:pagination:${policy.name}:${number}`;
-    const address = policy.route.replace(":page", String(number));
-    if (!await claimGeneratedRoute(application, owner, address)) continue;
-    const path = (await application.concepts.Routing._file({ address }))[0]?.path;
-    if (path === undefined) {
-      await reportDiagnostic(application, "INVALID_ADDRESS", `Pagination ${policy.name} has an invalid route.`);
-      continue;
-    }
-    const start = (number - 1) * policy.perPage;
-    const items = allItems.slice(start, start + policy.perPage);
-    const previous = number === 1 ? undefined : policy.route.replace(":page", String(number - 1));
-    const next = number === pages ? undefined : policy.route.replace(":page", String(number + 1));
-    const canonicalUrl = (await application.concepts.Routing._absolute({ address }))[0]?.url;
-    const context = {
-      site,
-      collections,
-      page: {
-        data: { section: "Collection page", title: policy.title ?? policy.name, description: "" },
-        url: address,
-        canonicalUrl: textValue(canonicalUrl),
-        source: { path: `[generated]/${policy.name}/${number}` },
-        content: paginationBody(items),
-      },
-      pagination: { collection: policy.collection, current: number, pages, items: items.map(({ card }) => card), previous, next },
-    };
-    const rendered = await application.concepts.Templating.render({
-      template: template.template,
-      subject: owner,
-      context,
-      trusted: [["page", "content"], TRUSTED_COLLECTION_EXCERPTS],
-    });
-    if (isActionFailure(rendered)) {
-      await reportDiagnostic(
-        application,
-        rendered.error,
-        `Pagination ${policy.name}: ${rendered.detail === undefined ? rendered.error : String(rendered.detail)}`,
-      );
-      continue;
-    }
-    if (typeof rendered.output !== "string") {
-      await reportDiagnostic(application, "TEMPLATE_FAILED", `Pagination ${policy.name} produced no layout output.`);
-      continue;
-    }
-    const output = await resolveVirtualLayout(application, owner, rendered.output);
-    if (output !== undefined) await stageArtifact(application, owner, path, output);
-  }
-}
-
-function validCalendarDate(year: number, month: number, day: number): boolean {
-  if (month < 1 || month > 12 || day < 1) return false;
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return day <= days[month - 1]!;
-}
-
-function atomTimestamp(value: string): string | undefined {
-  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (date !== null) {
-    const [, years, months, days] = date;
-    if (!validCalendarDate(Number(years), Number(months), Number(days))) return undefined;
-    return `${value}T00:00:00Z`;
-  }
-
-  const timestamp = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
-  if (timestamp === null) return undefined;
-  const [, years, months, days, hours, minutes, seconds, offset] = timestamp;
-  if (
-    !validCalendarDate(Number(years), Number(months), Number(days)) ||
-    Number(hours) > 23 ||
-    Number(minutes) > 59 ||
-    Number(seconds) > 59 ||
-    (offset !== "Z" && (Number(offset.slice(1, 3)) > 23 || Number(offset.slice(4, 6)) > 59))
-  ) {
-    return undefined;
-  }
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? undefined : parsed.toISOString();
-}
-
-async function emitFeed(application: Application, policy: NonNullable<SitePolicy["deploy"]["feed"]>, site: Record<string, unknown>): Promise<void> {
-  const collection = (await application.concepts.Collecting._named({ name: policy.collection }))[0];
-  if (collection === undefined) {
-    await reportDiagnostic(application, "FEED_COLLECTION_NOT_FOUND", `Feed names no configured collection: ${policy.collection}.`);
-    return;
-  }
-  const feedUrl = await deploymentAbsoluteUrl(application, site, policy.path);
-  if (feedUrl === undefined) {
-    await reportDiagnostic(application, "ORIGIN_REQUIRED", "Feed generation requires a valid site.origin.");
-    return;
-  }
-  const entries: string[] = [];
-  let updated = "1970-01-01T00:00:00Z";
-  for (const { card } of await application.concepts.Collecting._items({ collection: collection.collection })) {
-    const values = recordValue(card);
-    const data = cardData(card);
-    const address = textValue(values.url);
-    const link = (await application.concepts.Routing._absolute({ address }))[0]?.url;
-    const date = atomTimestamp(textValue(data.date));
-    if (link === undefined || date === undefined) {
-      await reportDiagnostic(application, "INVALID_FEED_ENTRY", "Feed entries need a routed URL and a valid data.date.");
-      continue;
-    }
-    if (date > updated) updated = date;
-    const title = textValue(data.title, "Untitled page");
-    const summary = textValue(values.excerpt, textValue(data.description));
-    entries.push(`<entry><id>${xmlEscape(link)}</id><title>${xmlEscape(title)}</title><link href="${xmlEscape(link)}"/><updated>${date}</updated>${summary === "" ? "" : `<summary type="html">${xmlEscape(summary)}</summary>`}</entry>`);
-  }
-  const title = policy.title ?? textValue(site.title, "Syncpress");
-  const subtitle = policy.description ?? textValue(site.description);
-  const content = `<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom"><id>${xmlEscape(feedUrl)}</id><title>${xmlEscape(title)}</title>${subtitle === "" ? "" : `<subtitle>${xmlEscape(subtitle)}</subtitle>`}<updated>${updated}</updated><link href="${xmlEscape(feedUrl)}"/>${entries.join("")}</feed>\n`;
-  await stageArtifact(application, "deployment:feed", policy.path, content);
-}
-
-async function emitSitemap(application: Application): Promise<void> {
-  if ((await application.concepts.Routing._absolute({ address: "/" }))[0]?.url === undefined) {
-    await reportDiagnostic(application, "ORIGIN_REQUIRED", "Sitemap generation requires a valid site.origin.");
-    return;
-  }
-  const urls: string[] = [];
-  for (const { owner, address } of await application.concepts.Routing._claims()) {
-    if (address === "/404.html" || owner.startsWith("deployment:redirect:")) continue;
-    const url = (await application.concepts.Routing._absolute({ address }))[0]?.url;
-    if (url !== undefined) urls.push(url);
-  }
-  const content = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url) => `<url><loc>${xmlEscape(url)}</loc></url>`).join("")}</urlset>\n`;
-  await stageArtifact(application, "deployment:sitemap", "sitemap.xml", content);
-}
-
-async function applyDeploymentPolicy(application: Application, policy: SitePolicy): Promise<void> {
-  const active = (await application.concepts.Configuring._active())[0];
-  if (active === undefined) throw new Error("Site configuration did not remain active.");
-  const site = recordValue((await application.concepts.Configuring._values({ node: active.root, path: PATHS.site, otherwise: {} }))[0]?.values);
-  const collections = recordValue((await application.concepts.Collecting._catalog()).collections);
-
-  for (const redirect of policy.deploy.redirects) {
-    const owner = `deployment:redirect:${redirect.from}`;
-    if (!await claimGeneratedRoute(application, owner, redirect.from)) continue;
-    const path = (await application.concepts.Routing._file({ address: redirect.from }))[0]?.path;
-    const target = await projectDeploymentTarget(application, redirect.to);
-    if (path === undefined || target === undefined) {
-      await reportDiagnostic(application, "INVALID_REDIRECT", `Redirect ${redirect.from} cannot be emitted.`);
-      continue;
-    }
-    const canonical = redirect.to.startsWith("/")
-      ? (await application.concepts.Routing._absolute({ address: redirect.to }))[0]?.url ?? target
-      : target;
-    const content = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=${htmlEscape(target)}"><link rel="canonical" href="${htmlEscape(canonical)}"></head><body><p>Moved to <a href="${htmlEscape(target)}">${htmlEscape(target)}</a>.</p></body></html>\n`;
-    await stageArtifact(application, owner, path, content);
-  }
-
-  for (const pagination of policy.deploy.pagination) await renderPagination(application, pagination, site, collections);
-  if (policy.deploy.sitemap) await emitSitemap(application);
-  if (policy.deploy.feed !== undefined) await emitFeed(application, policy.deploy.feed, site);
+  return assessed.policy;
 }
 
 async function prepareSite(projectDirectory = ".", destination?: string) {
@@ -778,8 +473,6 @@ async function prepareSite(projectDirectory = ".", destination?: string) {
   for (const file of publicFiles) await placeFile(application, publicFilesRoot.root, file.path, file.source);
 
   const job = await runPhases(application, configured.sequence);
-  await applyDeploymentPolicy(application, policy);
-  await application.whenIdle();
   return { application, gateway, job, inputFiles, policy };
 }
 
@@ -810,8 +503,7 @@ function leafPaths(value: unknown, prefix: string[] = []): string[][] {
 export async function inspectSite(projectDirectory: string, target: string) {
   const temporary = await mkdtemp(join(tmpdir(), "syncpress-inspect-"));
   try {
-    const { application, policy } = await prepareSite(projectDirectory, join(temporary, "output"));
-    const claims = await application.concepts.Routing._claims();
+    const { application } = await prepareSite(projectDirectory, join(temporary, "output"));
     let owner: string | undefined;
     if (target.startsWith("/")) owner = (await application.concepts.Routing._owner({ address: target }))[0]?.owner;
     else {
@@ -828,11 +520,11 @@ export async function inspectSite(projectDirectory: string, target: string) {
     const selected = source === undefined
       ? undefined
       : (await application.concepts.Layering._value({ subject: owner, path: PATHS.buildTemplate }))[0]?.value;
-    const generatedPagination = source === undefined
-      ? policy.deploy.pagination.find((pagination) => owner!.startsWith(`deployment:pagination:${pagination.name}:`))
+    const generated = source === undefined
+      ? (await application.concepts.Deploying._forOwner({ owner }))[0]
       : undefined;
     const templateName = source === undefined
-      ? generatedPagination?.template
+      ? generated?.kind === "pagination-page" ? generated.templateName : undefined
       : typeof selected === "string" ? selected : DEFAULTS.template;
     const template = templateName === undefined
       ? undefined
@@ -847,16 +539,18 @@ export async function inspectSite(projectDirectory: string, target: string) {
             ...(await application.concepts.Layering._origin({ subject: owner!, path }))[0],
           })),
         )).filter((origin) => origin.layer !== undefined);
-    const memberships = await Promise.all(
-      (await application.concepts.Collecting._membership({ item: owner })).map(async (membership) => ({
-        ...membership,
-        ...(await application.concepts.Collecting._position({ collection: membership.collection, item: owner }))[0],
+    const operational = await application.form(PageOperationalInspection({ owner })) as OperationalInspection;
+    const diagnostics = operational.diagnostics.map(({ related, source, line, column, ...diagnostic }) => ({
+      ...diagnostic,
+      source: source ?? undefined,
+      line: line ?? undefined,
+      column: column ?? undefined,
+      related: related.map(({ line, column, ...relation }) => ({
+        ...relation,
+        line: line ?? undefined,
+        column: column ?? undefined,
       })),
-    );
-    const diagnostics = await application.concepts.Diagnosing._all();
-    const detailedDiagnostics = await Promise.all(
-      diagnostics.map(async (diagnostic) => ({ ...diagnostic, related: await application.concepts.Diagnosing._related({ diagnostic: diagnostic.diagnostic }) })),
-    );
+    }));
 
     return {
       target,
@@ -868,15 +562,15 @@ export async function inspectSite(projectDirectory: string, target: string) {
         : { name: templateName, digest: template.digest, tree: await application.concepts.Templating._tree({ owner: template.template }) },
       layers,
       origins,
-      memberships,
+      memberships: operational.memberships,
       dependencies: {
-        state: await application.concepts.Depending._state({ subject: owner }),
-        reason: (await application.concepts.Depending._reason({ subject: owner }))[0]?.reason,
-        inputs: await application.concepts.Depending._uses({ subject: owner }),
+        state: [{ state: operational.dependencies.state }],
+        reason: operational.dependencies.reason ?? undefined,
+        inputs: operational.dependencies.inputs,
       },
-      outputs: await application.concepts.Emitting._byProducer({ producer: owner }),
-      claims,
-      diagnostics: detailedDiagnostics,
+      outputs: operational.outputs,
+      claims: operational.claims,
+      diagnostics,
     };
   } finally {
     await rm(temporary, { force: true, recursive: true });

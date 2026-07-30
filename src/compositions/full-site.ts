@@ -7,3 +7,4 @@ export * from "./render.ts";
 export * from "./routes.ts";
 export * from "./settings.ts";
 export * from "./sources.ts";
+export * from "./views.ts";

@@ -6,9 +6,11 @@ import { converting } from "./concepts/converting/registry.ts";
 import { depending } from "./concepts/depending/registry.ts";
 import { diagnosing } from "./concepts/diagnosing/registry.ts";
 import { documenting } from "./concepts/documenting/registry.ts";
+import { deploying } from "./concepts/deploying/registry.ts";
 import { embedding } from "./concepts/embedding/registry.ts";
 import { emitting } from "./concepts/emitting/registry.ts";
 import { filing } from "./concepts/filing/registry.ts";
+import { governing } from "./concepts/governing/registry.ts";
 import { layering } from "./concepts/layering/registry.ts";
 import { matching } from "./concepts/matching/registry.ts";
 import { phasing } from "./concepts/phasing/registry.ts";
@@ -25,9 +27,11 @@ export const syncpressConcepts = conceptSet({
   Depending: depending,
   Diagnosing: diagnosing,
   Documenting: documenting,
+  Deploying: deploying,
   Embedding: embedding,
   Emitting: emitting,
   Filing: filing,
+  Governing: governing,
   Layering: layering,
   Matching: matching,
   Phasing: phasing,

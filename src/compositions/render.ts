@@ -4,11 +4,10 @@ import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.t
 import {
   CONTEXT_PATHS,
   DEFAULTS,
-  PAGE_PATTERNS,
   PARTS,
   PATHS,
-  PROFILES,
 } from "./shared.ts";
+import { EffectiveConversionProfile } from "./views.ts";
 
 const {
   Collecting,
@@ -21,7 +20,6 @@ const {
   Emitting,
   Filing,
   Layering,
-  Matching,
   Phasing,
   Referencing,
   Routing,
@@ -37,7 +35,9 @@ export const RoutedDocumentsBeginRendering = reaction(({ page }) =>
 
 /** Open the page's complete replacement attempt before any output is staged. */
 export const RenderingAttemptsOpenEmission = reaction(({ page }) =>
-  when(Depending.begin({ subject: page }).responds({})).then(Emitting.begin({ producer: page })),
+  when(Depending.begin({ subject: page }).responds({}))
+    .where(Filing._file({ file: page }))
+    .then(Emitting.begin({ producer: page })),
 );
 
 /** Clear diagnostics for this source before its replacement render proceeds. */
@@ -49,9 +49,9 @@ export const RenderingAttemptsRetractDiagnostics = reaction(({ page, path }) =>
 
 /** The source file is always an input of its page result. */
 export const RenderingAttemptsTrackSource = reaction(({ page }) =>
-  when(Emitting.begin({ producer: page }).responds({})).then(
-    Depending.use({ subject: page, input: page }),
-  ),
+  when(Emitting.begin({ producer: page }).responds({}))
+    .where(Filing._file({ file: page }))
+    .then(Depending.use({ subject: page, input: page })),
 );
 
 /** Context assembly starts only after the page's diagnostic retraction settles. */
@@ -67,6 +67,7 @@ export const RenderingAttemptsClearContext = reaction(({ page, path }) =>
 export const ClearedContextsSetSite = reaction(({ page, configuration, site }) =>
   when(Composing.clear({ subject: page, part: PARTS.context }).responds({}))
     .where(
+      earlier(Phasing.advance, {}, { phase: "render" }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
     )
@@ -78,6 +79,13 @@ export const ClearedContextsSetSite = reaction(({ page, configuration, site }) =
         value: site,
       }),
     ),
+);
+
+/** Render contexts are transient once every render-phase reaction has quiesced. */
+export const EmittingPagesClearContexts = reaction(({ page }) =>
+  when(Phasing.advance({}).responds({ phase: "emit" }))
+    .where(Routing._claims({}).is({ owner: page }))
+    .then(Composing.clear({ subject: page, part: PARTS.context })),
 );
 
 export const SiteContextsSetCollections = reaction(({ page, collections }) =>
@@ -228,38 +236,9 @@ export const AuthoredBodiesFill = reaction(({ page, body, bodyLine, context, pat
 );
 
 /** Honor an explicit page conversion profile. */
-export const ConfiguredBodiesConvert = reaction(({ page, output, markup, profile }) =>
+export const FilledBodiesConvert = reaction(({ page, output, profile }) =>
   when(Templating.fill({ subject: page }).responds({ output }))
-    .where(
-      Layering._value({ subject: page, path: PATHS.buildMarkup }).is({ value: markup }),
-      Converting._profile({ name: markup }).is({ profile }),
-    )
-    .then(Converting.convert({ subject: page, part: PARTS.body, profile, source: output })),
-);
-
-/** Markdown is the default body profile for Markdown source files. */
-export const MarkdownBodiesConvert = reaction(({ page, output, path, pattern, profile }) =>
-  when(Templating.fill({ subject: page }).responds({ output }))
-    .where(
-      no(Layering._value({ subject: page, path: PATHS.buildMarkup })),
-      Filing._file({ file: page }).is({ path }),
-      Matching._compiled({ text: PAGE_PATTERNS.markdown }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Converting._profile({ name: PROFILES.markdown }).is({ profile }),
-    )
-    .then(Converting.convert({ subject: page, part: PARTS.body, profile, source: output })),
-);
-
-/** HTML source files use the verbatim default profile. */
-export const HtmlBodiesConvert = reaction(({ page, output, path, pattern, profile }) =>
-  when(Templating.fill({ subject: page }).responds({ output }))
-    .where(
-      no(Layering._value({ subject: page, path: PATHS.buildMarkup })),
-      Filing._file({ file: page }).is({ path }),
-      Matching._compiled({ text: PAGE_PATTERNS.html }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Converting._profile({ name: PROFILES.verbatim }).is({ profile }),
-    )
+    .where(EffectiveConversionProfile({ page }).is({ profile }))
     .then(Converting.convert({ subject: page, part: PARTS.body, profile, source: output })),
 );
 
@@ -374,9 +353,9 @@ export const RenderedLayoutsTrackTemplates = reaction(({ page, rendering, used, 
 
 /** The layout output gets a second reference pass so site-base rebasing is final. */
 export const RenderedLayoutsScan = reaction(({ page, output }) =>
-  when(Templating.render({ subject: page }).responds({ output })).then(
-    Referencing.scan({ subject: page, part: PARTS.layout, text: output }),
-  ),
+  when(Templating.render({ subject: page }).responds({ output }))
+    .where(Filing._file({ file: page }))
+    .then(Referencing.scan({ subject: page, part: PARTS.layout, text: output })),
 );
 
 /** A layout with no references can be committed as soon as it is scanned. */

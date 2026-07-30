@@ -180,6 +180,43 @@ test("rejects feed dates that would be invalid or host-timezone dependent", asyn
   }
 });
 
+test("generated route collisions retain route diagnostics and finish deployment work", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-deployment-route-collision-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const configurationPath = join(project, "site.yaml");
+    await writeFile(
+      configurationPath,
+      (await readFile(configurationPath, "utf8")).replace(
+        "/start/: /guides/getting-started/",
+        "/posts/first/: /guides/getting-started/",
+      ),
+    );
+
+    await expect(buildSite(project, "dist")).rejects.toThrow("ROUTE_COLLISION");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("invalid pagination work diagnoses and terminates without an incomplete queue", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-pagination-template-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const configurationPath = join(project, "site.yaml");
+    await writeFile(
+      configurationPath,
+      (await readFile(configurationPath, "utf8")).replace("template: page.html", "template: missing.html"),
+    );
+
+    await expect(buildSite(project, "dist")).rejects.toThrow("TEMPLATE_NOT_FOUND");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("reports multiple location-aware configuration errors before staging sources", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-policy-"));
   const destination = join(project, "dist");

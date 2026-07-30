@@ -134,3 +134,10 @@ export const UnsortedPagesJoinCollections = reaction(({ page, collection, rule, 
     )
     .then(Collecting.include({ collection, item: page, tiebreak: path, card })),
 );
+
+/** Collection entries retain cloned cards, so their transient source records can be released. */
+export const RenderingPagesClearCards = reaction(({ page }) =>
+  when(Phasing.advance({}).responds({ phase: "render" }))
+    .where(Routing._claims({}).is({ owner: page }))
+    .then(Composing.clear({ subject: page, part: PARTS.card })),
+);
