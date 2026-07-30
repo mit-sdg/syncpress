@@ -443,6 +443,32 @@ Queries (standing questions the state answers):
 - `_source (source)` — promises at most one row
 - `_unanswered (source)` — promises any number of rows
 
+### Rendering
+
+**Purpose.** Track each page rendering attempt from source selection through body and layout
+settlement, so later behavior observes one completion event for each stage.
+
+**Principle.** Ada begins a Markdown page without rendering controls, so its attempt uses the
+markdown profile and default page template. She begins an HTML page and it uses
+verbatim. Explicitly selected profile and template names are preserved instead.
+Settling the body, then the layout, then the attempt advances it in order.
+Repeating a settled transition reports no change. Beginning the page again
+supersedes its unfinished attempt, and late completion of that old attempt
+reports no change.
+
+Actions:
+
+- `begin (data, path, subject)` — may refuse `INVALID_DATA`, `INVALID_PROFILE`, `INVALID_TEMPLATE`, `INVALID_TEXT`, `UNKNOWN_SOURCE`
+- `finish (rendering)` — may refuse `RENDERING_NOT_FOUND`, `STAGE_NOT_READY`
+- `settleBody (rendering)` — may refuse `RENDERING_NOT_FOUND`
+- `settleLayout (rendering)` — may refuse `RENDERING_NOT_FOUND`, `STAGE_NOT_READY`
+
+Queries (standing questions the state answers):
+
+- `_all (…)` — promises any number of rows
+- `_attempt (rendering)` — promises at most one row
+- `_latest (subject)` — promises at most one row
+
 ### RequestBoundary
 
 **Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
@@ -613,22 +639,10 @@ default pattern setting of configuration (root) — inputs (root); outputs (rule
 ```
 
 ```view
-effective conversion profile of page (page) — inputs (page); outputs (profile); bindings (name, path, pattern) — answers at most one (profile)
+effective conversion profile of page (page) — inputs (page); outputs (profile); bindings (name) — answers at most one (profile)
   where
-    Layering._value (path: ["build", "markup"], subject: page) has (value: name)
+    Rendering._latest (subject: page) has (profile: name)
     Converting._profile (name) has (profile)
-  where
-    no Layering._value (path: ["build", "markup"], subject: page)
-    Filing._file (file: page) has (path)
-    Matching._compiled (text: "**/*.md") has (pattern)
-    Matching._matches (path, pattern) has (matched: true)
-    Converting._profile (name: "markdown") has (profile)
-  where
-    no Layering._value (path: ["build", "markup"], subject: page)
-    Filing._file (file: page) has (path)
-    Matching._compiled (text: "**/*.html") has (pattern)
-    Matching._matches (path, pattern) has (matched: true)
-    Converting._profile (name: "verbatim") has (profile)
 ```
 
 ```view
@@ -732,7 +746,7 @@ Former "the deployment entries of catalog (catalog)" — inputs (catalog); bindi
 ```
 
 ```former
-Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
+Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, rendering, renderingPath, renderingProfile, renderingTemplate, renderingStage, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
   a record of
     claims: each Routing._claims () has (address, owner: claimOwner)
       form a record of
@@ -772,6 +786,13 @@ Former "the operational inspection of page (owner)" — inputs (owner); bindings
         digest
         medium
         path: outputPath
+    rendering: a record of
+      where whether Rendering._latest (subject: owner) has (path: renderingPath, profile: renderingProfile, rendering, stage: renderingStage, template: renderingTemplate)
+      attempt: rendering
+      path: renderingPath
+      profile: renderingProfile
+      stage: renderingStage
+      template: renderingTemplate
 ```
 
 ```former
@@ -1073,6 +1094,18 @@ where
   whether Routing._absolute (address) has (url: canonicalUrl)
 then
   Deploying.context (canonicalUrl, collections, site, work)
+```
+
+### fullSite.ClaimedRoutesBeginRendering
+
+```reaction
+when Routing.claim (owner: page)
+where
+  earlier, Phasing.advance (phase: "route")
+  Filing._file (file: page) has (path)
+  Layering._resolved (subject: page) has (values: data)
+then
+  Rendering.begin (data, path, subject: page)
 ```
 
 ### fullSite.ClaimedUnoriginatedRedirectsRender
@@ -1422,148 +1455,25 @@ then
   Deploying.start (policy)
 ```
 
-### fullSite.EmptyBodyScansRenderOriginatedPages:configured
+### fullSite.EmptyBodyScansSettleRendering
 
 ```reaction
 when Referencing.scan (part: "body", subject: page, completed: true)
 where
   earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  Templating._template (name) has (template)
+  Rendering._latest (subject: page) has (rendering)
 then
-  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+  Rendering.settleBody (rendering)
 ```
 
-### fullSite.EmptyBodyScansRenderOriginatedPages:default
-
-```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  Templating._template (name: "page.html") has (template)
-then
-  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.EmptyBodyScansRenderOriginatedPages:missing-configured
-
-```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  no Templating._template (name)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.EmptyBodyScansRenderOriginatedPages:missing-default
-
-```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  no Templating._template (name: "page.html")
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.EmptyBodyScansRenderUnoriginatedPages:configured
-
-```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  Templating._template (name) has (template)
-then
-  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.EmptyBodyScansRenderUnoriginatedPages:default
-
-```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  Templating._template (name: "page.html") has (template)
-then
-  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.EmptyBodyScansRenderUnoriginatedPages:missing-configured
-
-```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  no Templating._template (name)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.EmptyBodyScansRenderUnoriginatedPages:missing-default
-
-```reaction
-when Referencing.scan (part: "body", subject: page, completed: true)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  no Templating._template (name: "page.html")
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.EmptyLayoutScansEmit
+### fullSite.EmptyLayoutScansSettleRendering
 
 ```reaction
 when Referencing.scan (part: "layout", subject: page, completed: true)
 where
-  Referencing._finished (part: "layout", subject: page) has (text)
-  Routing._address (owner: page) has (address)
-  Routing._file (address) has (path)
+  Rendering._latest (subject: page) has (rendering)
 then
-  Emitting.intend (content: text, medium: "text/html", path, producer: page)
-```
-
-### fullSite.EmptyLayoutScansEmit#2
-
-```reaction
-when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.EmptyLayoutScansEmit
-then
-  Emitting.commit (producer: page)
-```
-
-### fullSite.EmptyLayoutScansEmit#3
-
-```reaction
-when Emitting.commit (producer: page), asked by fullSite.EmptyLayoutScansEmit#2
-then
-  Depending.settle (subject: page)
+  Rendering.settleLayout (rendering)
 ```
 
 ### fullSite.EmptyPaginationLayoutScansBegin
@@ -1650,7 +1560,8 @@ then
 ```reaction
 when Templating.fill (subject: page, output)
 where
-  view "effective conversion profile of page (page)" with (page) has (profile)
+  Rendering._latest (subject: page) has (profile: name)
+  Converting._profile (name) has (profile)
 then
   Converting.convert (part: "body", profile, source: output, subject: page)
 ```
@@ -1666,148 +1577,25 @@ then
   Depending.use (input: template, subject: page)
 ```
 
-### fullSite.FinishedBodyAnswersRenderOriginatedPages:configured
+### fullSite.FinishedBodyAnswersSettleRendering
 
 ```reaction
 when Referencing.answer (completed: true, part: "body", subject: page)
 where
   earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  Templating._template (name) has (template)
+  Rendering._latest (subject: page) has (rendering)
 then
-  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+  Rendering.settleBody (rendering)
 ```
 
-### fullSite.FinishedBodyAnswersRenderOriginatedPages:default
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  Templating._template (name: "page.html") has (template)
-then
-  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.FinishedBodyAnswersRenderOriginatedPages:missing-configured
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  no Templating._template (name)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.FinishedBodyAnswersRenderOriginatedPages:missing-default
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  no Templating._template (name: "page.html")
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:configured
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  Templating._template (name) has (template)
-then
-  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:default
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  Templating._template (name: "page.html") has (template)
-then
-  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:missing-configured
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  no Templating._template (name)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:missing-default
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  no Layering._value (path: ["build", "template"], subject: page)
-  no Templating._template (name: "page.html")
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
-```
-
-### fullSite.FinishedLayoutAnswersEmit
+### fullSite.FinishedLayoutAnswersSettleRendering
 
 ```reaction
 when Referencing.answer (completed: true, part: "layout", subject: page)
 where
-  Referencing._finished (part: "layout", subject: page) has (text)
-  Routing._address (owner: page) has (address)
-  Routing._file (address) has (path)
+  Rendering._latest (subject: page) has (rendering)
 then
-  Emitting.intend (content: text, medium: "text/html", path, producer: page)
-```
-
-### fullSite.FinishedLayoutAnswersEmit#2
-
-```reaction
-when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.FinishedLayoutAnswersEmit
-then
-  Emitting.commit (producer: page)
-```
-
-### fullSite.FinishedLayoutAnswersEmit#3
-
-```reaction
-when Emitting.commit (producer: page), asked by fullSite.FinishedLayoutAnswersEmit#2
-then
-  Depending.settle (subject: page)
+  Rendering.settleLayout (rendering)
 ```
 
 ### fullSite.FinishedPaginationLayoutAnswersBegin
@@ -2085,19 +1873,6 @@ then
   Diagnosing.report (code: "MISSING_LOCAL_REFERENCE", message: "This local reference names no staged content file.", severity: "error", source: path)
 ```
 
-### fullSite.MissingConfiguredProfilesDiagnose
-
-```reaction
-when Templating.fill (subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Layering._value (path: ["build", "markup"], subject: page) has (value: markup)
-  no Converting._profile (name: markup)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "PROFILE_NOT_FOUND", message: "The selected body conversion profile is not defined.", severity: "error", source: path)
-```
-
 ### fullSite.MissingFeedCollectionsDiagnose
 
 ```reaction
@@ -2160,6 +1935,29 @@ where
   earlier, Deploying.dispatch (deployment, work)
 then
   Deploying.reject (work)
+```
+
+### fullSite.MissingRenderingProfilesDiagnose
+
+```reaction
+when Rendering.begin (subject: page, profile)
+where
+  no Converting._profile (name: profile)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "PROFILE_NOT_FOUND", message: "The selected body conversion profile is not defined.", severity: "error", source: path)
+```
+
+### fullSite.MissingRenderingTemplatesDiagnose
+
+```reaction
+when Rendering.settleBody (rendering, subject: page, transitioned: true)
+where
+  Rendering._attempt (rendering) has (template: name)
+  no Templating._template (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
 ```
 
 ### fullSite.MissingRequiredNotFoundPagesDiagnose
@@ -2702,6 +2500,16 @@ then
   Depending.use (input: page, subject: page)
 ```
 
+### fullSite.RenderingBeginningsDiagnose
+
+```reaction
+when refused Rendering.begin (subject: page, detail, error)
+where
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
 ### fullSite.RouteCollisionsReport
 
 ```reaction
@@ -2730,6 +2538,7 @@ then
 when Phasing.advance (phase: "render")
 where
   Routing._claims () has (owner: page)
+  Rendering._latest (subject: page) has (stage: "started")
 then
   Depending.begin (subject: page)
 ```
@@ -2954,6 +2763,72 @@ where
   view "verbatim settings of configuration (root)" with (root) has (separator)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.SettledBodiesRenderOriginatedPages
+
+```reaction
+when Rendering.settleBody (rendering, subject: page, transitioned: true)
+where
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  Rendering._attempt (rendering) has (template: name)
+  Templating._template (name) has (template)
+then
+  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.SettledBodiesRenderUnoriginatedPages
+
+```reaction
+when Rendering.settleBody (rendering, subject: page, transitioned: true)
+where
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  Rendering._attempt (rendering) has (template: name)
+  Templating._template (name) has (template)
+then
+  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.SettledLayoutsEmit
+
+```reaction
+when Rendering.settleLayout (rendering, subject: page, transitioned: true)
+where
+  Referencing._finished (part: "layout", subject: page) has (text)
+  Routing._address (owner: page) has (address)
+  Routing._file (address) has (path)
+then
+  Emitting.intend (content: text, medium: "text/html", path, producer: page)
+```
+
+### fullSite.SettledLayoutsEmit#2
+
+```reaction
+when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.SettledLayoutsEmit
+then
+  Emitting.commit (producer: page)
+```
+
+### fullSite.SettledLayoutsEmit#3
+
+```reaction
+when Emitting.commit (producer: page), asked by fullSite.SettledLayoutsEmit#2
+where
+  earlier, Rendering.settleLayout (rendering, subject: page, transitioned: true)
+then
+  Rendering.finish (rendering)
+```
+
+### fullSite.SettledLayoutsEmit#4
+
+```reaction
+when Rendering.finish (rendering, transitioned: true), asked by fullSite.SettledLayoutsEmit#3
+where
+  earlier, Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.SettledLayoutsEmit
+then
+  Depending.settle (subject: page)
 ```
 
 ### fullSite.SitemapWorkPrepares

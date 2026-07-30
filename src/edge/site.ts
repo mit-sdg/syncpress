@@ -26,6 +26,13 @@ type Diagnostic = {
 type ActionFailure = { readonly error: string; readonly detail?: unknown };
 type ActionValue<T> = T extends { readonly error: string } ? never : T;
 type OperationalInspection = {
+  rendering: {
+    attempt: string | null;
+    path: string | null;
+    profile: string | null;
+    template: string | null;
+    stage: string | null;
+  };
   memberships: Array<{ collection: string; name: string; index: number }>;
   dependencies: {
     state: string;
@@ -562,6 +569,7 @@ export async function inspectSite(projectDirectory: string, target: string) {
         : { name: templateName, digest: template.digest, tree: await application.concepts.Templating._tree({ owner: template.template }) },
       layers,
       origins,
+      rendering: operational.rendering.attempt === null ? undefined : operational.rendering,
       memberships: operational.memberships,
       dependencies: {
         state: [{ state: operational.dependencies.state }],

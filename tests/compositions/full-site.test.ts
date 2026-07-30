@@ -324,6 +324,12 @@ test("inspect reports route ownership, template provenance, collection membershi
     route: "/posts/first/",
     source: { path: "posts/first.md" },
     template: { name: "post.html" },
+    rendering: {
+      path: "posts/first.md",
+      profile: "markdown",
+      template: "post.html",
+      stage: "completed",
+    },
   });
   expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 1 }));
   expect(report.dependencies.inputs).toContainEqual(expect.objectContaining({ input: expect.stringContaining("posts/first.md") }));
@@ -331,6 +337,7 @@ test("inspect reports route ownership, template provenance, collection membershi
 
   const redirect = await inspectSite(exampleDirectory, "/start/");
   expect(redirect.template).toBeUndefined();
+  expect(redirect.rendering).toBeUndefined();
 });
 
 test("the development server serves reconciled output with a live-reload client", async () => {

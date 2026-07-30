@@ -1,6 +1,6 @@
 import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
-import { DEFAULTS, PAGE_PATTERNS, PARTS, PATHS, PROFILES, ROOTS } from "./shared.ts";
+import { DEFAULTS, PAGE_PATTERNS, PARTS, PATHS, ROOTS } from "./shared.ts";
 
 const {
   Cataloging,
@@ -13,6 +13,7 @@ const {
   Layering,
   Matching,
   Referencing,
+  Rendering,
   Routing,
 } = concepts;
 
@@ -40,26 +41,11 @@ export const ContentDocumentFile = view(
 /** The explicit or extension-derived conversion profile selected for a page. */
 export const EffectiveConversionProfile = view(
   "effective conversion profile of page (page)",
-  ({ page }, { profile }, { name, path, pattern }) => [
+  ({ page }, { profile }, { name }) =>
     where(
-      Layering._value({ subject: page, path: PATHS.buildMarkup }).is({ value: name }),
+      Rendering._latest({ subject: page }).is({ profile: name }),
       Converting._profile({ name }).is({ profile }),
     ),
-    where(
-      no(Layering._value({ subject: page, path: PATHS.buildMarkup })),
-      Filing._file({ file: page }).is({ path }),
-      Matching._compiled({ text: PAGE_PATTERNS.markdown }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Converting._profile({ name: PROFILES.markdown }).is({ profile }),
-    ),
-    where(
-      no(Layering._value({ subject: page, path: PATHS.buildMarkup })),
-      Filing._file({ file: page }).is({ path }),
-      Matching._compiled({ text: PAGE_PATTERNS.html }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-      Converting._profile({ name: PROFILES.verbatim }).is({ profile }),
-    ),
-  ],
 ).optional();
 
 export const MarkdownSettings = view(
@@ -223,6 +209,11 @@ export const PageOperationalInspection = former(
        catalog,
       name,
       index,
+      rendering,
+      renderingPath,
+      renderingProfile,
+      renderingTemplate,
+      renderingStage,
       state,
       reason,
       input,
@@ -245,6 +236,23 @@ export const PageOperationalInspection = former(
     },
   ) =>
     form({
+      rendering: where(
+        whether(
+          Rendering._latest({ subject: owner }).is({
+            rendering,
+            path: renderingPath,
+            profile: renderingProfile,
+            template: renderingTemplate,
+            stage: renderingStage,
+          }),
+        ),
+      ).form({
+        attempt: rendering,
+        path: renderingPath,
+        profile: renderingProfile,
+        template: renderingTemplate,
+        stage: renderingStage,
+      }),
       memberships: each(Cataloging._membership({ item: owner }).is({ catalog, name }))
         .where(Cataloging._position({ catalog, item: owner }).is({ index }))
         .form({ collection: catalog, name, index }),

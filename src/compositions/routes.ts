@@ -3,7 +3,7 @@ import { concepts } from "../concept-set.ts";
 import { PARTS, PATHS, ROOTS } from "./shared.ts";
 import { EffectiveConversionProfile } from "./views.ts";
 
-const { Converting, Diagnosing, Documenting, Filing, Layering, Phasing, Routing } = concepts;
+const { Converting, Diagnosing, Documenting, Filing, Layering, Phasing, Rendering, Routing } = concepts;
 
 export const ExplicitRoutesClaim = reaction(({ page, root, address }) =>
   when(Phasing.advance({}).responds({ phase: "route" }))
@@ -71,6 +71,40 @@ export const InvalidRouteClaimsDiagnose = reaction(({ page, root, path, detail }
         severity: "error",
         code: "INVALID_ADDRESS",
         message: detail,
+        source: path,
+      }),
+    ),
+);
+
+/** A successful route starts one observable rendering attempt and selects its source profile. */
+export const ClaimedRoutesBeginRendering = reaction(({ page, path, data }) =>
+  when(Routing.claim({ owner: page }).responds({}))
+    .where(
+      earlier(Phasing.advance, {}, { phase: "route" }),
+      Filing._file({ file: page }).is({ path }),
+      Layering._resolved({ subject: page }).is({ values: data }),
+    )
+    .then(Rendering.begin({ subject: page, path, data })),
+);
+
+export const RenderingBeginningsDiagnose = reaction(({ page, error, detail, path }) =>
+  when(Rendering.begin({ subject: page }).refuses({ error, detail }))
+    .where(Filing._file({ file: page }).is({ path }))
+    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
+);
+
+/** A selected profile must resolve before excerpt or body conversion can proceed. */
+export const MissingRenderingProfilesDiagnose = reaction(({ page, profile, path }) =>
+  when(Rendering.begin({ subject: page }).responds({ profile }))
+    .where(
+      no(Converting._profile({ name: profile })),
+      Filing._file({ file: page }).is({ path }),
+    )
+    .then(
+      Diagnosing.report({
+        severity: "error",
+        code: "PROFILE_NOT_FOUND",
+        message: "The selected body conversion profile is not defined.",
         source: path,
       }),
     ),
