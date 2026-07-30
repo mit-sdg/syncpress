@@ -80,6 +80,77 @@ test("the example site produces its exact deterministic golden tree", async () =
   }
 });
 
+test("renders without an origin and does not invent a canonical URL", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-no-origin-site-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const configurationPath = join(project, "site.yaml");
+    const configuration = await readFile(configurationPath, "utf8");
+    await writeFile(
+      configurationPath,
+      configuration
+        .replace("  origin: https://syncpress.example\n", "")
+        .replace("  sitemap: true\n", "  sitemap: false\n")
+        .replace(
+          "  feed:\n    collection: posts\n    path: feed.xml\n    title: Syncpress Field Notes\n    description: Release notes for the deterministic publishing field guide.\n",
+          "",
+        ),
+    );
+
+    const result = await buildSite(project);
+    expect(result).toMatchObject({ pages: 10, diagnostics: [] });
+    const index = await readFile(join(project, "dist", "index.html"), "utf8");
+    expect(index).toContain("Source file: <code>index.md</code>");
+    expect(index).not.toContain('<link rel="canonical"');
+    expect(index).not.toContain("https://syncpress.example");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("collection cards preserve conditions, optional excerpts, and missing sort keys", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-collection-cards-"));
+
+  try {
+    await cp(exampleDirectory, project, { recursive: true });
+    const configurationPath = join(project, "site.yaml");
+    await writeFile(
+      configurationPath,
+      (await readFile(configurationPath, "utf8")).replace(
+        "markdown:\n",
+        "  mixedDates:\n    match: \"**/*.md\"\n    sort:\n      by: data.date\n      order: desc\nmarkdown:\n",
+      ),
+    );
+    const indexPath = join(project, "content", "index.md");
+    await writeFile(
+      indexPath,
+      `${await readFile(indexPath, "utf8")}\n<div id="equals">{% for card in collections.featured %}{{ card.source.path }}|{% endfor %}</div>\n<div id="contains">{% for card in collections.siteBuilding %}{{ card.source.path }}|{% endfor %}</div>\n<div id="exists">{% for card in collections.documented %}{{ card.source.path }}|{% endfor %}</div>\n<div id="mixed-dates">{% for card in collections.mixedDates %}{{ card.source.path }}|{% endfor %}</div>\n{% for card in collections.featured %}<div data-card="{{ card.source.path }}" data-excerpt="{% if card.excerpt == nil %}null{% else %}present{% endif %}">{{ card.excerpt }}</div>{% endfor %}\n`,
+    );
+
+    await buildSite(project);
+    const index = await readFile(join(project, "dist", "index.html"), "utf8");
+    expect(index).toContain(
+      '<div id="equals">about.md|posts/second.md|guides/getting-started.md|posts/first.md|</div>',
+    );
+    expect(index).toContain(
+      '<div id="contains">index.md|about.md|guides/getting-started.md|posts/first.md|</div>',
+    );
+    expect(index).toContain(
+      '<div id="exists">index.md|about.md|posts/second.md|guides/getting-started.md|posts/first.md|</div>',
+    );
+    expect(index).toContain(
+      '<div id="mixed-dates">posts/second.md|posts/first.md|about.md|guides/getting-started.md|index.md|</div>',
+    );
+    expect(index).toContain('<div data-card="about.md" data-excerpt="null"></div>');
+    expect(index).toContain(
+      '<div data-card="posts/second.md" data-excerpt="present"><p>The newest note appears first',
+    );
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("uses paths.output when no explicit destination is supplied", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-default-output-"));
 

@@ -6,7 +6,7 @@ function matched(matching: MatchingConcept, pattern: string, path: string): bool
 }
 
 describe("Matching", () => {
-  test("its principle: a saved pattern selects only paths that fit it", () => {
+  test("its principle: an admitted selector selects only paths that fit it", () => {
     const matching = new MatchingConcept();
 
     expect(matching._compiled({ text: "posts/**/*.md" })).toEqual([]);

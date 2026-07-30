@@ -2,9 +2,10 @@ import { isProxy } from "node:util/types";
 
 export class InvalidText extends Error {}
 export class InvalidDirection extends Error {}
-export class InvalidSortKey extends Error {}
+export class InvalidField extends Error {}
+export class InvalidCondition extends Error {}
 export class InvalidCard extends Error {}
-export class CollectionNotFound extends Error {}
+export class CatalogNotFound extends Error {}
 export class NotIncluded extends Error {}
 
 export type Direction = "asc" | "desc";
@@ -13,10 +14,21 @@ export interface NormalizedRecord {
   [key: string]: NormalizedValue;
 }
 
-type CollectionRecord = { collection: string; name: string; direction: Direction };
+export type CatalogCondition =
+  | { test: "equals"; field: string; value: NormalizedValue }
+  | { test: "contains"; field: string; value: NormalizedValue }
+  | { test: "exists"; field: string };
+
+type CatalogRecord = {
+  catalog: string;
+  name: string;
+  direction: Direction;
+  sort: string | null;
+  condition: CatalogCondition | null;
+};
 type EntryRecord = {
   entry: string;
-  collection: string;
+  catalog: string;
   item: string;
   key: NormalizedValue | undefined;
   tiebreak: string;
@@ -26,6 +38,7 @@ type EntryRecord = {
 class UnsupportedValue extends Error {}
 
 const encoder = new TextEncoder();
+const fieldPattern = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
 
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();
@@ -129,6 +142,12 @@ function cloneRecord(record: NormalizedRecord): NormalizedRecord {
   return cloneValue(record) as NormalizedRecord;
 }
 
+function cloneCondition(condition: CatalogCondition | null): CatalogCondition | null {
+  if (condition === null) return null;
+  if (condition.test === "exists") return { ...condition };
+  return { ...condition, value: cloneValue(condition.value) };
+}
+
 function equalValue(left: NormalizedValue, right: NormalizedValue): boolean {
   if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) return left === right;
   if (Array.isArray(left) || Array.isArray(right)) {
@@ -141,6 +160,13 @@ function equalValue(left: NormalizedValue, right: NormalizedValue): boolean {
 
 function equalOptionalValue(left: NormalizedValue | undefined, right: NormalizedValue | undefined): boolean {
   return left === undefined || right === undefined ? left === right : equalValue(left, right);
+}
+
+function equalCondition(left: CatalogCondition | null, right: CatalogCondition | null): boolean {
+  if (left === null || right === null) return left === right;
+  if (left.test !== right.test || left.field !== right.field) return false;
+  if (left.test === "exists" || right.test === "exists") return true;
+  return equalValue(left.value, right.value);
 }
 
 function kind(value: NormalizedValue): number {
@@ -185,49 +211,118 @@ function compareValue(left: NormalizedValue, right: NormalizedValue): number {
   return compareRecords(left as NormalizedRecord, right as NormalizedRecord);
 }
 
-function collectionIdentity(name: string): string {
-  return `collection:${JSON.stringify(name)}`;
+function catalogIdentity(name: string): string {
+  return `catalog:${JSON.stringify(name)}`;
 }
 
-function entryIdentity(collection: string, item: string): string {
-  return `entry:${JSON.stringify([collection, item])}`;
+function entryIdentity(catalog: string, item: string): string {
+  return `entry:${JSON.stringify([catalog, item])}`;
 }
 
-/** Maintain generic named, totally ordered collections of lightweight values. */
-export class CollectingConcept {
-  readonly #collectionsByName = new Map<string, CollectionRecord>();
-  readonly #collectionsByID = new Map<string, CollectionRecord>();
+function normalizeField(field: unknown): string {
+  if (typeof field !== "string" || !fieldPattern.test(field)) throw new InvalidField();
+  return field;
+}
+
+function normalizeCondition(condition: unknown): CatalogCondition | null {
+  if (condition === null) return null;
+  try {
+    if (typeof condition !== "object" || Array.isArray(condition) || isProxy(condition)) throw new InvalidCondition();
+    const prototype = Object.getPrototypeOf(condition);
+    if (prototype !== Object.prototype && prototype !== null) throw new InvalidCondition();
+    const keys = Reflect.ownKeys(condition);
+    if (keys.some((key) => typeof key !== "string")) throw new InvalidCondition();
+    for (const key of keys as string[]) {
+      const descriptor = Object.getOwnPropertyDescriptor(condition, key);
+      if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) throw new InvalidCondition();
+    }
+    const record = condition as Record<string, unknown>;
+    const field = normalizeField(record.field);
+    if (record.test === "exists" && keys.length === 2) return { test: "exists", field };
+    if ((record.test === "equals" || record.test === "contains") && keys.length === 3) {
+      return { test: record.test, field, value: normalizeValue(record.value) };
+    }
+  } catch {
+    throw new InvalidCondition();
+  }
+  throw new InvalidCondition();
+}
+
+function readField(card: NormalizedRecord, field: string): NormalizedValue | undefined {
+  let current: NormalizedValue = card;
+  for (const segment of field.split(".")) {
+    if (current === null || typeof current !== "object" || Array.isArray(current) || !Object.hasOwn(current, segment)) {
+      return undefined;
+    }
+    current = current[segment]!;
+  }
+  return current;
+}
+
+function containsValue(container: NormalizedValue, value: NormalizedValue): boolean {
+  if (Array.isArray(container)) return container.some((member) => equalValue(member, value));
+  return typeof container === "string" && typeof value === "string" && container.includes(value);
+}
+
+function accepts(card: NormalizedRecord, condition: CatalogCondition | null): boolean {
+  if (condition === null) return true;
+  const value = readField(card, condition.field);
+  if (condition.test === "exists") return value !== undefined;
+  if (value === undefined) return false;
+  return condition.test === "equals" ? equalValue(value, condition.value) : containsValue(value, condition.value);
+}
+
+/** Catalog projected items under declared admission and deterministic ordering policy. */
+export class CatalogingConcept {
+  readonly #catalogsByName = new Map<string, CatalogRecord>();
+  readonly #catalogsByID = new Map<string, CatalogRecord>();
   readonly #entries = new Map<string, EntryRecord>();
 
-  declare({ name, direction }: { name: unknown; direction: unknown }) {
+  declare({
+    name,
+    direction,
+    sort,
+    condition,
+  }: {
+    name: unknown;
+    direction: unknown;
+    sort: unknown;
+    condition: unknown;
+  }) {
     requireText(name);
     if (direction !== "asc" && direction !== "desc") throw new InvalidDirection();
-    const existing = this.#collectionsByName.get(name);
+    const normalizedSort = sort === null ? null : normalizeField(sort);
+    const normalizedCondition = normalizeCondition(condition);
+    const existing = this.#catalogsByName.get(name);
     if (existing === undefined) {
-      const collection = collectionIdentity(name);
-      const record: CollectionRecord = { collection, name, direction };
-      this.#collectionsByName.set(name, record);
-      this.#collectionsByID.set(collection, record);
-      return { collection, changed: true };
+      const catalog = catalogIdentity(name);
+      const record: CatalogRecord = { catalog, name, direction, sort: normalizedSort, condition: normalizedCondition };
+      this.#catalogsByName.set(name, record);
+      this.#catalogsByID.set(catalog, record);
+      return { catalog, changed: true };
     }
-    const changed = existing.direction !== direction;
+    const changed =
+      existing.direction !== direction ||
+      existing.sort !== normalizedSort ||
+      !equalCondition(existing.condition, normalizedCondition);
+    if (!changed) return { catalog: existing.catalog, changed: false };
     existing.direction = direction;
-    return { collection: existing.collection, changed };
+    existing.sort = normalizedSort;
+    existing.condition = normalizedCondition;
+    for (const [entry, record] of this.#entries) {
+      if (record.catalog !== existing.catalog) continue;
+      if (!accepts(record.card, normalizedCondition)) this.#entries.delete(entry);
+      else record.key = normalizedSort === null ? undefined : readField(record.card, normalizedSort);
+    }
+    return { catalog: existing.catalog, changed: true };
   }
 
-  include({ collection, item, key, tiebreak, card }: { collection: unknown; item: unknown; key?: unknown; tiebreak: unknown; card: unknown }) {
-    requireText(collection);
+  index({ catalog, item, tiebreak, card }: { catalog: unknown; item: unknown; tiebreak: unknown; card: unknown }) {
+    requireText(catalog);
     requireText(item);
     requireText(tiebreak);
-    if (!this.#collectionsByID.has(collection)) throw new CollectionNotFound();
-
-    let normalizedKey: NormalizedValue | undefined;
-    try {
-      normalizedKey = key === undefined ? undefined : normalizeValue(key);
-    } catch (error) {
-      if (error instanceof UnsupportedValue) throw new InvalidSortKey();
-      throw error;
-    }
+    const policy = this.#catalogsByID.get(catalog);
+    if (policy === undefined) throw new CatalogNotFound();
 
     let normalizedCard: NormalizedRecord;
     try {
@@ -237,24 +332,28 @@ export class CollectingConcept {
       throw error;
     }
 
-    const entry = entryIdentity(collection, item);
+    const entry = entryIdentity(catalog, item);
     const existing = this.#entries.get(entry);
+    if (!accepts(normalizedCard, policy.condition)) {
+      return { entry, included: false, changed: existing === undefined ? false : this.#entries.delete(entry) };
+    }
+    const normalizedKey = policy.sort === null ? undefined : readField(normalizedCard, policy.sort);
     if (
       existing !== undefined &&
       equalOptionalValue(existing.key, normalizedKey) &&
       existing.tiebreak === tiebreak &&
       equalValue(existing.card, normalizedCard)
     ) {
-      return { entry, changed: false };
+      return { entry, included: true, changed: false };
     }
-    this.#entries.set(entry, { entry, collection, item, key: normalizedKey, tiebreak, card: normalizedCard });
-    return { entry, changed: true };
+    this.#entries.set(entry, { entry, catalog, item, key: normalizedKey, tiebreak, card: normalizedCard });
+    return { entry, included: true, changed: true };
   }
 
-  exclude({ collection, item }: { collection: unknown; item: unknown }) {
-    requireText(collection);
+  unindex({ catalog, item }: { catalog: unknown; item: unknown }) {
+    requireText(catalog);
     requireText(item);
-    const entry = entryIdentity(collection, item);
+    const entry = entryIdentity(catalog, item);
     if (!this.#entries.delete(entry)) throw new NotIncluded();
     return { entry };
   }
@@ -271,60 +370,62 @@ export class CollectingConcept {
   }
 
   reset() {
-    const count = this.#collectionsByID.size;
-    this.#collectionsByName.clear();
-    this.#collectionsByID.clear();
+    const count = this.#catalogsByID.size;
+    this.#catalogsByName.clear();
+    this.#catalogsByID.clear();
     this.#entries.clear();
     return { count };
   }
 
-  _collections(): { collection: string; name: string; direction: Direction }[] {
-    return [...this.#collectionsByID.values()]
+  _catalogs(): { catalog: string; name: string; direction: Direction; sort: string | null; condition: CatalogCondition | null }[] {
+    return [...this.#catalogsByID.values()]
       .sort((left, right) => compareText(left.name, right.name))
-      .map(({ collection, name, direction }) => ({ collection, name, direction }));
+      .map(({ catalog, name, direction, sort, condition }) => ({ catalog, name, direction, sort, condition: cloneCondition(condition) }));
   }
 
-  _named({ name }: { name: unknown }): { collection: string; direction: Direction }[] {
+  _named({ name }: { name: unknown }): { catalog: string; direction: Direction; sort: string | null; condition: CatalogCondition | null }[] {
     if (!isText(name)) return [];
-    const collection = this.#collectionsByName.get(name);
-    return collection === undefined ? [] : [{ collection: collection.collection, direction: collection.direction }];
+    const catalog = this.#catalogsByName.get(name);
+    return catalog === undefined
+      ? []
+      : [{ catalog: catalog.catalog, direction: catalog.direction, sort: catalog.sort, condition: cloneCondition(catalog.condition) }];
   }
 
-  _items({ collection }: { collection: unknown }): { item: string; key: NormalizedValue | undefined; card: NormalizedRecord }[] {
-    if (!isText(collection)) return [];
-    const record = this.#collectionsByID.get(collection);
+  _entries({ catalog }: { catalog: unknown }): { entry: string; item: string; card: NormalizedRecord }[] {
+    if (!isText(catalog)) return [];
+    const record = this.#catalogsByID.get(catalog);
     if (record === undefined) return [];
     return [...this.#entries.values()]
-      .filter((entry) => entry.collection === collection)
+      .filter((entry) => entry.catalog === catalog)
       .sort((left, right) => this.#compareEntries(left, right, record.direction))
-      .map(({ item, key, card }) => ({ item, key: key === undefined ? undefined : cloneValue(key), card: cloneRecord(card) }));
+      .map(({ entry, item, card }) => ({ entry, item, card: cloneRecord(card) }));
   }
 
-  _membership({ item }: { item: unknown }): { collection: string; name: string }[] {
+  _membership({ item }: { item: unknown }): { entry: string; catalog: string; name: string }[] {
     if (!isText(item)) return [];
     return [...this.#entries.values()]
       .filter((entry) => entry.item === item)
-      .map((entry) => this.#collectionsByID.get(entry.collection)!)
-      .sort((left, right) => compareText(left.name, right.name))
-      .map(({ collection, name }) => ({ collection, name }));
+      .map((entry) => ({ entry: entry.entry, catalog: this.#catalogsByID.get(entry.catalog)! }))
+      .sort((left, right) => compareText(left.catalog.name, right.catalog.name))
+      .map(({ entry, catalog }) => ({ entry, catalog: catalog.catalog, name: catalog.name }));
   }
 
-  _position({ collection, item }: { collection: unknown; item: unknown }): { index: number }[] {
-    if (!isText(collection) || !isText(item)) return [];
-    const index = this._items({ collection }).findIndex((entry) => entry.item === item);
+  _position({ catalog, item }: { catalog: unknown; item: unknown }): { index: number }[] {
+    if (!isText(catalog) || !isText(item)) return [];
+    const index = this._entries({ catalog }).findIndex((entry) => entry.item === item);
     return index === -1 ? [] : [{ index }];
   }
 
-  _catalog(): { collections: NormalizedRecord } {
-    const collections: NormalizedRecord = {};
-    for (const { collection, name } of this._collections()) {
+  _record(): { catalogs: NormalizedRecord } {
+    const catalogs: NormalizedRecord = {};
+    for (const { catalog, name } of this._catalogs()) {
       setOwn(
-        collections,
+        catalogs,
         name,
-        this._items({ collection }).map(({ card }) => card),
+        this._entries({ catalog }).map(({ card }) => card),
       );
     }
-    return { collections };
+    return { catalogs };
   }
 
   #compareEntries(left: EntryRecord, right: EntryRecord, direction: Direction): number {

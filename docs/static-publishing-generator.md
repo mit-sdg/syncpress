@@ -326,9 +326,15 @@ prevents collection/page render cycles.
   after present keys, and ties break by source path then item identity.
 
 Excerpts are derived from the authored body before Liquid evaluation and end at
-the configured separator. They are absent when no separator occurs. The narrowly
+the configured separator. A card has `excerpt: null` when no separator occurs. The narrowly
 scoped `collections/*/*/excerpt` trusted declaration permits rendered excerpts
 in collection cards while every other interpolated value remains escaped.
+
+Internally, `Cataloging` owns each named catalog's condition, sort field,
+membership reconciliation, projection snapshot, and total order. Path-pattern
+admission remains a separate `Matching` decision. Composition forms each
+complete card once and asks Cataloging to index it; no field-by-field card state
+is retained.
 
 ## 7. Routes And Output Paths
 
@@ -430,12 +436,12 @@ are complete before layouts render them.
 
 | Phase | Required composition outcome |
 | --- | --- |
-| `settings` | Load YAML, declare profiles, compile fixed/configured patterns, rebase routes, and reset/declare collections. |
+| `settings` | Load YAML, declare profiles, compile fixed/configured patterns, rebase routes, and reset/declare catalog policy. |
 | `read` | Parse content, define layouts/includes, emit public files, and layer defaults plus front matter. |
 | `route` | Claim published routes and report invalid or colliding claims. |
 | `excerpt` | Convert authored bodies before body Liquid rendering. |
-| `collect` | Assemble cards and populate ordered collections. |
-| `render` | Open per-page replacement attempts; create context; fill/convert/resolve bodies; process assets/images; render layouts; rebase final references; commit finished pages. |
+| `collect` | Form complete cards and index path-matched pages under catalog-owned conditions and ordering. |
+| `render` | Open per-page replacement attempts; form complete contexts; fill/convert/resolve bodies; process assets/images; render layouts; rebase final references; commit finished pages. |
 | `emit` | Current barrier reserved for publication policy. It does not reconcile itself. |
 | post-phase reconcile | Require a finished job, no error diagnostics, and no routed page without a current `Depending` result; atomically reconcile active intents. |
 

@@ -34,11 +34,11 @@ export const DEFAULTS = {
 
 export const PARTS = {
   body: "body",
-  card: "card",
-  context: "context",
   excerpt: "excerpt",
   layout: "layout",
 } as const;
+
+export const PAGE_CONTENT_PATH = ["page", "content"] as const;
 
 export const PROFILES = {
   markdown: "markdown",
@@ -72,23 +72,6 @@ export const PATHS = {
   site: ["site"],
   siteBasePath: ["site", "basePath"],
   siteOrigin: ["site", "origin"],
-} as const;
-
-export const CONTEXT_PATHS = {
-  collections: ["collections"],
-  pageContent: ["page", "content"],
-  pageCanonicalUrl: ["page", "canonicalUrl"],
-  pageData: ["page", "data"],
-  pageSourcePath: ["page", "source", "path"],
-  pageUrl: ["page", "url"],
-  site: ["site"],
-} as const;
-
-export const CARD_PATHS = {
-  data: ["data"],
-  excerpt: ["excerpt"],
-  sourcePath: ["source", "path"],
-  url: ["url"],
 } as const;
 
 export const MAX_PAGE_LAYER_RANK = Number.MAX_SAFE_INTEGER;

@@ -1,6 +1,5 @@
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { collecting } from "./concepts/collecting/registry.ts";
-import { composing } from "./concepts/composing/registry.ts";
+import { cataloging } from "./concepts/cataloging/registry.ts";
 import { configuring } from "./concepts/configuring/registry.ts";
 import { converting } from "./concepts/converting/registry.ts";
 import { depending } from "./concepts/depending/registry.ts";
@@ -20,8 +19,7 @@ import { templating } from "./concepts/templating/registry.ts";
 import { transcoding } from "./concepts/transcoding/registry.ts";
 
 export const syncpressConcepts = conceptSet({
-  Collecting: collecting,
-  Composing: composing,
+  Cataloging: cataloging,
   Configuring: configuring,
   Converting: converting,
   Depending: depending,

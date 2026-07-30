@@ -27,36 +27,36 @@ function ownRecord(entries: ReadonlyArray<readonly [string, unknown]>): Record<s
   return record;
 }
 
-test("its principle: a higher-ranked correction refines a profile and remains explainable", () => {
+test("its principle: a deployment override refines tool defaults and remains explainable", () => {
   const layering = new LayeringConcept();
   layering.contribute({
-    subject: "profile",
+    subject: "tool",
     rank: 10,
-    values: { name: "Ada", address: { city: "London", country: "UK" }, interests: ["math"] },
+    values: { output: "preview", endpoint: { host: "localhost", protocol: "http" }, formats: ["html"] },
   });
   layering.contribute({
-    subject: "profile",
+    subject: "tool",
     rank: 20,
-    values: { name: "Augusta Ada", address: { district: "Westminster" }, interests: ["computing"] },
+    values: { output: "production", endpoint: { port: 443 }, formats: ["html", "xml"] },
   });
 
-  expect(layering._resolved({ subject: "profile" })).toEqual({
+  expect(layering._resolved({ subject: "tool" })).toEqual({
     values: {
-      name: "Augusta Ada",
-      address: { city: "London", country: "UK", district: "Westminster" },
-      interests: ["computing"],
+      output: "production",
+      endpoint: { host: "localhost", protocol: "http", port: 443 },
+      formats: ["html", "xml"],
     },
   });
-  expect(layering._origin({ subject: "profile", path: ["name"] })).toEqual([
-    { rank: 20, layer: layerID("profile", 20) },
+  expect(layering._origin({ subject: "tool", path: ["output"] })).toEqual([
+    { rank: 20, layer: layerID("tool", 20) },
   ]);
-  expect(layering._origin({ subject: "profile", path: ["address", "city"] })).toEqual([
-    { rank: 10, layer: layerID("profile", 10) },
+  expect(layering._origin({ subject: "tool", path: ["endpoint", "host"] })).toEqual([
+    { rank: 10, layer: layerID("tool", 10) },
   ]);
 
-  layering.withdraw({ subject: "profile", rank: 20 });
-  expect(layering._value({ subject: "profile", path: ["name"] })).toEqual([{ value: "Ada" }]);
-  expect(() => layering.contribute({ subject: "profile", rank: 10, values: {} })).toThrow(RankTaken);
+  layering.withdraw({ subject: "tool", rank: 20 });
+  expect(layering._value({ subject: "tool", path: ["output"] })).toEqual([{ value: "preview" }]);
+  expect(() => layering.contribute({ subject: "tool", rank: 10, values: {} })).toThrow(RankTaken);
 });
 
 test("rank order, not arrival order, determines resolution and layer listings", () => {

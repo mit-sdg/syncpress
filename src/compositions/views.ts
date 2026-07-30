@@ -1,9 +1,9 @@
 import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
-import { DEFAULTS, PAGE_PATTERNS, PATHS, PROFILES, ROOTS } from "./shared.ts";
+import { DEFAULTS, PAGE_PATTERNS, PARTS, PATHS, PROFILES, ROOTS } from "./shared.ts";
 
 const {
-  Collecting,
+  Cataloging,
   Configuring,
   Converting,
   Depending,
@@ -12,6 +12,7 @@ const {
   Filing,
   Layering,
   Matching,
+  Referencing,
   Routing,
 } = concepts;
 
@@ -111,15 +112,107 @@ export const CollectionPatternSetting = view(
 
 export const CollectionDeclarationSetting = view(
   "collection declaration setting of configuration (root)",
-  ({ root }, { name, rule, direction }, { collections }) =>
+  ({ root }, { name, rule, direction, sort }, { collections }) =>
     where(
       Configuring._at({ node: root, path: ["collections"] }).is({ found: collections }),
       Configuring._entries({ node: collections }).is({ key: name, child: rule }),
       Configuring._scalar({ node: rule, path: PATHS.collectionSortOrder, otherwise: "asc" }).is({
         value: direction,
       }),
+      Configuring._scalar({ node: rule, path: PATHS.collectionSortBy, otherwise: null }).is({ value: sort }),
     ),
 ).many();
+
+export const PageRenderContext = former(
+  "the originated render context of page (page)",
+  ({ page }, { configuration, site, collections, data, address, canonicalUrl, path }) =>
+    where(
+      Configuring._active({}).is({ root: configuration }),
+      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
+      Cataloging._record({}).is({ catalogs: collections }),
+      Layering._resolved({ subject: page }).is({ values: data }),
+      Routing._address({ owner: page }).is({ address }),
+      Routing._absolute({ address }).is({ url: canonicalUrl }),
+      Filing._file({ file: page }).is({ path }),
+    ).form({
+      collections,
+      page: form({ canonicalUrl, data, source: form({ path }), url: address }),
+      site,
+    }),
+);
+
+export const UnoriginatedPageRenderContext = former(
+  "the unoriginated render context of page (page)",
+  ({ page }, { configuration, site, collections, data, address, path }) =>
+    where(
+      Configuring._active({}).is({ root: configuration }),
+      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
+      Cataloging._record({}).is({ catalogs: collections }),
+      Layering._resolved({ subject: page }).is({ values: data }),
+      Routing._address({ owner: page }).is({ address }),
+      no(Routing._absolute({ address })),
+      Filing._file({ file: page }).is({ path }),
+    ).form({
+      collections,
+      page: form({ data, source: form({ path }), url: address }),
+      site,
+    }),
+);
+
+export const CompletedPageRenderContext = former(
+  "the originated completed render context of page (page)",
+  ({ page }, { configuration, site, collections, data, address, canonicalUrl, path, content }) =>
+    where(
+      Configuring._active({}).is({ root: configuration }),
+      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
+      Cataloging._record({}).is({ catalogs: collections }),
+      Layering._resolved({ subject: page }).is({ values: data }),
+      Routing._address({ owner: page }).is({ address }),
+      Routing._absolute({ address }).is({ url: canonicalUrl }),
+      Filing._file({ file: page }).is({ path }),
+      Referencing._finished({ subject: page, part: PARTS.body }).is({ text: content }),
+    ).form({
+      collections,
+      page: form({ canonicalUrl, content, data, source: form({ path }), url: address }),
+      site,
+    }),
+);
+
+export const CompletedUnoriginatedPageRenderContext = former(
+  "the unoriginated completed render context of page (page)",
+  ({ page }, { configuration, site, collections, data, address, path, content }) =>
+    where(
+      Configuring._active({}).is({ root: configuration }),
+      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
+      Cataloging._record({}).is({ catalogs: collections }),
+      Layering._resolved({ subject: page }).is({ values: data }),
+      Routing._address({ owner: page }).is({ address }),
+      no(Routing._absolute({ address })),
+      Filing._file({ file: page }).is({ path }),
+      Referencing._finished({ subject: page, part: PARTS.body }).is({ text: content }),
+    ).form({
+      collections,
+      page: form({ content, data, source: form({ path }), url: address }),
+      site,
+    }),
+);
+
+export const PublicationCard = former(
+  "the publication card of page (page)",
+  ({ page }, { data, address, excerpt, root, path }) =>
+    where(
+      Layering._resolved({ subject: page }).is({ values: data }),
+      Routing._address({ owner: page }).is({ address }),
+      whether(Converting._excerpt({ subject: page, part: PARTS.excerpt }).is({ excerpt })),
+      Filing._named({ name: ROOTS.content }).is({ root }),
+      Filing._file({ file: page }).is({ root, path }),
+    ).form({
+      data,
+      excerpt,
+      source: form({ path }),
+      url: address,
+    }),
+);
 
 /** Current operational evidence used by page inspection. */
 export const PageOperationalInspection = former(
@@ -127,7 +220,7 @@ export const PageOperationalInspection = former(
   (
     { owner },
     {
-      collection,
+       catalog,
       name,
       index,
       state,
@@ -152,9 +245,9 @@ export const PageOperationalInspection = former(
     },
   ) =>
     form({
-      memberships: each(Collecting._membership({ item: owner }).is({ collection, name }))
-        .where(Collecting._position({ collection, item: owner }).is({ index }))
-        .form({ collection, name, index }),
+      memberships: each(Cataloging._membership({ item: owner }).is({ catalog, name }))
+        .where(Cataloging._position({ catalog, item: owner }).is({ index }))
+        .form({ collection: catalog, name, index }),
       dependencies: where(
         Depending._state({ subject: owner }).is({ state }),
         whether(Depending._reason({ subject: owner }).is({ reason })),

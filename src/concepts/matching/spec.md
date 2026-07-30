@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Save a pattern that selects paths and answer whether a path fits it, so the
-same selection rule can be reused.
+Admit reusable path selectors under one stable glob contract and answer whether
+paths match them, so malformed syntax is refused before a selector is used.
 
 ## Principle
 
-Ada saves `posts/**/*.md`, where `**` means any folders. The pattern selects
+Ada admits `posts/**/*.md`, where `**` means any folders. The pattern selects
 `posts/compiler-design/index.md`, but not `about/index.md` or
-`posts/notes.txt`. Saving the exact text again returns the same pattern without
-adding another one. Saving the broken pattern `posts/**{` is refused and adds
+`posts/notes.txt`. Admitting the exact text again returns the same pattern without
+adding another one. Admitting the broken pattern `posts/**{` is refused and adds
 nothing. A pattern that was never saved selects no path.
 
 ## State
@@ -76,4 +76,5 @@ _compiled (text: Text) : optional (pattern: Pattern)
 ```
 
 Matching owns pattern syntax, not the paths it receives or the policy that a
-match implies.
+match implies. Compilation is behavioral admission under this contract, not
+merely a performance cache.

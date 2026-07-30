@@ -2,16 +2,18 @@
 
 ## Purpose
 
-Combine several ranked versions of a record, so broad values can be refined and
-the source of each resulting value can be found later.
+Resolve layered configuration by explicit rank, so broad defaults can be
+refined, replaced, withdrawn, and traced to the declaration that supplied each
+effective value.
 
 ## Principle
 
-Ada starts with a basic profile and adds a higher-ranked correction. The
-correction changes the display name, adds one nested address detail, and replaces
-a list, while untouched details remain. The result is the same whichever layer
-arrived first. Each value says which layer supplied it. Removing the correction
-restores the earlier profile. Two layers cannot use the same rank.
+Ada contributes tool defaults and a higher-ranked deployment override. The
+override changes the output name, adds one nested endpoint detail, and replaces
+a format list, while untouched settings remain. The effective configuration is
+the same whichever layer arrived first. Each value says which layer supplied it.
+Withdrawing the override reveals the defaults again. Two layers cannot use the
+same rank.
 
 ## Values
 

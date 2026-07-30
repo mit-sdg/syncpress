@@ -21,7 +21,7 @@ const matchOptions = {
   windows: false,
 } as const;
 
-/** Compile portable path patterns once and answer their matches deterministically. */
+/** Admit reusable path selectors and answer matches under one stable glob contract. */
 export class MatchingConcept {
   readonly #patterns = new Map<string, (path: string) => boolean>();
 

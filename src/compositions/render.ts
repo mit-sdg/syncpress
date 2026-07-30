@@ -1,18 +1,16 @@
-import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
+import { earlier, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.ts";
+import { DEFAULTS, PAGE_CONTENT_PATH, PARTS, PATHS } from "./shared.ts";
 import {
-  CONTEXT_PATHS,
-  DEFAULTS,
-  PARTS,
-  PATHS,
-} from "./shared.ts";
-import { EffectiveConversionProfile } from "./views.ts";
+  CompletedPageRenderContext,
+  CompletedUnoriginatedPageRenderContext,
+  EffectiveConversionProfile,
+  PageRenderContext,
+  UnoriginatedPageRenderContext,
+} from "./views.ts";
 
 const {
-  Collecting,
-  Composing,
-  Configuring,
   Converting,
   Depending,
   Diagnosing,
@@ -54,185 +52,37 @@ export const RenderingAttemptsTrackSource = reaction(({ page }) =>
     .then(Depending.use({ subject: page, input: page })),
 );
 
-/** Context assembly starts only after the page's diagnostic retraction settles. */
-export const RenderingAttemptsClearContext = reaction(({ page, path }) =>
+/** Diagnostic retraction causally begins body rendering with one complete context. */
+export const RenderingAttemptsFillAuthoredBodies = reaction(({ page, body, bodyLine, path, address }) =>
   when(Diagnosing.retract({ source: path }).responds({}))
     .where(
       earlier(Emitting.begin, { producer: page }),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(Composing.clear({ subject: page, part: PARTS.context })),
-);
-
-export const ClearedContextsSetSite = reaction(({ page, configuration, site }) =>
-  when(Composing.clear({ subject: page, part: PARTS.context }).responds({}))
-    .where(
-      earlier(Phasing.advance, {}, { phase: "render" }),
-      Configuring._active({}).is({ root: configuration }),
-      Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
-    )
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.site,
-        value: site,
-      }),
-    ),
-);
-
-/** Render contexts are transient once every render-phase reaction has quiesced. */
-export const EmittingPagesClearContexts = reaction(({ page }) =>
-  when(Phasing.advance({}).responds({ phase: "emit" }))
-    .where(Routing._claims({}).is({ owner: page }))
-    .then(Composing.clear({ subject: page, part: PARTS.context })),
-);
-
-export const SiteContextsSetCollections = reaction(({ page, collections }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.site,
-    }).responds({}),
-  )
-    .where(Collecting._catalog({}).is({ collections }))
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.collections,
-        value: collections,
-      }),
-    ),
-);
-
-export const CollectionContextsSetPageData = reaction(({ page, data }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.collections,
-    }).responds({}),
-  )
-    .where(Layering._resolved({ subject: page }).is({ values: data }))
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.pageData,
-        value: data,
-      }),
-    ),
-);
-
-/** Context URLs remain unbased until the final HTML reference pass. */
-export const PageDataContextsSetUrl = reaction(({ page, address }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageData,
-    }).responds({}),
-  )
-    .where(Routing._address({ owner: page }).is({ address }))
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.pageUrl,
-        value: address,
-      }),
-    ),
-);
-
-/** Canonical URLs are available to layouts only when the site opted into an origin. */
-export const PageUrlContextsSetCanonicalUrl = reaction(({ page, address, url }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageUrl,
-    }).responds({}),
-  )
-    .where(
-      Routing._address({ owner: page }).is({ address }),
-      Routing._absolute({ address }).is({ url }),
-    )
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.pageCanonicalUrl,
-        value: url,
-      }),
-    ),
-);
-
-export const CanonicalContextsSetSourcePath = reaction(({ page, path }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageCanonicalUrl,
-    }).responds({}),
-  )
-    .where(Filing._file({ file: page }).is({ path }))
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.pageSourcePath,
-        value: path,
-      }),
-    ),
-);
-
-export const UnoriginatedPageUrlsSetSourcePath = reaction(({ page, address, path }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageUrl,
-    }).responds({}),
-  )
-    .where(
-      Routing._address({ owner: page }).is({ address }),
-      no(Routing._absolute({ address })),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.pageSourcePath,
-        value: path,
-      }),
-    ),
-);
-
-/** Treat the authored document body as untrusted Liquid input. */
-export const AuthoredBodiesFill = reaction(({ page, body, bodyLine, context, path }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageSourcePath,
-    }).responds({}),
-  )
-    .where(
       Documenting._document({ subject: page }).is({ body, bodyLine }),
-      Composing._record({ subject: page, part: PARTS.context }).is({ values: context }),
       Filing._file({ file: page }).is({ path }),
+      Routing._address({ owner: page }).is({ address }),
     )
-    .then(Templating.fill({
-      subject: page,
-      source: body,
-      context,
-      trusted: [TRUSTED_COLLECTION_EXCERPTS],
-      sourceName: path,
-      sourceLine: bodyLine,
-    })),
+    .then(
+      where(Routing._absolute({ address }))
+        .then(Templating.fill({
+          subject: page,
+          source: body,
+          context: PageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [TRUSTED_COLLECTION_EXCERPTS],
+          sourceName: path,
+          sourceLine: bodyLine,
+        }))
+        .named("originated"),
+      where(no(Routing._absolute({ address })))
+        .then(Templating.fill({
+          subject: page,
+          source: body,
+          context: UnoriginatedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [TRUSTED_COLLECTION_EXCERPTS],
+          sourceName: path,
+          sourceLine: bodyLine,
+        }))
+        .named("unoriginated"),
+    ),
 );
 
 /** Honor an explicit page conversion profile. */
@@ -259,85 +109,235 @@ export const FilledBodiesTrackTemplates = reaction(({ page, filling, used, templ
     .then(Depending.use({ subject: page, input: template })),
 );
 
-/** A scan with no references finishes the body immediately. */
-export const EmptyBodyScansSetContent = reaction(({ page, text }) =>
+/** An empty body scan chooses exactly one originated layout or diagnostic case. */
+export const EmptyBodyScansRenderOriginatedPages = reaction(({ page, address, name, template, path }) =>
   when(Referencing.scan({ subject: page, part: PARTS.body }).responds({ completed: true }))
-    .where(Referencing._finished({ subject: page, part: PARTS.body }).is({ text }))
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.pageContent,
-        value: text,
-      }),
-    ),
-);
-
-/** The last body-reference answer supplies trusted page content. */
-export const FinishedBodyAnswersSetContent = reaction(({ page, text }) =>
-  when(
-    Referencing.answer({}).responds({
-      subject: page,
-      part: PARTS.body,
-      completed: true,
-    }),
-  )
-    .where(Referencing._finished({ subject: page, part: PARTS.body }).is({ text }))
-    .then(
-      Composing.set({
-        subject: page,
-        part: PARTS.context,
-        path: CONTEXT_PATHS.pageContent,
-        value: text,
-      }),
-    ),
-);
-
-/** Render a configured layout and trust only the completed body HTML path. */
-export const ConfiguredLayoutsRender = reaction(({ page, name, template, context }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageContent,
-    }).responds({}),
-  )
     .where(
-      Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
-      Templating._template({ name }).is({ template }),
-      Composing._record({ subject: page, part: PARTS.context }).is({ values: context }),
+      earlier(Phasing.advance, {}, { phase: "render" }),
+      Routing._address({ owner: page }).is({ address }),
+      Routing._absolute({ address }),
     )
     .then(
-      Templating.render({
-        template,
-        subject: page,
-        context,
-        trusted: [CONTEXT_PATHS.pageContent, TRUSTED_COLLECTION_EXCERPTS],
-      }),
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        Templating._template({ name }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        Templating._template({ name: DEFAULTS.template }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("default"),
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        no(Templating._template({ name })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The selected page template is not defined.",
+          source: path,
+        }))
+        .named("missing-configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        no(Templating._template({ name: DEFAULTS.template })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The default page template is not defined.",
+          source: path,
+        }))
+        .named("missing-default"),
     ),
 );
 
-/** Use the site default layout when the page has no configured override. */
-export const DefaultLayoutsRender = reaction(({ page, template, context }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageContent,
-    }).responds({}),
-  )
+/** An empty body scan preserves canonical-key omission for unoriginated pages. */
+export const EmptyBodyScansRenderUnoriginatedPages = reaction(({ page, address, name, template, path }) =>
+  when(Referencing.scan({ subject: page, part: PARTS.body }).responds({ completed: true }))
     .where(
-      no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
-      Templating._template({ name: DEFAULTS.template }).is({ template }),
-      Composing._record({ subject: page, part: PARTS.context }).is({ values: context }),
+      earlier(Phasing.advance, {}, { phase: "render" }),
+      Routing._address({ owner: page }).is({ address }),
+      no(Routing._absolute({ address })),
     )
     .then(
-      Templating.render({
-        template,
-        subject: page,
-        context,
-        trusted: [CONTEXT_PATHS.pageContent, TRUSTED_COLLECTION_EXCERPTS],
-      }),
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        Templating._template({ name }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedUnoriginatedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        Templating._template({ name: DEFAULTS.template }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedUnoriginatedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("default"),
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        no(Templating._template({ name })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The selected page template is not defined.",
+          source: path,
+        }))
+        .named("missing-configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        no(Templating._template({ name: DEFAULTS.template })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The default page template is not defined.",
+          source: path,
+        }))
+        .named("missing-default"),
+    ),
+);
+
+/** The final body-reference answer chooses one originated layout or diagnostic case. */
+export const FinishedBodyAnswersRenderOriginatedPages = reaction(({ page, address, name, template, path }) =>
+  when(Referencing.answer({}).responds({ subject: page, part: PARTS.body, completed: true }))
+    .where(
+      earlier(Phasing.advance, {}, { phase: "render" }),
+      Routing._address({ owner: page }).is({ address }),
+      Routing._absolute({ address }),
+    )
+    .then(
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        Templating._template({ name }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        Templating._template({ name: DEFAULTS.template }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("default"),
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        no(Templating._template({ name })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The selected page template is not defined.",
+          source: path,
+        }))
+        .named("missing-configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        no(Templating._template({ name: DEFAULTS.template })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The default page template is not defined.",
+          source: path,
+        }))
+        .named("missing-default"),
+    ),
+);
+
+/** The final body-reference answer preserves omission for unoriginated pages. */
+export const FinishedBodyAnswersRenderUnoriginatedPages = reaction(({ page, address, name, template, path }) =>
+  when(Referencing.answer({}).responds({ subject: page, part: PARTS.body, completed: true }))
+    .where(
+      earlier(Phasing.advance, {}, { phase: "render" }),
+      Routing._address({ owner: page }).is({ address }),
+      no(Routing._absolute({ address })),
+    )
+    .then(
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        Templating._template({ name }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedUnoriginatedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        Templating._template({ name: DEFAULTS.template }).is({ template }),
+      )
+        .then(Templating.render({
+          template,
+          subject: page,
+          context: CompletedUnoriginatedPageRenderContext({ page }) as unknown as Record<string, unknown>,
+          trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
+        }))
+        .named("default"),
+      where(
+        Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
+        no(Templating._template({ name })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The selected page template is not defined.",
+          source: path,
+        }))
+        .named("missing-configured"),
+      where(
+        no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
+        no(Templating._template({ name: DEFAULTS.template })),
+        Filing._file({ file: page }).is({ path }),
+      )
+        .then(Diagnosing.report({
+          severity: "error",
+          code: "TEMPLATE_NOT_FOUND",
+          message: "The default page template is not defined.",
+          source: path,
+        }))
+        .named("missing-default"),
     ),
 );
 
@@ -418,55 +418,6 @@ export const LayoutTemplateFailuresDiagnose = reaction(({ page, error, detail, p
       Templating._failureLocation({ subject: page, fallbackSource: path }).is({ source, line, column }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source, line, column })),
-);
-
-/** A selected template that was never defined is an authored build error. */
-export const MissingConfiguredLayoutsDiagnose = reaction(({ page, name, path }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageContent,
-    }).responds({}),
-  )
-    .where(
-      earlier(Phasing.advance, {}, { phase: "render" }),
-      Layering._value({ subject: page, path: PATHS.buildTemplate }).is({ value: name }),
-      no(Templating._template({ name })),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(
-      Diagnosing.report({
-        severity: "error",
-        code: "TEMPLATE_NOT_FOUND",
-        message: "The selected page template is not defined.",
-        source: path,
-      }),
-    ),
-);
-
-export const MissingDefaultLayoutsDiagnose = reaction(({ page, path }) =>
-  when(
-    Composing.set({
-      subject: page,
-      part: PARTS.context,
-      path: CONTEXT_PATHS.pageContent,
-    }).responds({}),
-  )
-    .where(
-      earlier(Phasing.advance, {}, { phase: "render" }),
-      no(Layering._value({ subject: page, path: PATHS.buildTemplate })),
-      no(Templating._template({ name: DEFAULTS.template })),
-      Filing._file({ file: page }).is({ path }),
-    )
-    .then(
-      Diagnosing.report({
-        severity: "error",
-        code: "TEMPLATE_NOT_FOUND",
-        message: "The default page template is not defined.",
-        source: path,
-      }),
-    ),
 );
 
 /** An explicit conversion-profile name must resolve before a page can publish. */

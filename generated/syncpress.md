@@ -7,57 +7,35 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
-### Collecting
+### Cataloging
 
-**Purpose.** Keep named lists in a dependable order, with a small summary for each item.
+**Purpose.** Admit projected items into named catalogs under declared conditions and keep
+every catalog in a deterministic order for publication and inspection.
 
-**Principle.** Ada makes a `favorites` list and adds a few items with scores and short
-summaries. Reading it gives the items in score order. Equal scores are settled
-by a supplied label and then by item identity, while an item without a score
-comes last. Adding the same item again changes nothing; changing its score,
-label, or summary updates it.
+**Principle.** Ada declares a newest-first catalog sorted by a card's `data.date` field and a
+featured catalog that accepts cards whose `data.featured` field equals true.
+Indexing complete cards places qualifying entries in deterministic order;
+entries with no date follow dated entries. Re-indexing a changed card updates
+its projection and position, and re-indexing a card that no longer qualifies
+removes its earlier featured entry. Ada can unindex one membership, withdraw an
+item from every catalog, or reset all catalog state.
 
 Actions:
 
-- `declare (direction, name)` — may refuse `INVALID_DIRECTION`, `INVALID_TEXT`
-- `exclude (collection, item)` — may refuse `INVALID_TEXT`, `NOT_INCLUDED`
-- `include (card, collection, item, key, tiebreak)` — may refuse `COLLECTION_NOT_FOUND`, `INVALID_CARD`, `INVALID_SORT_KEY`, `INVALID_TEXT`
+- `declare (condition, direction, name, sort)` — may refuse `INVALID_CONDITION`, `INVALID_DIRECTION`, `INVALID_FIELD`, `INVALID_TEXT`
+- `index (card, catalog, item, tiebreak)` — may refuse `COLLECTION_NOT_FOUND`, `INVALID_CARD`, `INVALID_TEXT`
 - `reset (…)`
+- `unindex (catalog, item)` — may refuse `INVALID_TEXT`, `NOT_INCLUDED`
 - `withdraw (item)` — may refuse `INVALID_TEXT`
 
 Queries (standing questions the state answers):
 
-- `_catalog (…)` — promises exactly one row
-- `_collections (…)` — promises any number of rows
-- `_items (collection)` — promises any number of rows
+- `_catalogs (…)` — promises any number of rows
+- `_entries (catalog)` — promises any number of rows
 - `_membership (item)` — promises any number of rows
 - `_named (name)` — promises at most one row
-- `_position (collection, item)` — promises at most one row
-
-### Composing
-
-**Purpose.** Build one record from pieces supplied separately, so each person or process can
-add what it knows without rebuilding the whole record.
-
-**Principle.** Rosa is planning a neighborhood picnic. One friend adds the venue name, another
-adds a contact phone number, and a third adds the capacity. They may add those
-pieces in any order and Rosa reads the same complete plan. Correcting the phone
-number replaces it. A shopping list is a separate part and remains unchanged.
-No one may also add the whole contact record, because that would overlap the
-phone-number piece. Clearing the plan leaves it empty.
-
-Actions:
-
-- `clear (part, subject)`
-- `set (part, path, subject, value)` — may refuse `INVALID_PATH`, `INVALID_VALUE`, `KEY_CONFLICTS`
-
-Queries (standing questions the state answers):
-
-- `_field (field, part, subject)` — promises at most one row
-- `_holds (field, part, subject, value)` — promises exactly one row
-- `_keys (part, subject)` — promises any number of rows
-- `_record (part, subject)` — promises exactly one row
-- `_value (part, path, subject)` — promises at most one row
+- `_position (catalog, item)` — promises at most one row
+- `_record (…)` — promises exactly one row
 
 ### Configuring
 
@@ -367,14 +345,16 @@ Queries (standing questions the state answers):
 
 ### Layering
 
-**Purpose.** Combine several ranked versions of a record, so broad values can be refined and
-the source of each resulting value can be found later.
+**Purpose.** Resolve layered configuration by explicit rank, so broad defaults can be
+refined, replaced, withdrawn, and traced to the declaration that supplied each
+effective value.
 
-**Principle.** Ada starts with a basic profile and adds a higher-ranked correction. The
-correction changes the display name, adds one nested address detail, and replaces
-a list, while untouched details remain. The result is the same whichever layer
-arrived first. Each value says which layer supplied it. Removing the correction
-restores the earlier profile. Two layers cannot use the same rank.
+**Principle.** Ada contributes tool defaults and a higher-ranked deployment override. The
+override changes the output name, adds one nested endpoint detail, and replaces
+a format list, while untouched settings remain. The effective configuration is
+the same whichever layer arrived first. Each value says which layer supplied it.
+Withdrawing the override reveals the defaults again. Two layers cannot use the
+same rank.
 
 Actions:
 
@@ -393,13 +373,13 @@ Queries (standing questions the state answers):
 
 ### Matching
 
-**Purpose.** Save a pattern that selects paths and answer whether a path fits it, so the
-same selection rule can be reused.
+**Purpose.** Admit reusable path selectors under one stable glob contract and answer whether
+paths match them, so malformed syntax is refused before a selector is used.
 
-**Principle.** Ada saves `posts/**/*.md`, where `**` means any folders. The pattern selects
+**Principle.** Ada admits `posts/**/*.md`, where `**` means any folders. The pattern selects
 `posts/compiler-design/index.md`, but not `about/index.md` or
-`posts/notes.txt`. Saving the exact text again returns the same pattern without
-adding another one. Saving the broken pattern `posts/**{` is refused and adds
+`posts/notes.txt`. Admitting the exact text again returns the same pattern without
+adding another one. Admitting the broken pattern `posts/**{` is refused and adds
 nothing. A pattern that was never saved selects no path.
 
 Actions:
@@ -592,11 +572,12 @@ beside-page output for page (page) and name (name) — inputs (page, name); outp
 ```
 
 ```view
-collection declaration setting of configuration (root) — inputs (root); outputs (name, rule, direction); bindings (collections) — answers any number of (name, rule, direction)
+collection declaration setting of configuration (root) — inputs (root); outputs (name, rule, direction, sort); bindings (collections) — answers any number of (name, rule, direction, sort)
   where
     Configuring._at (node: root, path: ["collections"]) has (found: collections)
     Configuring._entries (node: collections) has (child: rule, key: name)
     Configuring._scalar (node: rule, otherwise: "asc", path: ["sort", "order"]) has (value: direction)
+    Configuring._scalar (node: rule, otherwise: null, path: ["sort", "by"]) has (value: sort)
 ```
 
 ```view
@@ -605,23 +586,6 @@ collection pattern setting of configuration (root) — inputs (root); outputs (r
     Configuring._at (node: root, path: ["collections"]) has (found: collections)
     Configuring._entries (node: collections) has (child: rule)
     Configuring._at (node: rule, path: ["match"]) has (value: text)
-```
-
-```view
-collection rule (rule) accepts page (page) — inputs (page, rule); outputs (); bindings (field, value)
-  where no Configuring._at (node: rule, path: ["where"])
-  where
-    Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
-    Configuring._at (node: rule, path: ["where", "equals"]) has (value)
-    Composing._holds (field, part: "card", subject: page, value) has (equal: true)
-  where
-    Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
-    Configuring._at (node: rule, path: ["where", "contains"]) has (value)
-    Composing._holds (field, part: "card", subject: page, value) has (contains: true)
-  where
-    Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
-    Configuring._at (node: rule, path: ["where", "exists"]) has (value: true)
-    Composing._holds (field, part: "card", subject: page, value: null) has (present: true)
 ```
 
 ```view
@@ -676,20 +640,18 @@ markdown settings of configuration (root) — inputs (root); outputs (extensions
 ```
 
 ```view
-matching collection of page (page) — inputs (page); outputs (collection, rule, path, card); bindings (content, configuration, collections, name, text, pattern) — answers any number of (collection, rule, path, card)
+matching catalog of page (page) — inputs (page); outputs (catalog, path); bindings (root, configuration, collections, name, rule, text, pattern) — answers any number of (catalog, path)
   where
     Routing._address (owner: page)
-    Filing._named (name: "content") has (root: content)
-    Filing._file (file: page) has (path, root: content)
-    Composing._record (part: "card", subject: page) has (values: card)
+    Filing._named (name: "content") has (root)
+    Filing._file (file: page) has (path, root)
     Configuring._active () has (root: configuration)
     Configuring._at (node: configuration, path: ["collections"]) has (found: collections)
     Configuring._entries (node: collections) has (child: rule, key: name)
-    Collecting._named (name) has (collection)
+    Cataloging._named (name) has (catalog)
     Configuring._at (node: rule, path: ["match"]) has (value: text)
     Matching._compiled (text) has (pattern)
     Matching._matches (path, pattern) has (matched: true)
-    view "collection rule (rule) accepts page (page)" with (page, rule)
 ```
 
 ```view
@@ -762,15 +724,15 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Former "the deployment entries of collection (collection)" — inputs (collection); bindings (item, card); promises exactly one record — forms:
-  each Collecting._items (collection) has (card, item)
+Former "the deployment entries of catalog (catalog)" — inputs (catalog); bindings (item, card); promises exactly one record — forms:
+  each Cataloging._entries (catalog) has (card, item)
     form a record of
       card
       item
 ```
 
 ```former
-Former "the operational inspection of page (owner)" — inputs (owner); bindings (collection, name, index, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
+Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, state, reason, input, outputPath, digest, medium, claimOwner, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
   a record of
     claims: each Routing._claims () has (address, owner: claimOwner)
       form a record of
@@ -799,10 +761,10 @@ Former "the operational inspection of page (owner)" — inputs (owner); bindings
             source: relatedSource
         severity
         source
-    memberships: each Collecting._membership (item: owner) has (collection, name)
-      where Collecting._position (collection, item: owner) has (index)
+    memberships: each Cataloging._membership (item: owner) has (catalog, name)
+      where Cataloging._position (catalog, item: owner) has (index)
       form a record of
-        collection
+        collection: catalog
         index
         name
     outputs: each Emitting._byProducer (producer: owner) has (digest, medium, path: outputPath)
@@ -813,10 +775,107 @@ Former "the operational inspection of page (owner)" — inputs (owner); bindings
 ```
 
 ```former
+Former "the originated completed render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, canonicalUrl, path, content); promises exactly one record — forms:
+  a record of
+    where Configuring._active () has (root: configuration)
+    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+    where Cataloging._record () has (catalogs: collections)
+    where Layering._resolved (subject: page) has (values: data)
+    where Routing._address (owner: page) has (address)
+    where Routing._absolute (address) has (url: canonicalUrl)
+    where Filing._file (file: page) has (path)
+    where Referencing._finished (part: "body", subject: page) has (text: content)
+    collections
+    page: a record of
+      canonicalUrl
+      content
+      data
+      source: a record of
+        path
+      url: address
+    site
+```
+
+```former
+Former "the originated render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, canonicalUrl, path); promises exactly one record — forms:
+  a record of
+    where Configuring._active () has (root: configuration)
+    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+    where Cataloging._record () has (catalogs: collections)
+    where Layering._resolved (subject: page) has (values: data)
+    where Routing._address (owner: page) has (address)
+    where Routing._absolute (address) has (url: canonicalUrl)
+    where Filing._file (file: page) has (path)
+    collections
+    page: a record of
+      canonicalUrl
+      data
+      source: a record of
+        path
+      url: address
+    site
+```
+
+```former
+Former "the publication card of page (page)" — inputs (page); bindings (data, address, excerpt, root, path); promises exactly one record — forms:
+  a record of
+    where Layering._resolved (subject: page) has (values: data)
+    where Routing._address (owner: page) has (address)
+    where whether Converting._excerpt (part: "excerpt", subject: page) has (excerpt)
+    where Filing._named (name: "content") has (root)
+    where Filing._file (file: page) has (path, root)
+    data
+    excerpt
+    source: a record of
+      path
+    url: address
+```
+
+```former
 Former "the sitemap urls" — inputs (); bindings (owner, address, url); promises exactly one record — forms:
   each view "sitemap page" has (address, owner, url)
     form a record of
       url
+```
+
+```former
+Former "the unoriginated completed render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, path, content); promises exactly one record — forms:
+  a record of
+    where Configuring._active () has (root: configuration)
+    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+    where Cataloging._record () has (catalogs: collections)
+    where Layering._resolved (subject: page) has (values: data)
+    where Routing._address (owner: page) has (address)
+    where no Routing._absolute (address)
+    where Filing._file (file: page) has (path)
+    where Referencing._finished (part: "body", subject: page) has (text: content)
+    collections
+    page: a record of
+      content
+      data
+      source: a record of
+        path
+      url: address
+    site
+```
+
+```former
+Former "the unoriginated render context of page (page)" — inputs (page); bindings (configuration, site, collections, data, address, path); promises exactly one record — forms:
+  a record of
+    where Configuring._active () has (root: configuration)
+    where Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
+    where Cataloging._record () has (catalogs: collections)
+    where Layering._resolved (subject: page) has (values: data)
+    where Routing._address (owner: page) has (address)
+    where no Routing._absolute (address)
+    where Filing._file (file: page) has (path)
+    collections
+    page: a record of
+      data
+      source: a record of
+        path
+      url: address
+    site
 ```
 
 ## Reactions
@@ -886,18 +945,6 @@ where
   Configuring._values (node: configuration, otherwise: ["avif", "webp", "original"], path: ["images", "formats"]) has (values: formats)
 then
   Transcoding.render (formats, original, widths)
-```
-
-### fullSite.AuthoredBodiesFill
-
-```reaction
-when Composing.set (part: "context", path: ["page", "source", "path"], subject: page)
-where
-  Documenting._document (subject: page) has (body, bodyLine)
-  Composing._record (part: "context", subject: page) has (values: context)
-  Filing._file (file: page) has (path)
-then
-  Templating.fill (context, source: body, sourceLine: bodyLine, sourceName: path, subject: page, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.BegunFeedsIntend
@@ -979,50 +1026,6 @@ then
   Diagnosing.report (code: error, column, line, message: detail, severity: "error", source)
 ```
 
-### fullSite.CanonicalContextsSetSourcePath
-
-```reaction
-when Composing.set (part: "context", path: ["page", "canonicalUrl"], subject: page)
-where
-  Filing._file (file: page) has (path)
-then
-  Composing.set (part: "context", path: ["page", "source", "path"], subject: page, value: path)
-```
-
-### fullSite.CardDataSetsUrl
-
-```reaction
-when Composing.set (part: "card", path: ["data"], subject: page)
-where
-  earlier, Phasing.advance (phase: "collect")
-  Routing._address (owner: page) has (address)
-then
-  Composing.set (part: "card", path: ["url"], subject: page, value: address)
-```
-
-### fullSite.CardExcerptSetsSourcePath
-
-```reaction
-when Composing.set (part: "card", path: ["excerpt"], subject: page)
-where
-  earlier, Phasing.advance (phase: "collect")
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (path, root)
-then
-  Composing.set (part: "card", path: ["source", "path"], subject: page, value: path)
-```
-
-### fullSite.CardUrlSetsExcerpt
-
-```reaction
-when Composing.set (part: "card", path: ["url"], subject: page)
-where
-  earlier, Phasing.advance (phase: "collect")
-  whether Converting._excerpt (part: "excerpt", subject: page) has (excerpt)
-then
-  Composing.set (part: "card", path: ["excerpt"], subject: page, value: excerpt)
-```
-
 ### fullSite.ClaimedBodyReferencesRetarget
 
 ```reaction
@@ -1066,7 +1069,7 @@ where
   Deploying._forOwner (owner) has (address, kind: "pagination-page", work)
   Configuring._active () has (root: configuration)
   Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
-  Collecting._catalog () has (collections)
+  Cataloging._record () has (catalogs: collections)
   whether Routing._absolute (address) has (url: canonicalUrl)
 then
   Deploying.context (canonicalUrl, collections, site, work)
@@ -1082,17 +1085,6 @@ where
   no Routing._absolute (address: raw)
 then
   Deploying.redirect (canonical: target, target, work)
-```
-
-### fullSite.ClearedCardsSetData
-
-```reaction
-when Composing.clear (part: "card", subject: page)
-where
-  earlier, Phasing.advance (phase: "collect")
-  Layering._resolved (subject: page) has (values: data)
-then
-  Composing.set (part: "card", path: ["data"], subject: page, value: data)
 ```
 
 ### fullSite.ClearedContentGetsAttributes
@@ -1126,28 +1118,6 @@ where
   Configuring._record (node: valuesNode) has (values)
 then
   Layering.contribute (rank: index, subject, values)
-```
-
-### fullSite.ClearedContextsSetSite
-
-```reaction
-when Composing.clear (part: "context", subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Configuring._active () has (root: configuration)
-  Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
-then
-  Composing.set (part: "context", path: ["site"], subject: page, value: site)
-```
-
-### fullSite.CollectionContextsSetPageData
-
-```reaction
-when Composing.set (part: "context", path: ["collections"], subject: page)
-where
-  Layering._resolved (subject: page) has (values: data)
-then
-  Composing.set (part: "context", path: ["page", "data"], subject: page, value: data)
 ```
 
 ### fullSite.CommittedDeploymentArtifactsComplete
@@ -1227,18 +1197,6 @@ then
   RequestBoundary.respond (requestId, sequence)
 ```
 
-### fullSite.ConfiguredLayoutsRender
-
-```reaction
-when Composing.set (part: "context", path: ["page", "content"], subject: page)
-where
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  Templating._template (name) has (template)
-  Composing._record (part: "context", subject: page) has (values: context)
-then
-  Templating.render (context, subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
 ### fullSite.ContentDocumentsParse
 
 ```reaction
@@ -1296,18 +1254,6 @@ where
   Embedding._markup (embedding) has (markup)
 then
   Referencing.answer (form: "markup", reference, value: markup)
-```
-
-### fullSite.DefaultLayoutsRender
-
-```reaction
-when Composing.set (part: "context", path: ["page", "content"], subject: page)
-where
-  no Layering._value (path: ["build", "template"], subject: page)
-  Templating._template (name: "page.html") has (template)
-  Composing._record (part: "context", subject: page) has (values: context)
-then
-  Templating.render (context, subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.DeploymentBeginFailuresDiagnose
@@ -1466,16 +1412,6 @@ then
   Diagnosing.report (code: "MALFORMED_ATTRIBUTES", message: detail, severity: "error", source: path)
 ```
 
-### fullSite.EmittingPagesClearContexts
-
-```reaction
-when Phasing.advance (phase: "emit")
-where
-  Routing._claims () has (owner: page)
-then
-  Composing.clear (part: "context", subject: page)
-```
-
 ### fullSite.EmittingStartsDeployment
 
 ```reaction
@@ -1486,14 +1422,120 @@ then
   Deploying.start (policy)
 ```
 
-### fullSite.EmptyBodyScansSetContent
+### fullSite.EmptyBodyScansRenderOriginatedPages:configured
 
 ```reaction
 when Referencing.scan (part: "body", subject: page, completed: true)
 where
-  Referencing._finished (part: "body", subject: page) has (text)
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  Templating._template (name) has (template)
 then
-  Composing.set (part: "context", path: ["page", "content"], subject: page, value: text)
+  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.EmptyBodyScansRenderOriginatedPages:default
+
+```reaction
+when Referencing.scan (part: "body", subject: page, completed: true)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  Templating._template (name: "page.html") has (template)
+then
+  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.EmptyBodyScansRenderOriginatedPages:missing-configured
+
+```reaction
+when Referencing.scan (part: "body", subject: page, completed: true)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  no Templating._template (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.EmptyBodyScansRenderOriginatedPages:missing-default
+
+```reaction
+when Referencing.scan (part: "body", subject: page, completed: true)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  no Templating._template (name: "page.html")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.EmptyBodyScansRenderUnoriginatedPages:configured
+
+```reaction
+when Referencing.scan (part: "body", subject: page, completed: true)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  Templating._template (name) has (template)
+then
+  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.EmptyBodyScansRenderUnoriginatedPages:default
+
+```reaction
+when Referencing.scan (part: "body", subject: page, completed: true)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  Templating._template (name: "page.html") has (template)
+then
+  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.EmptyBodyScansRenderUnoriginatedPages:missing-configured
+
+```reaction
+when Referencing.scan (part: "body", subject: page, completed: true)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  no Templating._template (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.EmptyBodyScansRenderUnoriginatedPages:missing-default
+
+```reaction
+when Referencing.scan (part: "body", subject: page, completed: true)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  no Templating._template (name: "page.html")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
 ```
 
 ### fullSite.EmptyLayoutScansEmit
@@ -1596,11 +1638,11 @@ then
 when Deploying.dispatch (deployment, work)
 where
   Deploying._work (work) has (collection: collectionName, kind: "feed")
-  Collecting._named (name: collectionName) has (collection)
+  Cataloging._named (name: collectionName) has (catalog)
   Configuring._active () has (root: configuration)
   Configuring._values (node: configuration, otherwise: (), path: ["site"]) has (values: site)
 then
-  Deploying.feed (entries: former "the deployment entries of collection (collection)" with (collection), site, work)
+  Deploying.feed (entries: former "the deployment entries of catalog (catalog)" with (catalog), site, work)
 ```
 
 ### fullSite.FilledBodiesConvert
@@ -1624,14 +1666,120 @@ then
   Depending.use (input: template, subject: page)
 ```
 
-### fullSite.FinishedBodyAnswersSetContent
+### fullSite.FinishedBodyAnswersRenderOriginatedPages:configured
 
 ```reaction
 when Referencing.answer (completed: true, part: "body", subject: page)
 where
-  Referencing._finished (part: "body", subject: page) has (text)
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  Templating._template (name) has (template)
 then
-  Composing.set (part: "context", path: ["page", "content"], subject: page, value: text)
+  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.FinishedBodyAnswersRenderOriginatedPages:default
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  Templating._template (name: "page.html") has (template)
+then
+  Templating.render (context: former "the originated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.FinishedBodyAnswersRenderOriginatedPages:missing-configured
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  no Templating._template (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.FinishedBodyAnswersRenderOriginatedPages:missing-default
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  no Templating._template (name: "page.html")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:configured
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  Templating._template (name) has (template)
+then
+  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:default
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  Templating._template (name: "page.html") has (template)
+then
+  Templating.render (context: former "the unoriginated completed render context of page (page)" with (page), subject: page, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:missing-configured
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  Layering._value (path: ["build", "template"], subject: page) has (value: name)
+  no Templating._template (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
+```
+
+### fullSite.FinishedBodyAnswersRenderUnoriginatedPages:missing-default
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: page)
+where
+  earlier, Phasing.advance (phase: "render")
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+  no Layering._value (path: ["build", "template"], subject: page)
+  no Templating._template (name: "page.html")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
 ```
 
 ### fullSite.FinishedLayoutAnswersEmit
@@ -1914,6 +2062,17 @@ then
   Diagnosing.report (code: error, column, line, message: detail, severity: "error", source)
 ```
 
+### fullSite.MatchingPagesEnterCatalogs
+
+```reaction
+when Phasing.advance (phase: "collect")
+where
+  Routing._claims () has (owner: page)
+  view "matching catalog of page (page)" with (page) has (catalog, path)
+then
+  Cataloging.index (card: former "the publication card of page (page)" with (page), catalog, item: page, tiebreak: path)
+```
+
 ### fullSite.MissingBodyReferencesDiagnose
 
 ```reaction
@@ -1924,19 +2083,6 @@ where
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: "MISSING_LOCAL_REFERENCE", message: "This local reference names no staged content file.", severity: "error", source: path)
-```
-
-### fullSite.MissingConfiguredLayoutsDiagnose
-
-```reaction
-when Composing.set (part: "context", path: ["page", "content"], subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  Layering._value (path: ["build", "template"], subject: page) has (value: name)
-  no Templating._template (name)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", severity: "error", source: path)
 ```
 
 ### fullSite.MissingConfiguredProfilesDiagnose
@@ -1952,26 +2098,13 @@ then
   Diagnosing.report (code: "PROFILE_NOT_FOUND", message: "The selected body conversion profile is not defined.", severity: "error", source: path)
 ```
 
-### fullSite.MissingDefaultLayoutsDiagnose
-
-```reaction
-when Composing.set (part: "context", path: ["page", "content"], subject: page)
-where
-  earlier, Phasing.advance (phase: "render")
-  no Layering._value (path: ["build", "template"], subject: page)
-  no Templating._template (name: "page.html")
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The default page template is not defined.", severity: "error", source: path)
-```
-
 ### fullSite.MissingFeedCollectionsDiagnose
 
 ```reaction
 when Deploying.dispatch (deployment, work)
 where
   Deploying._work (work) has (collection: collectionName, kind: "feed")
-  no Collecting._named (name: collectionName)
+  no Cataloging._named (name: collectionName)
 then
   Diagnosing.report (code: "FEED_COLLECTION_NOT_FOUND", message: "Feed names no configured collection.", severity: "error", source: "site.yaml")
 ```
@@ -1992,7 +2125,7 @@ then
 when Deploying.dispatch (deployment, work)
 where
   Deploying._work (work) has (collection: collectionName, kind: "pagination-plan")
-  no Collecting._named (name: collectionName)
+  no Cataloging._named (name: collectionName)
 then
   Diagnosing.report (code: "PAGINATION_COLLECTION_NOT_FOUND", message: "A pagination rule names no configured collection.", severity: "error", source: "site.yaml")
 ```
@@ -2013,7 +2146,7 @@ then
 when Deploying.dispatch (deployment, work)
 where
   Deploying._work (work) has (collection: collectionName, kind: "pagination-plan", templateName)
-  Collecting._named (name: collectionName)
+  Cataloging._named (name: collectionName)
   no Templating._template (name: templateName)
 then
   Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "A pagination rule selects an undefined template.", severity: "error", source: "site.yaml")
@@ -2115,16 +2248,6 @@ then
   Diagnosing.report (code: "OUTSIDE_LOCAL_REFERENCE", message: "This local reference leaves the content root.", severity: "error", source: path)
 ```
 
-### fullSite.PageDataContextsSetUrl
-
-```reaction
-when Composing.set (part: "context", path: ["page", "data"], subject: page)
-where
-  Routing._address (owner: page) has (address)
-then
-  Composing.set (part: "context", path: ["page", "url"], subject: page, value: address)
-```
-
 ### fullSite.PageEmissionFailuresDiagnose
 
 ```reaction
@@ -2146,17 +2269,6 @@ where
   view "effective conversion profile of page (page)" with (page) has (profile)
 then
   Converting.convert (part: "excerpt", profile, source: body, subject: page)
-```
-
-### fullSite.PageUrlContextsSetCanonicalUrl
-
-```reaction
-when Composing.set (part: "context", path: ["page", "url"], subject: page)
-where
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address) has (url)
-then
-  Composing.set (part: "context", path: ["page", "canonicalUrl"], subject: page, value: url)
 ```
 
 ### fullSite.PaginationContextsRender
@@ -2183,10 +2295,10 @@ then
 when Deploying.dispatch (deployment, work)
 where
   Deploying._work (work) has (collection: collectionName, kind: "pagination-plan", templateName)
-  Collecting._named (name: collectionName) has (collection)
+  Cataloging._named (name: collectionName) has (catalog)
   Templating._template (name: templateName) has (template)
 then
-  Deploying.divide (deployment, entries: former "the deployment entries of collection (collection)" with (collection), template, work)
+  Deploying.divide (deployment, entries: former "the deployment entries of catalog (catalog)" with (catalog), template, work)
 ```
 
 ### fullSite.PaginationTemplateFailuresDiagnose
@@ -2532,15 +2644,32 @@ then
   Emitting.begin (producer)
 ```
 
-### fullSite.RenderingAttemptsClearContext
+### fullSite.RenderingAttemptsFillAuthoredBodies:originated
 
 ```reaction
 when Diagnosing.retract (source: path)
 where
   earlier, Emitting.begin (producer: page)
+  Documenting._document (subject: page) has (body, bodyLine)
   Filing._file (file: page) has (path)
+  Routing._address (owner: page) has (address)
+  Routing._absolute (address)
 then
-  Composing.clear (part: "context", subject: page)
+  Templating.fill (context: former "the originated render context of page (page)" with (page), source: body, sourceLine: bodyLine, sourceName: path, subject: page, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.RenderingAttemptsFillAuthoredBodies:unoriginated
+
+```reaction
+when Diagnosing.retract (source: path)
+where
+  earlier, Emitting.begin (producer: page)
+  Documenting._document (subject: page) has (body, bodyLine)
+  Filing._file (file: page) has (path)
+  Routing._address (owner: page) has (address)
+  no Routing._absolute (address)
+then
+  Templating.fill (context: former "the unoriginated render context of page (page)" with (page), source: body, sourceLine: bodyLine, sourceName: path, subject: page, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.RenderingAttemptsOpenEmission
@@ -2571,16 +2700,6 @@ where
   Filing._file (file: page)
 then
   Depending.use (input: page, subject: page)
-```
-
-### fullSite.RenderingPagesClearCards
-
-```reaction
-when Phasing.advance (phase: "render")
-where
-  Routing._claims () has (owner: page)
-then
-  Composing.clear (part: "card", subject: page)
 ```
 
 ### fullSite.RouteCollisionsReport
@@ -2615,18 +2734,6 @@ then
   Depending.begin (subject: page)
 ```
 
-### fullSite.RoutedPagesClearCards
-
-```reaction
-when Phasing.advance (phase: "collect")
-where
-  Routing._claims () has (owner: page)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (root)
-then
-  Composing.clear (part: "card", subject: page)
-```
-
 ### fullSite.SettingsClearRoutingOrigin
 
 ```reaction
@@ -2641,11 +2748,9 @@ then
 ### fullSite.SettingsCollectionDeclarationFailuresDiagnose
 
 ```reaction
-when refused Collecting.declare (direction, name, detail, error)
+when refused Cataloging.declare (detail, error)
 where
   earlier, Phasing.start (phase: "settings")
-  Configuring._active () has (root)
-  view "collection declaration setting of configuration (root)" with (root) has (direction, name)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
@@ -2684,16 +2789,59 @@ then
   Matching.compile (text)
 ```
 
-### fullSite.SettingsDeclareCollections
+### fullSite.SettingsDeclareCatalogs:contains
 
 ```reaction
-when Collecting.reset ()
+when Cataloging.reset ()
 where
   earlier, Phasing.start (phase: "settings")
   Configuring._active () has (root)
-  view "collection declaration setting of configuration (root)" with (root) has (direction, name)
+  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
+  Configuring._at (node: rule, path: ["where", "contains"]) has (value)
 then
-  Collecting.declare (direction, name)
+  Cataloging.declare (condition: (field, test: "contains", value), direction, name, sort)
+```
+
+### fullSite.SettingsDeclareCatalogs:equals
+
+```reaction
+when Cataloging.reset ()
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._active () has (root)
+  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
+  Configuring._at (node: rule, path: ["where", "equals"]) has (value)
+then
+  Cataloging.declare (condition: (field, test: "equals", value), direction, name, sort)
+```
+
+### fullSite.SettingsDeclareCatalogs:exists
+
+```reaction
+when Cataloging.reset ()
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._active () has (root)
+  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  Configuring._at (node: rule, path: ["where", "field"]) has (value: field)
+  Configuring._at (node: rule, path: ["where", "exists"]) has (value: true)
+then
+  Cataloging.declare (condition: (field, test: "exists"), direction, name, sort)
+```
+
+### fullSite.SettingsDeclareCatalogs:unconditional
+
+```reaction
+when Cataloging.reset ()
+where
+  earlier, Phasing.start (phase: "settings")
+  Configuring._active () has (root)
+  view "collection declaration setting of configuration (root)" with (root) has (direction, name, rule, sort)
+  no Configuring._at (node: rule, path: ["where"])
+then
+  Cataloging.declare (condition: null, direction, name, sort)
 ```
 
 ### fullSite.SettingsDeclareMarkdownProfile
@@ -2788,12 +2936,12 @@ then
   Routing.reorigin (origin)
 ```
 
-### fullSite.SettingsResetCollections
+### fullSite.SettingsResetCatalogs
 
 ```reaction
 when Phasing.start (phase: "settings")
 then
-  Collecting.reset ()
+  Cataloging.reset ()
 ```
 
 ### fullSite.SettingsVerbatimProfileFailuresDiagnose
@@ -2808,16 +2956,6 @@ then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
 
-### fullSite.SiteContextsSetCollections
-
-```reaction
-when Composing.set (part: "context", path: ["site"], subject: page)
-where
-  Collecting._catalog () has (collections)
-then
-  Composing.set (part: "context", path: ["collections"], subject: page, value: collections)
-```
-
 ### fullSite.SitemapWorkPrepares
 
 ```reaction
@@ -2826,19 +2964,6 @@ where
   Deploying._work (work) has (kind: "sitemap")
 then
   Deploying.sitemap (urls: former "the sitemap urls", work)
-```
-
-### fullSite.SortedPagesJoinCollections
-
-```reaction
-when Composing.set (part: "card", path: ["source", "path"], subject: page)
-where
-  earlier, Phasing.advance (phase: "collect")
-  view "matching collection of page (page)" with (page) has (card, collection, path, rule)
-  Configuring._at (node: rule, path: ["sort", "by"]) has (value: sortPath)
-  Composing._field (field: sortPath, part: "card", subject: page) has (value: key)
-then
-  Collecting.include (card, collection, item: page, key, tiebreak: path)
 ```
 
 ### fullSite.StartedDeploymentsDispatch
@@ -2872,31 +2997,6 @@ where
   Filing._text (file) has (text)
 then
   Templating.define (name: path, source: text)
-```
-
-### fullSite.UnkeyedSortedPagesJoinCollections
-
-```reaction
-when Composing.set (part: "card", path: ["source", "path"], subject: page)
-where
-  earlier, Phasing.advance (phase: "collect")
-  view "matching collection of page (page)" with (page) has (card, collection, path, rule)
-  Configuring._at (node: rule, path: ["sort", "by"]) has (value: sortPath)
-  no Composing._field (field: sortPath, part: "card", subject: page)
-then
-  Collecting.include (card, collection, item: page, tiebreak: path)
-```
-
-### fullSite.UnoriginatedPageUrlsSetSourcePath
-
-```reaction
-when Composing.set (part: "context", path: ["page", "url"], subject: page)
-where
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  Filing._file (file: page) has (path)
-then
-  Composing.set (part: "context", path: ["page", "source", "path"], subject: page, value: path)
 ```
 
 ### fullSite.UnprojectableDeploymentLayoutReferencesDiagnose:diagnose
@@ -3011,18 +3111,6 @@ where
   Filing._file (file: page) has (path: sourcePath)
 then
   Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", severity: "error", source: sourcePath)
-```
-
-### fullSite.UnsortedPagesJoinCollections
-
-```reaction
-when Composing.set (part: "card", path: ["source", "path"], subject: page)
-where
-  earlier, Phasing.advance (phase: "collect")
-  view "matching collection of page (page)" with (page) has (card, collection, path, rule)
-  no Configuring._at (node: rule, path: ["sort", "by"])
-then
-  Collecting.include (card, collection, item: page, tiebreak: path)
 ```
 
 ## Endpoint input contracts

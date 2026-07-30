@@ -546,7 +546,7 @@ export class DeployingConcept {
           page: {
             data: { section: "Collection page", title: current.title, description: "" },
             url: current.address,
-            canonicalUrl: canonicalUrl ?? "",
+            ...(canonicalUrl == null ? {} : { canonicalUrl }),
             source: { path: current.sourcePath },
             content: current.content,
           },

@@ -1,10 +1,10 @@
 import { earlier, each, former, no, reaction, view, when, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.ts";
-import { CONFIGURATION_PATH, CONTEXT_PATHS, PARTS, PATHS } from "./shared.ts";
+import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PARTS, PATHS } from "./shared.ts";
 
 const {
-  Collecting,
+  Cataloging,
   Configuring,
   Depending,
   Deploying,
@@ -19,10 +19,10 @@ const {
 
 const DEPLOYMENT_LAYOUT = "deployment-layout";
 
-const CollectionEntries = former(
-  "the deployment entries of collection (collection)",
-  ({ collection }, { item, card }) =>
-    each(Collecting._items({ collection }).is({ item, card })).form({ item, card }),
+const CatalogEntries = former(
+  "the deployment entries of catalog (catalog)",
+  ({ catalog }, { item, card }) =>
+    each(Cataloging._entries({ catalog }).is({ item, card })).form({ item, card }),
 );
 
 const SitemapPage = view(
@@ -186,21 +186,21 @@ export const BegunRedirectsIntend = reaction(({ producer, work, address, path, c
 );
 
 /** Resolve a pagination plan before replacing it with page work. */
-export const PaginationPlansDivide = reaction(({ deployment, work, collectionName, collection, templateName, template }) =>
+export const PaginationPlansDivide = reaction(({ deployment, work, collectionName, catalog, templateName, template }) =>
   when(Deploying.dispatch({ deployment, work }).responds({}))
     .where(
       Deploying._work({ work }).is({ kind: "pagination-plan", collection: collectionName, templateName }),
-      Collecting._named({ name: collectionName }).is({ collection }),
+      Cataloging._named({ name: collectionName }).is({ catalog }),
       Templating._template({ name: templateName }).is({ template }),
     )
-    .then(Deploying.divide({ deployment, work, template, entries: CollectionEntries({ collection }) })),
+    .then(Deploying.divide({ deployment, work, template, entries: CatalogEntries({ catalog }) })),
 );
 
 export const MissingPaginationCollectionsDiagnose = reaction(({ deployment, work, collectionName }) =>
   when(Deploying.dispatch({ deployment, work }).responds({}))
     .where(
       Deploying._work({ work }).is({ kind: "pagination-plan", collection: collectionName }),
-      no(Collecting._named({ name: collectionName })),
+      no(Cataloging._named({ name: collectionName })),
     )
     .then(Diagnosing.report({
       severity: "error",
@@ -215,7 +215,7 @@ export const MissingPaginationTemplatesDiagnose = reaction(({ deployment, work, 
   when(Deploying.dispatch({ deployment, work }).responds({}))
     .where(
       Deploying._work({ work }).is({ kind: "pagination-plan", collection: collectionName, templateName }),
-      Collecting._named({ name: collectionName }),
+      Cataloging._named({ name: collectionName }),
       no(Templating._template({ name: templateName })),
     )
     .then(Diagnosing.report({
@@ -234,7 +234,7 @@ export const ClaimedPaginationPagesFormContext = reaction(
         Deploying._forOwner({ owner }).is({ work, kind: "pagination-page", address }),
         Configuring._active({}).is({ root: configuration }),
         Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
-        Collecting._catalog({}).is({ collections }),
+        Cataloging._record({}).is({ catalogs: collections }),
         whether(Routing._absolute({ address }).is({ url: canonicalUrl })),
       )
       .then(Deploying.context({ work, site, collections, canonicalUrl })),
@@ -246,7 +246,7 @@ export const PaginationContextsRender = reaction(({ work, owner, template, conte
       template,
       subject: owner,
       context,
-      trusted: [CONTEXT_PATHS.pageContent, TRUSTED_COLLECTION_EXCERPTS],
+      trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
     }),
   ),
 );
@@ -400,22 +400,22 @@ export const BegunSitemapsIntend = reaction(({ producer, work, path, content }) 
     .then(Emitting.intend({ producer, path, content, medium: "text/plain" })),
 );
 
-export const FeedWorkPrepares = reaction(({ deployment, work, collectionName, collection, configuration, site }) =>
+export const FeedWorkPrepares = reaction(({ deployment, work, collectionName, catalog, configuration, site }) =>
   when(Deploying.dispatch({ deployment, work }).responds({}))
     .where(
       Deploying._work({ work }).is({ kind: "feed", collection: collectionName }),
-      Collecting._named({ name: collectionName }).is({ collection }),
+      Cataloging._named({ name: collectionName }).is({ catalog }),
       Configuring._active({}).is({ root: configuration }),
       Configuring._values({ node: configuration, path: PATHS.site, otherwise: {} }).is({ values: site }),
     )
-    .then(Deploying.feed({ work, site, entries: CollectionEntries({ collection }) })),
+    .then(Deploying.feed({ work, site, entries: CatalogEntries({ catalog }) })),
 );
 
 export const MissingFeedCollectionsDiagnose = reaction(({ deployment, work, collectionName }) =>
   when(Deploying.dispatch({ deployment, work }).responds({}))
     .where(
       Deploying._work({ work }).is({ kind: "feed", collection: collectionName }),
-      no(Collecting._named({ name: collectionName })),
+      no(Cataloging._named({ name: collectionName })),
     )
     .then(Diagnosing.report({
       severity: "error",

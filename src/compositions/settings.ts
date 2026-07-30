@@ -1,4 +1,4 @@
-import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
+import { earlier, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 import {
   CONFIGURATION_PATH,
@@ -15,7 +15,7 @@ import {
   VerbatimSettings,
 } from "./views.ts";
 
-const { Collecting, Configuring, Converting, Diagnosing, Matching, Phasing, Routing } = concepts;
+const { Cataloging, Configuring, Converting, Diagnosing, Matching, Phasing, Routing } = concepts;
 
 /** Make the built-in source selectors available even when configuration has no rules. */
 export const FixedPatternsCompile = reaction(() =>
@@ -203,27 +203,47 @@ export const SettingsCollectionPatternFailuresDiagnose = reaction(({ root, text,
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
 
-export const SettingsResetCollections = reaction(() =>
-  when(Phasing.start({}).responds({ phase: "settings" })).then(Collecting.reset({})),
+export const SettingsResetCatalogs = reaction(() =>
+  when(Phasing.start({}).responds({ phase: "settings" })).then(Cataloging.reset({})),
 );
 
-export const SettingsDeclareCollections = reaction(({ root, name, direction }) =>
-  when(Collecting.reset({}).responds({}))
+export const SettingsDeclareCatalogs = reaction(({ root, name, rule, direction, sort, field, value }) =>
+  when(Cataloging.reset({}).responds({}))
     .where(
       earlier(Phasing.start, {}, { phase: "settings" }),
       Configuring._active({}).is({ root }),
-      CollectionDeclarationSetting({ root }).is({ name, direction }),
+      CollectionDeclarationSetting({ root }).is({ name, rule, direction, sort }),
     )
-    .then(Collecting.declare({ name, direction })),
+    .then(
+      where(no(Configuring._at({ node: rule, path: ["where"] })))
+        .then(Cataloging.declare({ name, direction, sort, condition: null }))
+        .named("unconditional"),
+      where(
+        Configuring._at({ node: rule, path: ["where", "field"] }).is({ value: field }),
+        Configuring._at({ node: rule, path: PATHS.collectionWhereEquals }).is({ value }),
+      )
+        .then(Cataloging.declare({ name, direction, sort, condition: { test: "equals", field, value } }))
+        .named("equals"),
+      where(
+        Configuring._at({ node: rule, path: ["where", "field"] }).is({ value: field }),
+        Configuring._at({ node: rule, path: PATHS.collectionWhereContains }).is({ value }),
+      )
+        .then(Cataloging.declare({ name, direction, sort, condition: { test: "contains", field, value } }))
+        .named("contains"),
+      where(
+        Configuring._at({ node: rule, path: ["where", "field"] }).is({ value: field }),
+        Configuring._at({ node: rule, path: PATHS.collectionWhereExists }).is({ value: true }),
+      )
+        .then(Cataloging.declare({ name, direction, sort, condition: { test: "exists", field } }))
+        .named("exists"),
+    ),
 );
 
 export const SettingsCollectionDeclarationFailuresDiagnose = reaction(
-  ({ root, name, direction, error, detail }) =>
-    when(Collecting.declare({ name, direction }).refuses({ error, detail }))
+  ({ error, detail }) =>
+    when(Cataloging.declare({}).refuses({ error, detail }))
       .where(
         earlier(Phasing.start, {}, { phase: "settings" }),
-        Configuring._active({}).is({ root }),
-        CollectionDeclarationSetting({ root }).is({ name, direction }),
       )
       .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );

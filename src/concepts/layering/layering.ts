@@ -208,7 +208,7 @@ function layerIdentity(subject: string, rank: number): string {
   return `layer:${JSON.stringify([subject, rank])}`;
 }
 
-/** Merge safe records by finite rank and retain exact provenance for every resolved path. */
+/** Resolve ranked configuration layers and retain provenance for every effective path. */
 export class LayeringConcept {
   readonly #layers = new Map<string, Map<number, LayerRecord>>();
 
