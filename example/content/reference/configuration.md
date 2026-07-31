@@ -1,6 +1,8 @@
 ---
 title: Configuration reference
 description: The site.yaml schema, path defaults, ordered page defaults, Markdown profiles, image policy, collections, and deployment settings.
+group: guide
+order: 2
 topics: [configuration, site-building]
 ---
 

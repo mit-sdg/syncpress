@@ -1,6 +1,8 @@
 ---
 title: Build a Syncpress site
 description: Create the required project files, render one Markdown page, and verify the static output.
+group: start
+order: 1
 featured: true
 topics: [guides, site-building]
 ---

@@ -1,6 +1,8 @@
 ---
 title: User guide
 description: Authoritative behavior for configuring, authoring, building, and deploying a Syncpress site.
+group: guide
+order: 1
 topics: [reference, site-building]
 ---
 

@@ -1,6 +1,8 @@
 ---
 title: Content, front matter, and routes
 description: Which files become pages, how page data is formed, and how canonical routes map to output files.
+group: guide
+order: 3
 topics: [content, routing, site-building]
 ---
 

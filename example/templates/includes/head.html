@@ -1,9 +1,145 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="{{ page.data.description | default: site.description }}">
-<meta name="theme-color" content="#13233c">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eef2f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#080d18" media="(prefers-color-scheme: dark)">
 <title>{{ page.data.title | default: site.title }} | {{ site.title }}</title>
 {% if page.canonicalUrl %}<link rel="canonical" href="{{ page.canonicalUrl }}">{% endif %}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="/site.webmanifest">
 <link rel="stylesheet" href="/styles.css">
+<script>
+  /* Progressive enhancement only. Every page is complete and readable without this script. */
+  (function () {
+    var root = document.documentElement;
+    var THEME_KEY = "syncpress-theme";
+
+    /* Applied before first paint so a stored theme choice never flashes. */
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === "light" || stored === "dark") root.dataset.theme = stored;
+    } catch (error) { /* Storage can be unavailable; the media query still applies. */ }
+
+    function slug(text) {
+      var base = text.toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/[\s-]+/g, "-");
+      return base.slice(0, 64) || "section";
+    }
+
+    function connectTheme() {
+      var toggle = document.querySelector("[data-theme-toggle]");
+      if (!toggle) return;
+      var query = window.matchMedia("(prefers-color-scheme: dark)");
+      var isDark = function () {
+        var dark = root.dataset.theme ? root.dataset.theme === "dark" : query.matches;
+        toggle.setAttribute("aria-pressed", dark ? "true" : "false");
+        return dark;
+      };
+      isDark();
+      toggle.addEventListener("click", function () {
+        root.dataset.theme = isDark() ? "light" : "dark";
+        try { localStorage.setItem(THEME_KEY, root.dataset.theme); } catch (error) { /* ignore */ }
+        isDark();
+      });
+    }
+
+    function connectHeadings() {
+      var prose = document.querySelector(".prose");
+      if (!prose) return;
+      var toc = document.querySelector("[data-toc]");
+      var list = toc ? toc.querySelector("ol") : null;
+      var taken = Object.create(null);
+      var entries = [];
+
+      Array.prototype.forEach.call(prose.querySelectorAll("h2, h3"), function (heading) {
+        var id = heading.id;
+        if (!id) {
+          id = slug(heading.textContent || "");
+          if (taken[id]) id = id + "-" + (taken[id] + 1);
+          heading.id = id;
+        }
+        taken[id] = (taken[id] || 0) + 1;
+
+        var label = heading.textContent || "";
+        var permalink = document.createElement("a");
+        permalink.className = "heading-anchor";
+        permalink.href = "#" + id;
+        permalink.setAttribute("aria-label", "Permanent link to " + label);
+        permalink.textContent = "#";
+        heading.appendChild(permalink);
+
+        if (!list) return;
+        var item = document.createElement("li");
+        item.className = heading.tagName === "H3" ? "toc-item toc-nested" : "toc-item";
+        var link = document.createElement("a");
+        link.href = "#" + id;
+        link.textContent = label;
+        item.appendChild(link);
+        list.appendChild(item);
+        entries.push({ id: id, link: link, heading: heading });
+      });
+
+      if (!list || entries.length < 2) return;
+      toc.hidden = false;
+      trackReading(entries);
+    }
+
+    function trackReading(entries) {
+      if (!window.IntersectionObserver) return;
+      var visible = Object.create(null);
+      var observer = new IntersectionObserver(function (records) {
+        records.forEach(function (record) {
+          visible[record.target.id] = record.isIntersecting;
+        });
+        var active = null;
+        entries.forEach(function (entry) {
+          if (!active && visible[entry.id]) active = entry.id;
+        });
+        if (!active) return;
+        entries.forEach(function (entry) {
+          entry.link.classList.toggle("is-current", entry.id === active);
+        });
+      }, { rootMargin: "-88px 0px -68% 0px" });
+      entries.forEach(function (entry) { observer.observe(entry.heading); });
+    }
+
+    function connectCodeBlocks() {
+      Array.prototype.forEach.call(document.querySelectorAll(".prose pre"), function (block) {
+        var code = block.querySelector("code");
+        if (!code) return;
+        var frame = document.createElement("div");
+        frame.className = "code-block";
+        block.parentNode.insertBefore(frame, block);
+        frame.appendChild(block);
+        if (!navigator.clipboard) return;
+
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "copy-button";
+        button.textContent = "Copy";
+        button.addEventListener("click", function () {
+          navigator.clipboard.writeText(code.textContent || "").then(function () {
+            button.textContent = "Copied";
+            button.classList.add("is-done");
+            window.setTimeout(function () {
+              button.textContent = "Copy";
+              button.classList.remove("is-done");
+            }, 1500);
+          }, function () {
+            button.textContent = "Press Ctrl+C";
+          });
+        });
+        frame.appendChild(button);
+      });
+    }
+
+    function start() {
+      connectTheme();
+      connectHeadings();
+      connectCodeBlocks();
+    }
+
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+    else start();
+  })();
+</script>

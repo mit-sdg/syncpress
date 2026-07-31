@@ -6,19 +6,34 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   {% render "header.html" %}
-  <main id="main" class="site-main">
+  <main id="main" class="site-main site-main-narrow">
     <article class="document post">
       <header class="document-header">
-        <p class="eyebrow">{{ page.data.section }}</p>
-        <p class="post-date">Published {{ page.data.date }}</p>
-        <h1>{{ page.data.title }}</h1>
-        <p class="lede">{{ page.data.description }}</p>
+        <div class="hero-copy">
+          <p class="post-meta">
+            <span class="eyebrow">{{ page.data.section }}</span>
+            <time class="post-date" datetime="{{ page.data.date }}">{{ page.data.date }}</time>
+          </p>
+          <h1>{{ page.data.title }}</h1>
+          <p class="lede">{{ page.data.description }}</p>
+        </div>
       </header>
       <div class="prose">
         {{ page.content }}
       </div>
       {% render "page-footer.html" %}
     </article>
+    <aside class="related" aria-labelledby="related-title">
+      <h2 class="related-title" id="related-title">More field notes</h2>
+      <div class="post-list">
+        {% for post in collections.posts %}
+          {% unless post.url == page.url %}
+            {% render "cards/post.html", post: post %}
+          {% endunless %}
+        {% endfor %}
+      </div>
+      <p class="related-more"><a href="/journal/1/">Open the field note archive</a></p>
+    </aside>
   </main>
   {% render "footer.html" %}
 </body>

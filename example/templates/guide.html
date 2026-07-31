@@ -6,18 +6,49 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   {% render "header.html" %}
-  <main id="main" class="site-main">
-    <article class="document guide">
-      <header class="document-header">
-        <p class="eyebrow">{{ page.data.section }}</p>
-        <h1>{{ page.data.title }}</h1>
-        <p class="lede">{{ page.data.description }}</p>
-      </header>
-      <div class="prose">
-        {{ page.content }}
+  <main id="main" class="site-main site-main-wide">
+    <div class="docs-shell">
+      <nav class="docs-nav" aria-label="Documentation sections">
+        <p class="docs-nav-heading">Documentation</p>
+        <p class="docs-nav-title">Get started</p>
+        <ul class="docs-nav-list">
+          {% for item in collections.startHere %}
+            <li><a{% if item.url == page.url %} aria-current="page"{% endif %} href="{{ item.url }}">{{ item.data.title }}</a></li>
+          {% endfor %}
+        </ul>
+        <p class="docs-nav-title">User guide</p>
+        <ul class="docs-nav-list">
+          {% for item in collections.userGuide %}
+            <li><a{% if item.url == page.url %} aria-current="page"{% endif %} href="{{ item.url }}">{{ item.data.title }}</a></li>
+          {% endfor %}
+        </ul>
+        <p class="docs-nav-title">Implementation</p>
+        <ul class="docs-nav-list">
+          {% for item in collections.implementation %}
+            <li><a{% if item.url == page.url %} aria-current="page"{% endif %} href="{{ item.url }}">{{ item.data.title }}</a></li>
+          {% endfor %}
+        </ul>
+      </nav>
+      <article class="document guide">
+        <header class="document-header">
+          <div class="hero-copy">
+            <p class="eyebrow">{{ page.data.section }}</p>
+            <h1>{{ page.data.title }}</h1>
+            <p class="lede">{{ page.data.description }}</p>
+          </div>
+        </header>
+        <div class="prose">
+          {{ page.content }}
+        </div>
+        {% render "page-footer.html" %}
+      </article>
+      <div class="docs-aside">
+        <nav class="toc" data-toc hidden aria-label="On this page">
+          <p class="toc-title">On this page</p>
+          <ol></ol>
+        </nav>
       </div>
-      {% render "page-footer.html" %}
-    </article>
+    </div>
   </main>
   {% render "footer.html" %}
 </body>

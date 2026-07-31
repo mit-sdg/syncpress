@@ -1,7 +1,25 @@
 <footer class="site-footer">
-  <p><strong>{{ site.title }}</strong> is generated from the executable example maintained by {{ site.owner }}.</p>
-  <nav aria-label="Site resources">
-    <a href="/downloads/build-checklist.txt" download>Download the example checklist</a>
-    <a href="/robots.txt">View robots.txt</a>
-  </nav>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      {% render "site-mark.html" %}
+      <p class="footer-lede"><strong>{{ site.title }}</strong> is generated from the executable example maintained by {{ site.owner }}.</p>
+    </div>
+    <nav class="footer-column" aria-label="Documentation">
+      <p class="footer-title">Documentation</p>
+      {% for item in site.navigation %}
+        <a href="{{ item.url }}">{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+    <nav class="footer-column" aria-label="Site resources">
+      <p class="footer-title">Resources</p>
+      <a href="/journal/1/">Field note archive</a>
+      <a href="/feed.xml">Atom feed</a>
+      <a href="/downloads/build-checklist.txt" download>Example checklist</a>
+      <a href="/robots.txt">robots.txt</a>
+    </nav>
+  </div>
+  <p class="footer-note">
+    <span class="footer-badge">Deterministic build</span>
+    Equal declared input bytes and configuration produce equal output bytes.
+  </p>
 </footer>

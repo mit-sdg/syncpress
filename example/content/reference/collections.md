@@ -1,6 +1,8 @@
 ---
 title: Collections and excerpts
 description: Select routed pages, filter publication cards, establish deterministic order, and render collection data.
+group: guide
+order: 5
 topics: [collections, excerpts, site-building]
 ---
 

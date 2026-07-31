@@ -1,6 +1,8 @@
 ---
 title: Programmatic API
 description: Package-root functions for building, inspecting, watching, and serving a Syncpress site.
+group: guide
+order: 8
 topics: [reference, commands, site-building]
 ---
 

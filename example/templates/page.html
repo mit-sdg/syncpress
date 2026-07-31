@@ -6,17 +6,79 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   {% render "header.html" %}
-  <main id="main" class="site-main">
-    <article class="document">
-      <header class="document-header">
-        <p class="eyebrow">{{ page.data.section | default: "Field guide" }}</p>
-        <h1>{{ page.data.title | default: site.title }}</h1>
-        {% if page.data.description %}
-          <p class="lede">{{ page.data.description }}</p>
+  <main id="main" class="site-main{% unless page.data.hero %} site-main-narrow{% endunless %}">
+    {% assign lede = page.data.description | default: "" %}
+    <article class="document{% if page.data.hero %} document-hero{% endif %}">
+      <header class="document-header{% if page.data.hero %} hero{% endif %}">
+        <div class="hero-copy">
+          <p class="eyebrow">{{ page.data.section | default: "Field guide" }}</p>
+          <h1>{{ page.data.title | default: site.title }}</h1>
+          {% if lede != "" %}
+            <p class="lede">{{ lede }}</p>
+          {% endif %}
+          {% if page.data.hero %}
+            <div class="hero-actions">
+              {% for action in site.actions %}
+                <a class="button{% unless action.primary %} button-quiet{% endunless %}" href="{{ action.url }}">{{ action.label }}</a>
+              {% endfor %}
+            </div>
+            <dl class="hero-stats">
+              <div class="hero-stat">
+                <dt>Routed documents</dt>
+                <dd>{{ collections.documented.size }}</dd>
+              </div>
+              <div class="hero-stat">
+                <dt>Reference pages</dt>
+                <dd>{{ collections.userGuide.size }}</dd>
+              </div>
+              <div class="hero-stat">
+                <dt>Field notes</dt>
+                <dd>{{ collections.posts.size }}</dd>
+              </div>
+            </dl>
+          {% endif %}
+        </div>
+        {% if page.data.hero %}
+          <div class="hero-figure" aria-hidden="true">
+            <div class="terminal">
+              <div class="terminal-bar">
+                <span class="terminal-dot"></span>
+                <span class="terminal-dot"></span>
+                <span class="terminal-dot"></span>
+                <span class="terminal-name">syncpress build</span>
+              </div>
+              <pre class="terminal-body"><span class="term-prompt">$</span> npx syncpress build
+<span class="term-step">read</span>    content · templates · public
+<span class="term-step">route</span>   canonical addresses claimed
+<span class="term-step">render</span>  bodies, references, layouts
+<span class="term-ok">emit</span>    one reconciled output tree</pre>
+            </div>
+          </div>
         {% endif %}
       </header>
       <div class="prose">
-        {{ page.content }}
+        {% if pagination %}
+          <div class="post-list">
+            {% for item in pagination.items %}
+              {% render "cards/post.html", post: item, compact: true %}
+            {% endfor %}
+          </div>
+          <nav class="pager" aria-label="Archive pages">
+            {% if pagination.previous %}
+              <a class="pager-link" href="{{ pagination.previous }}">Newer notes</a>
+            {% else %}
+              <span class="pager-link is-disabled">Newer notes</span>
+            {% endif %}
+            <p class="pager-status">Page {{ pagination.current }} of {{ pagination.pages }}</p>
+            {% if pagination.next %}
+              <a class="pager-link" href="{{ pagination.next }}">Older notes</a>
+            {% else %}
+              <span class="pager-link is-disabled">Older notes</span>
+            {% endif %}
+          </nav>
+        {% else %}
+          {{ page.content }}
+        {% endif %}
       </div>
       {% render "page-footer.html" %}
     </article>

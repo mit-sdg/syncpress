@@ -3,6 +3,6 @@
   "short_name": "Syncpress",
   "start_url": "/syncpress/",
   "display": "standalone",
-  "background_color": "#fbfcfe",
-  "theme_color": "#13233c"
+  "background_color": "#eef2f9",
+  "theme_color": "#101b2e"
 }
