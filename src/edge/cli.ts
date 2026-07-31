@@ -4,10 +4,10 @@ import { buildSite, inspectSite, type BuildResult } from "./site.ts";
 import { watchSite } from "./watch.ts";
 
 const HELP = `Usage:
-  bun run site build [site-directory] [output-directory]
-  bun run site build --watch [site-directory] [output-directory]
-  bun run site dev [--port PORT] [site-directory] [output-directory]
-  bun run site inspect <page-or-route> [site-directory]
+  syncpress build [site-directory] [output-directory]
+  syncpress build --watch [site-directory] [output-directory]
+  syncpress dev [--port PORT] [site-directory] [output-directory]
+  syncpress inspect <page-or-route> [site-directory]
 
 Build the configured site rooted at <site-directory>, defaulting to the current
 directory. Without an explicit output directory, paths.output (or dist) is used.

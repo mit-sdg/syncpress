@@ -6,14 +6,15 @@ topics: [overview, site-building]
 
 Syncpress is a static site generator for documentation, blogs, portfolios, and other content-oriented sites. A project contains YAML policy, Markdown or HTML content, Liquid layouts, and ordinary files. A successful build writes a static directory with no server-side runtime.
 
-This documentation is also the repository's executable example. Every page is built from [`example/`](https://github.com/mit-sdg/syncpress/tree/main/example), and the integration suite checks the complete output tree by SHA-256. The examples therefore demonstrate the interfaces they describe.
+Install the public `@mit-sdg/syncpress` package from npm as a development dependency. It provides the `syncpress` executable and a programmatic API. This documentation is also an independently installable example site under [`example/`](https://github.com/mit-sdg/syncpress/tree/main/example), and the integration suite checks its complete output tree by SHA-256.
 
 ## Start here
 
 1. [Build the example](./guides/getting-started.md) to see one complete project lifecycle.
 2. Read [configuration](./reference/configuration.md), [content and routes](./reference/content-routing.md), [templates and data](./reference/templates.md), and [assets and images](./reference/assets.md) when changing a site.
 3. Use [commands, deployment, and diagnostics](./reference/operations.md) when running builds locally or in automation.
-4. Read [how Syncpress is built](./about.md) for the concept-and-reaction architecture.
+4. Use the [programmatic API](./reference/programmatic-api.md) when invoking builds, inspection, watching, or the development server from TypeScript or JavaScript.
+5. Read [how Syncpress is built](./about.md) for the concept-and-reaction architecture.
 
 ## What a build guarantees
 

@@ -5,16 +5,27 @@ featured: true
 topics: [guides, site-building]
 ---
 
-This tutorial covers the smallest complete Syncpress lifecycle. It uses the repository checkout because Syncpress does not currently publish a standalone package or installation command. The [user guide](../reference/configuration.md) defines the complete configuration and authoring contracts.
+This introductory tutorial covers the smallest complete Syncpress lifecycle. It installs the public package, builds one site, inspects the result, and starts the development server. The [user guide](../reference/index.md) defines the complete configuration, authoring, command-line, and programmatic contracts.
 
 <h2 id="prerequisites">Prerequisites</h2>
 
-- Bun 1.3.14 or another 1.3 release accepted by `package.json`.
-- A Syncpress repository checkout with dependencies installed by `bun install`.
+- Node.js 24 (`>=24 <25`) and npm. The built package has been smoke-tested with Node.js 24.
+- Alternatively, Bun `>=1.3.14 <1.4` can install and run the package.
 
-## Create the project boundary
+## Install Syncpress and create the project boundary
 
-Create a directory containing all four required inputs:
+Create the project and install Syncpress 0.1.0 as a development dependency:
+
+```sh
+mkdir notes
+cd notes
+npm init -y
+npm install --save-dev @mit-sdg/syncpress
+```
+
+The equivalent Bun installation is `bun add --dev @mit-sdg/syncpress`.
+
+Add all four required inputs below the `notes` project directory:
 
 ```text
 notes/
@@ -31,7 +42,7 @@ notes/
 
 ## Configure the site
 
-Write `notes/site.yaml`:
+Write `site.yaml`:
 
 ```yaml
 site:
@@ -49,7 +60,7 @@ Omitted paths use `content`, `templates`, `public`, `assets`, and `dist`. Defaul
 
 ## Add a page
 
-Write `notes/content/index.md`:
+Write `content/index.md`:
 
 {% raw %}
 ```md
@@ -68,7 +79,7 @@ Front matter is an optional strict YAML mapping fenced by exact `---` lines. Its
 
 ## Add the layout
 
-Write `notes/templates/page.html`:
+Write `templates/page.html`:
 
 {% raw %}
 ```liquid
@@ -88,23 +99,23 @@ Write `notes/templates/page.html`:
 
 `page.content` is completed body HTML and is trusted in layouts. Ordinary values such as `page.data.title` are HTML-escaped. Layouts must use site-absolute, external, or fragment-only references; relative references in a layout are build errors.
 
-Add any CSS to `notes/public/styles.css`. Every regular file below `public/` is copied unchanged to the same output-relative path.
+Add any CSS to `public/styles.css`. Every regular file below `public/` is copied unchanged to the same output-relative path.
 
 ## Build and inspect
 
-From the Syncpress checkout, run:
+From the `notes` directory, run the installed executable through npm:
 
 ```sh
-bun run site build ./notes
-bun run site inspect / ./notes
+npx syncpress build
+npx syncpress inspect /
 ```
 
-The build writes `notes/dist/index.html` and `notes/dist/styles.css`. `inspect` reports the route owner, selected template, data origins, dependencies, collection positions, outputs, and current diagnostics without replacing `dist`.
+The build writes `dist/index.html` and `dist/styles.css`. `inspect` reports the route owner, selected template, data origins, dependencies, collection positions, outputs, and current diagnostics without replacing `dist`.
 
 To serve successful builds and reload after source changes, run:
 
 ```sh
-bun run site dev ./notes
+npx syncpress dev
 ```
 
 The development server listens on `127.0.0.1:3000` by default. It continues to serve the last successful output after a failed rebuild.

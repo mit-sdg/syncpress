@@ -69,4 +69,4 @@ Only the finished-and-clean branch asks Emitting to reconcile and returns file c
 
 ## Reading the complete assembly
 
-Use the source composition for intent and [`generated/syncpress.md`](https://github.com/mit-sdg/syncpress/blob/main/generated/syncpress.md) for the expanded assembly. Generated files are review artifacts; changes begin in concept specifications, implementations, views, formers, reactions, or endpoints and are propagated with `bun run generate`.
+Use the source composition for intent and [`generated/syncpress.md`](https://github.com/mit-sdg/syncpress/blob/main/generated/syncpress.md) for the expanded assembly. Generated files are review artifacts; changes begin in concept specifications, implementations, views, formers, reactions, or endpoints and are propagated with `bun run generate`. The package bundles these implementation inputs, but the package root exposes only the edge functions and public types; consumers cannot construct the internal assembly through `buildSyncpress`.

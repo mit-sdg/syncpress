@@ -4,7 +4,7 @@ description: Authoritative behavior for configuring, authoring, building, and de
 topics: [reference, site-building]
 ---
 
-The user guide describes the current observable authoring and command-line contract. Begin with [Build a Syncpress site](../guides/getting-started.md) for one guided lifecycle.
+The user guide describes the current observable authoring, command-line, and programmatic contract. Begin with [Build a Syncpress site](../guides/getting-started.md) for one guided lifecycle.
 
 ## Project and authoring
 
@@ -17,6 +17,8 @@ The user guide describes the current observable authoring and command-line contr
 ## Running and deploying
 
 [Commands, deployment, and diagnostics](./operations.md) defines strict builds, watch mode, the development server, inspection, generated artifacts, failure reporting, and reconciliation limits.
+
+[Programmatic API](./programmatic-api.md) defines the package-root functions, result types, callbacks, and resource cleanup. The internal application assembly is not public API.
 
 ## Implementation
 

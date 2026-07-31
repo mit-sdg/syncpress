@@ -1,13 +1,41 @@
 {
-  "name": "syncpress",
-  "private": true,
+  "name": "@mit-sdg/syncpress",
+  "version": "0.1.0",
+  "description": "A deterministic static publishing generator built from independently specified concepts.",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./dist/edge.js"
+    }
+  },
+  "bin": {
+    "syncpress": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "types",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mit-sdg/syncpress.git"
+  },
+  "homepage": "https://github.com/mit-sdg/syncpress#readme",
+  "bugs": {
+    "url": "https://github.com/mit-sdg/syncpress/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "rm -rf dist && bun build src/edge.ts src/cli.ts --outdir dist --target=node --packages=external --splitting --banner='#!/usr/bin/env node'",
     "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check --config generated.config.ts && tsc --noEmit",
     "generate": "sync-engine artifacts pin",
+    "prepack": "bun run build",
     "typecheck": "tsc --noEmit",
     "principle": "bun test src/concepts",
-    "site": "bun src/edge.ts",
+    "site": "bun src/cli.ts",
     "test": "bun test"
   },
   "dependencies": {

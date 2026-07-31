@@ -13,6 +13,12 @@ Syncpress models a site build as a finite synchronization job. The filesystem ed
 
 This page assumes familiarity with concept design and sync-engine composition. It describes the current design rather than the engine vocabulary or a public extension API.
 
+## Package boundary
+
+The public npm package is `@mit-sdg/syncpress`. Its root exports the filesystem-edge operations `runCli`, `buildSite`, `inspectSite`, `watchSite`, and `serveSite` plus their public types. It does not export `buildSyncpress` or the internal application assembly. The [programmatic API reference](./reference/programmatic-api.md) defines the supported package boundary.
+
+The package build bundles Syncpress's internal TypeScript and Markdown specifications into distribution artifacts under `dist`. Third-party runtime packages remain external package dependencies. Bundling changes distribution, not the concept boundaries or build lifecycle described below.
+
 ## Boundaries follow invariants
 
 The concept boundaries separate decisions that can be specified and tested independently:
@@ -85,7 +91,7 @@ This gate is defined in [`src/compositions/endpoints.ts`](https://github.com/mit
 
 [`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) handles work that requires the operating system: validating project boundaries, reading directory entries, staging bytes, waiting for quiescence, writing the prepared tree, and watching for changes. It does not derive routes, interpret templates, or decide whether a build is publishable.
 
-[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The host reaches that application through the configure and reconcile protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts).
+[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The host reaches that application through the configure and reconcile protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts). This assembly is an implementation detail, not a package-root export.
 
 ## Selected composition paths
 
