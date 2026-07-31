@@ -125,14 +125,13 @@ npx syncpress dev
 
 The development server listens on `127.0.0.1:3000` by default. It continues to serve the last successful output after a failed rebuild.
 
+## Verify local asset handling
+
+Open this [local checklist](../assets/guide.txt?format=text#checklist). The source
+file is `content/assets/guide.txt`; Syncpress copies it beside this page because
+the page links to it. An unreferenced content asset is not emitted.
+
 ## Next steps
-
-Add CSS to `public/styles.css`. Every regular file below `public/` is copied
-unchanged to the same output-relative path.
-
-For example, this [local checklist](../assets/guide.txt?format=text#checklist)
-is copied beside this page when the site builds. The source file is
-`content/assets/guide.txt`; it is not copied merely because it exists.
 
 For content-relative links and local files, see [references and assets](../reference/assets.md).
 For front matter, routes, and publication controls, see [content and routes](../reference/content-routing.md).

@@ -6,10 +6,10 @@ featured: true
 topics: [routing, site-building]
 ---
 
-Every routed document starts with an ordinary content path. `posts/first.md` derives `/posts/first/`, while the source-tree tour overrides its derived address with an explicit route.
+Every routed document begins as a file below the content root. `posts/first.md` derives `/posts/first/`; a page can instead claim an explicit route in front matter.
 
 <!--more-->
 
-Collections receive this authored prefix as an excerpt before page rendering. The post card renders that conversion as trusted markup through Syncpress's fixed excerpt capability; front matter remains escaped.
+Syncpress extracts this authored prefix as the collection excerpt before rendering the complete page. The post card may render the converted excerpt as trusted markup, while ordinary front-matter values remain escaped.
 
 [Read the build lifecycle](../about.md#build-lifecycle) for the project-level view.

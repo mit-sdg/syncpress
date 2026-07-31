@@ -30,14 +30,3 @@
     </button>
   </div>
 </header>
-<div class="notes-band">
-  <div class="notes-rail">
-    <span class="rail-label">Field notes</span>
-    <nav class="rail-links" aria-label="Recent field notes">
-    {% for post in collections.posts %}
-      <a href="{{ post.url }}"><span class="rail-date">{{ post.data.date }}</span>{{ post.data.title }}</a>
-    {% endfor %}
-    </nav>
-    <a class="rail-archive" href="/journal/1/">Archive</a>
-  </div>
-</div>

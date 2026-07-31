@@ -1,26 +1,23 @@
 ---
-title: Static publishing with explicit rules
-description: Syncpress builds Markdown, HTML, templates, and local files into a deterministic static site.
+title: Build static sites from ordinary files
+description: Syncpress turns Markdown, HTML, Liquid templates, and local assets into a static site with repeatable output.
 hero: true
 topics: [overview, site-building]
 ---
 
-Syncpress builds documentation, blogs, portfolios, and other content-oriented
-sites from YAML policy, Markdown or HTML content, Liquid layouts, and ordinary
-files. A successful build writes a static directory with no server-side runtime.
+Syncpress builds content-oriented sites from a YAML configuration file, Markdown
+or HTML content, Liquid layouts, and ordinary local files. A successful build
+writes a static directory that can be deployed without a server-side runtime.
 
 Install the public `@mit-sdg/syncpress` package from npm as a development
 dependency. It provides the `syncpress` executable and a programmatic API. This
 documentation is also an independently installable [example site](https://github.com/mit-sdg/syncpress/tree/main/example).
 
-## Start here
+## Choose a starting point
 
-1. [Build the example](./guides/getting-started.md) to see one complete project lifecycle.
-2. Read [configuration](./reference/configuration.md), [content and routes](./reference/content-routing.md), [templates and data](./reference/templates.md), and [assets and images](./reference/assets.md) when changing a site.
-3. Use [commands, deployment, and diagnostics](./reference/operations.md) when running builds locally or in automation.
-4. Use the [programmatic API](./reference/programmatic-api.md) when invoking builds, inspection, watching, or the development server from TypeScript or JavaScript.
-5. Read [implementation documentation](./about.md) only when working on the
-   Syncpress repository.
+- [Build a site](./guides/getting-started.md) for a complete first project.
+- Use the [user guide](./reference/index.md) for configuration, templates, assets, commands, and the programmatic API.
+- Read [how Syncpress is built](./about.md) when contributing to the repository.
 
 ## What a build guarantees
 
@@ -28,27 +25,30 @@ Equal declared input bytes and configuration produce equal output bytes. The bui
 
 Syncpress does not provide server rendering, API routes, a database, executable configuration, or a plugin platform. Use another system when a page must depend on request-time state or arbitrary build-time code.
 
-## This page as an example
+## What this example covers
 
-The source for this page demonstrates front matter, Markdown, Liquid collection access, a named partial, local page references, an ordinary SVG, and a responsive raster image. Inspect [`content/index.md`](https://github.com/mit-sdg/syncpress/blob/main/example/content/index.md) beside the generated result.
+This documentation is also a working Syncpress project. Its source demonstrates
+front matter, Markdown, collections, partials, local links, copied assets, and
+responsive images. Compare [`content/index.md`](https://github.com/mit-sdg/syncpress/blob/main/example/content/index.md)
+with this generated page.
 
 <figure class="responsive-swatch">
   <img src="./assets/blue.png?variant=field-note#pixel" alt="A flat blue field used as a responsive image fixture" class="field-image" sizes="(min-width: 48rem) 42rem, 100vw" data-fixture="responsive">
-  <figcaption>A one-pixel raster keeps this fixture compact while still producing a responsive <code>picture</code> with AVIF and WebP offers.</figcaption>
+  <figcaption>This small PNG is emitted as a responsive <code>picture</code> with AVIF and WebP alternatives.</figcaption>
 </figure>
 
 <figure class="mark-demo">
   <img src="./assets/mark.svg" alt="Blue circular Syncpress mark">
-  <figcaption>The adjacent SVG is a normal local asset, copied beside the referencing page.</figcaption>
+  <figcaption>This SVG follows the ordinary local-asset copy path.</figcaption>
 </figure>
 
-## Reference handling in this page
+## Links and collections
 
-[Build the example](./guides/getting-started.md?from=home#prerequisites), [trace the implementation](./about.md?from=home#build-lifecycle), or [inspect a verbatim HTML page](./legal.html#escaping). These content-relative links retain their query strings and fragments when Syncpress retargets them to canonical routes.
+[Build the example](./guides/getting-started.md?from=home#prerequisites), [trace the implementation](./about.md?from=home#build-lifecycle), or [inspect a verbatim HTML page](./legal.html#escaping). Syncpress resolves these content-relative links to their canonical routes while retaining query strings and fragments.
 
 The `documented` collection uses an existence filter and currently contains **{{ collections.documented.size }}** routed documents. The `siteBuilding` collection uses a list-contains filter, while the featured section below uses a boolean equality filter.
 
-## Documentation routes selected by a collection
+## Featured documentation
 
 <div class="feature-grid">
 {% for item in collections.featured %}
@@ -56,7 +56,7 @@ The `documented` collection uses an existence filter and currently contains **{{
 {% endfor %}
 </div>
 
-## Design notes
+## Recent implementation notes
 
 <div id="journal" class="post-list">
 {% for post in collections.posts %}

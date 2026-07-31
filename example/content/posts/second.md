@@ -6,8 +6,8 @@ featured: true
 topics: [assets, responsive-images]
 ---
 
-The newest note appears first because the `posts` collection sorts `data.date` in descending order. Its card gets a canonical URL and source path without having access to this fully rendered article.
+The `posts` collection sorts `data.date` in descending order, so this note appears before older entries. Its collection card contains publication data and an excerpt, not the fully rendered article.
 
 <!--more-->
 
-An ordinary local download is copied under its content-root-relative path. A primary local PNG takes the responsive-image path and keeps an original fallback, while an SVG remains an ordinary copied asset. [The overview](../index.md#journal) shows both image cases in one page.
+A linked download is copied next to the page that references it. A primary local PNG enters responsive-image processing and retains its original fallback; an SVG remains an ordinary copied asset. [The introduction](../index.md#recent-implementation-notes) shows both image paths.

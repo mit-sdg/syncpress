@@ -29,15 +29,16 @@ deployment. The built-in development server does not mount a base path, so set
 
 ## Theme layout
 
-The presentation lives in two places. `public/styles.css` holds the whole design
-system: color tokens declared once and resolved per scheme with `light-dark()`,
-a fluid type scale, the page shell, and every component. `templates/` holds the
-three layouts and the includes they share.
+The presentation lives in two places. `public/styles.css` contains the color
+tokens, responsive page shell, typography, and component styles. `templates/`
+contains the three layouts and their shared includes. The stylesheet avoids
+fixed decorative layers, filters, and scroll effects so document scrolling does
+not require repainting large visual effects.
 
 | Layout | Used by | Shape |
 | --- | --- | --- |
 | `page.html` | Home, verbatim HTML pages, generated archive pages | Single column; renders a hero when a page sets `hero: true`, and collection cards with a pager when `pagination` is present. |
-| `guide.html` | Guides, reference, and implementation pages | Three columns: section navigation, the document, and an on-page table of contents. |
+| `guide.html` | Guides, reference, and implementation pages | Responsive document layout with section navigation and, on wide screens, an on-page table of contents. |
 | `post.html` | Field notes | Single column with dated header and the remaining notes below. |
 
 The section navigation is built from the `startHere`, `userGuide`, and
@@ -46,8 +47,8 @@ value and order them by `order`. Adding a page to the sidebar is therefore a
 front-matter change, not a template change.
 
 The pages are complete without client-side code. `templates/includes/head.html`
-carries one small progressive-enhancement script that adds the light and dark
-theme toggle, heading anchors, the table of contents, and code copy buttons.
+contains one small progressive-enhancement script that adds the light and dark
+theme toggle, heading anchors, the table of contents, and code-copy buttons.
 Without it the site still renders, follows the operating system color scheme,
 and stays fully navigable.
 

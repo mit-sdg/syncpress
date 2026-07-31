@@ -2,7 +2,7 @@
   <div class="footer-grid">
     <div class="footer-brand">
       {% render "site-mark.html" %}
-      <p class="footer-lede"><strong>{{ site.title }}</strong> is generated from the executable example maintained by {{ site.owner }}.</p>
+      <p class="footer-lede"><strong>{{ site.title }}</strong><br>A working Syncpress project maintained by {{ site.owner }}.</p>
     </div>
     <nav class="footer-column" aria-label="Documentation">
       <p class="footer-title">Documentation</p>
@@ -19,7 +19,6 @@
     </nav>
   </div>
   <p class="footer-note">
-    <span class="footer-badge">Deterministic build</span>
-    Equal declared input bytes and configuration produce equal output bytes.
+    This site is generated from the files in the <a href="https://github.com/mit-sdg/syncpress/tree/main/example">example project</a>.
   </p>
 </footer>

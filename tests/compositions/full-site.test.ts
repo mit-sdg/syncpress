@@ -70,7 +70,7 @@ test("the example site produces its exact deterministic golden tree", async () =
     expect(index).toContain('<source type="image/webp"');
     expect(index).toContain('src="/syncpress/blue.png?variant=field-note#pixel"');
     expect(index).toContain('class="field-image" data-fixture="responsive" sizes="(min-width: 48rem) 42rem, 100vw"');
-    expect(index).toContain('<div class="excerpt-code"><p>The newest note appears first');
+    expect(index).toContain('<div class="post-excerpt"><p>The <code>posts</code> collection sorts');
     expect(index).toContain('<link rel="canonical" href="https://mit-sdg.github.io/syncpress/">');
     expect(await readFile(join(destination, "legal", "index.html"), "utf8")).toContain(
       "This authored HTML passes through the verbatim profile for Syncpress Documentation.",
@@ -104,7 +104,7 @@ test("renders without an origin and does not invent a canonical URL", async () =
         .replace("  origin: https://mit-sdg.github.io\n", "")
         .replace("  sitemap: true\n", "  sitemap: false\n")
         .replace(
-          "  feed:\n    collection: posts\n    path: feed.xml\n    title: Syncpress Field Notes\n    description: Design notes from the Syncpress executable documentation.\n",
+          "  feed:\n    collection: posts\n    path: feed.xml\n    title: Syncpress Field Notes\n    description: Implementation notes from the Syncpress example project.\n",
           "",
         ),
     );
@@ -145,17 +145,17 @@ test("collection cards preserve conditions, optional excerpts, and missing sort 
       '<div id="equals">posts/second.md|guides/getting-started.md|about.md|posts/first.md|</div>',
     );
     expect(index).toContain(
-      '<div id="contains">guides/getting-started.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|index.md|reference/index.md|</div>',
+      '<div id="contains">guides/getting-started.md|index.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|reference/index.md|</div>',
     );
     expect(index).toContain(
-      '<div id="exists">posts/second.md|guides/getting-started.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|internals/reactions.md|index.md|reference/index.md|</div>',
+      '<div id="exists">posts/second.md|guides/getting-started.md|index.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|internals/reactions.md|reference/index.md|</div>',
     );
     expect(index).toContain(
       '<div id="mixed-dates">posts/second.md|posts/first.md|about.md|guides/getting-started.md|index.md|internals/reactions.md|reference/assets.md|reference/collections.md|reference/configuration.md|reference/content-routing.md|reference/index.md|reference/operations.md|reference/programmatic-api.md|reference/templates.md|</div>',
     );
     expect(index).toContain('<div data-card="about.md" data-excerpt="null"></div>');
     expect(index).toContain(
-      '<div data-card="posts/second.md" data-excerpt="present"><p>The newest note appears first',
+      '<div data-card="posts/second.md" data-excerpt="present"><p>The <code>posts</code> collection sorts',
     );
   } finally {
     await rm(project, { recursive: true, force: true });

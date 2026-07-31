@@ -138,7 +138,7 @@ deploy:
     collection: posts
     path: feed.xml
     title: Syncpress Field Notes
-    description: Design notes from the Syncpress executable documentation.
+    description: Implementation notes from the Syncpress example project.
   redirects:
     /start/: /guides/getting-started/
   pagination:
