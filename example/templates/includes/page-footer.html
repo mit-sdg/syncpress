@@ -1,4 +1,9 @@
 <footer class="document-footer">
-  <p>Source file: <code>{{ page.source.path }}</code></p>
-  <a href="{{ page.url }}">Open this canonical route</a>
+  <p class="source-note">Source file: <code>{{ page.source.path }}</code></p>
+  <div class="document-footer-links">
+    {% unless page.source.path contains "[generated]" %}
+      {% if site.editBase %}<a href="{{ site.editBase }}{{ page.source.path }}">Edit this page</a>{% endif %}
+    {% endunless %}
+    <a href="{{ page.url }}">Open this canonical route</a>
+  </div>
 </footer>

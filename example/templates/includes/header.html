@@ -2,20 +2,42 @@
   <div class="site-bar">
     <a class="brand" href="/" aria-label="{{ site.title }} home">
       {% render "site-mark.html" %}
-      <span>{{ site.title }}</span>
+      <span class="brand-text">
+        <span class="brand-name">{{ site.title }}</span>
+        {% if site.tagline %}<span class="brand-tagline">{{ site.tagline }}</span>{% endif %}
+      </span>
     </a>
     <nav class="primary-nav" aria-label="Primary navigation">
       {% for item in site.navigation %}
-        <a href="{{ item.url }}">{{ item.label }}</a>
+        {% assign state = "" %}
+        {% if item.url == page.url %}
+          {% assign state = "page" %}
+        {% elsif item.url != "/" and page.url contains item.url %}
+          {% assign state = "section" %}
+        {% endif %}
+        <a class="nav-link{% if state != "" %} is-current{% endif %}"{% if state == "page" %} aria-current="page"{% endif %} href="{{ item.url }}">{{ item.label }}</a>
       {% endfor %}
     </nav>
-  </div>
-  <div class="recent-notes">
-    <span class="recent-label">Design notes</span>
-    <nav aria-label="Design notes">
-    {% for post in collections.posts %}
-      <a href="{{ post.url }}">{{ post.data.title }}</a>
-    {% endfor %}
-    </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" title="Switch between the light and dark theme">
+      <span class="sr-only">Switch between the light and dark theme</span>
+      <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.4"></circle>
+        <path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"></path>
+      </svg>
+      <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+        <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.6 8.6 0 1 0 10.4 10.4z"></path>
+      </svg>
+    </button>
   </div>
 </header>
+<div class="notes-band">
+  <div class="notes-rail">
+    <span class="rail-label">Field notes</span>
+    <nav class="rail-links" aria-label="Recent field notes">
+    {% for post in collections.posts %}
+      <a href="{{ post.url }}"><span class="rail-date">{{ post.data.date }}</span>{{ post.data.title }}</a>
+    {% endfor %}
+    </nav>
+    <a class="rail-archive" href="/journal/1/">Archive</a>
+  </div>
+</div>

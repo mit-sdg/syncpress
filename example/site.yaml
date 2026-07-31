@@ -1,9 +1,17 @@
 site:
   title: Syncpress Documentation
+  tagline: Deterministic static publishing
   description: User and implementation documentation for the Syncpress static publishing generator.
   origin: https://mit-sdg.github.io
   basePath: /syncpress/
   owner: the Syncpress project
+  editBase: https://github.com/mit-sdg/syncpress/blob/main/example/content/
+  actions:
+    - label: Build the example
+      url: /guides/getting-started/
+      primary: true
+    - label: Read the user guide
+      url: /reference/
   navigation:
     - label: Introduction
       url: /
@@ -56,6 +64,11 @@ defaults:
       section: Field note
       build:
         template: post.html
+  - match: "about.md"
+    values:
+      section: How Syncpress is built
+      build:
+        template: guide.html
 collections:
   posts:
     match: "posts/**/*.md"
@@ -85,6 +98,30 @@ collections:
       exists: true
     sort:
       by: data.title
+      order: asc
+  startHere:
+    match: "**/*.md"
+    where:
+      field: data.group
+      equals: start
+    sort:
+      by: data.order
+      order: asc
+  userGuide:
+    match: "**/*.md"
+    where:
+      field: data.group
+      equals: guide
+    sort:
+      by: data.order
+      order: asc
+  implementation:
+    match: "**/*.md"
+    where:
+      field: data.group
+      equals: implementation
+    sort:
+      by: data.order
       order: asc
 markdown:
   extensions: [tables, footnotes, strikethrough, autolinks]

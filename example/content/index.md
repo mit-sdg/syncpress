@@ -1,6 +1,7 @@
 ---
 title: Static publishing with explicit rules
 description: Syncpress builds Markdown, HTML, templates, and local files into a deterministic static site.
+hero: true
 topics: [overview, site-building]
 ---
 

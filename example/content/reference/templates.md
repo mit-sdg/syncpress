@@ -1,6 +1,8 @@
 ---
 title: Liquid templates and page data
 description: Body evaluation, layouts, includes, available values, escaping, and template restrictions.
+group: guide
+order: 4
 topics: [templates, liquid, site-building]
 ---
 
