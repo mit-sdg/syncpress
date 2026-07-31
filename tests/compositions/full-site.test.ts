@@ -54,9 +54,9 @@ test("the example site produces its exact deterministic golden tree", async () =
 
     const first = await buildSite(exampleDirectory, destination);
     expect(first).toMatchObject({
-      pages: 19,
-      inputFiles: 37,
-      written: 33,
+      pages: 21,
+      inputFiles: 38,
+      written: 35,
       replaced: 0,
       kept: 0,
       removed: 1,
@@ -84,7 +84,7 @@ test("the example site produces its exact deterministic golden tree", async () =
     expect(await readFile(join(destination, "legal", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
 
     const second = await buildSite(exampleDirectory, destination);
-    expect(second).toMatchObject({ written: 0, replaced: 0, kept: 33, removed: 0, diagnostics: [] });
+    expect(second).toMatchObject({ written: 0, replaced: 0, kept: 35, removed: 0, diagnostics: [] });
     await expectGoldenTree(destination);
   } finally {
     await rm(destination, { recursive: true, force: true });
@@ -110,7 +110,7 @@ test("renders without an origin and does not invent a canonical URL", async () =
     );
 
     const result = await buildSite(project);
-    expect(result).toMatchObject({ pages: 19, diagnostics: [] });
+    expect(result).toMatchObject({ pages: 21, diagnostics: [] });
     const index = await readFile(join(project, "dist", "index.html"), "utf8");
     expect(index).toContain("Source file: <code>index.md</code>");
     expect(index).not.toContain('<link rel="canonical"');
@@ -142,16 +142,16 @@ test("collection cards preserve conditions, optional excerpts, and missing sort 
     await buildSite(project);
     const index = await readFile(join(project, "dist", "index.html"), "utf8");
     expect(index).toContain(
-      '<div id="equals">posts/second.md|guides/getting-started.md|about.md|posts/first.md|</div>',
+      '<div id="equals">posts/second.md|guides/getting-started.md|about.md|posts/first.md|posts/why-a-sync-engine.md|</div>',
     );
     expect(index).toContain(
-      '<div id="contains">guides/getting-started.md|index.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|reference/index.md|</div>',
+      '<div id="contains">guides/getting-started.md|index.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|reference/index.md|posts/why-a-sync-engine.md|</div>',
     );
     expect(index).toContain(
-      '<div id="exists">posts/second.md|guides/getting-started.md|index.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|internals/reactions.md|reference/index.md|</div>',
+      '<div id="exists">posts/second.md|guides/getting-started.md|index.md|reference/collections.md|reference/operations.md|reference/configuration.md|reference/content-routing.md|about.md|reference/templates.md|reference/programmatic-api.md|reference/assets.md|posts/first.md|internals/reactions.md|reference/index.md|posts/why-a-sync-engine.md|</div>',
     );
     expect(index).toContain(
-      '<div id="mixed-dates">posts/second.md|posts/first.md|about.md|guides/getting-started.md|index.md|internals/reactions.md|reference/assets.md|reference/collections.md|reference/configuration.md|reference/content-routing.md|reference/index.md|reference/operations.md|reference/programmatic-api.md|reference/templates.md|</div>',
+      '<div id="mixed-dates">posts/why-a-sync-engine.md|posts/second.md|posts/first.md|about.md|guides/getting-started.md|index.md|internals/reactions.md|reference/assets.md|reference/collections.md|reference/configuration.md|reference/content-routing.md|reference/index.md|reference/operations.md|reference/programmatic-api.md|reference/templates.md|</div>',
     );
     expect(index).toContain('<div data-card="about.md" data-excerpt="null"></div>');
     expect(index).toContain(
@@ -168,7 +168,7 @@ test("uses paths.output when no explicit destination is supplied", async () => {
   try {
     await copyExample(project);
     const result = await buildSite(project);
-    expect(result).toMatchObject({ pages: 19, written: 33, diagnostics: [] });
+    expect(result).toMatchObject({ pages: 21, written: 35, diagnostics: [] });
     expect(await readFile(join(project, "dist", "index.html"), "utf8")).toContain("Syncpress Documentation");
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -365,7 +365,7 @@ test("inspect reports route ownership, template provenance, collection membershi
       layout: { source: expect.any(String) },
     },
   });
-  expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 1 }));
+  expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 2 }));
   expect(report.renderings).toEqual([
     expect.objectContaining({ attempt: report.rendering?.attempt, stage: "completed" }),
   ]);
