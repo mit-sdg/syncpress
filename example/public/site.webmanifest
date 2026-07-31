@@ -1,7 +1,7 @@
 {
   "name": "Syncpress Field Notes",
   "short_name": "Syncpress",
-  "start_url": "/field-notes/",
+  "start_url": "/syncpress/",
   "display": "standalone",
   "background_color": "#fbfcfe",
   "theme_color": "#13233c"

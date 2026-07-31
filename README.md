@@ -1,5 +1,8 @@
 # Syncpress
 
+[![npm version](https://img.shields.io/npm/v/%40mit-sdg%2Fsyncpress)](https://www.npmjs.com/package/@mit-sdg/syncpress)
+[![CI](https://github.com/mit-sdg/syncpress/actions/workflows/ci.yml/badge.svg)](https://github.com/mit-sdg/syncpress/actions/workflows/ci.yml)
+
 Syncpress is a deterministic static publishing generator for Markdown, HTML,
 Liquid templates, and local files. A successful build produces an ordinary
 static directory with no server-side runtime. The source repository is
@@ -98,26 +101,39 @@ package manager.
 
 ## Publishing the npm package
 
-Publishing requires an npm account authorized for the `@mit-sdg` scope. From a
-clean checkout:
+Normal releases use the `Publish npm package` workflow in
+`.github/workflows/release.yml`. Before the first release, configure an npm
+trusted publisher for repository `mit-sdg/syncpress` and workflow
+`release.yml`. The workflow authenticates through GitHub OIDC; it does not use
+an npm token.
+
+To release a version:
+
+1. Update the version in `package.json`.
+2. Install and verify the release from a clean checkout:
 
 ```sh
-npm login
-npm whoami
-npm publish
+bun install --frozen-lockfile
+bun run check
+bun test
+npm pack --dry-run
 ```
 
-`publishConfig.access` is `public`, so `npm publish` publishes the scoped
-package publicly. After publication, verify the registry record and the exact
-version:
+3. Commit the version change.
+4. Create a tag whose name is `v` followed by the exact package version, such
+   as `v0.2.0`, and push the commit and tag.
+
+A pushed `v*` tag starts the release workflow. The workflow runs
+`bun run check` and `bun test`, rejects a tag that does not match
+`package.json`, and publishes the public package with npm trusted publishing.
+If that exact package version already exists, the workflow skips publication.
+
+After the workflow succeeds, verify the registry record:
 
 ```sh
-npm view @mit-sdg/syncpress@0.1.0 name version
+version=$(node -p "require('./package.json').version")
+npm view "@mit-sdg/syncpress@$version" name version
 ```
-
-The registry will not accept another publication of the same package name and
-version. Update `package.json` to a new version before each later publication,
-then build and verify that version before publishing it.
 
 ## Contributor workflow
 

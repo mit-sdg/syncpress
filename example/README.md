@@ -34,28 +34,24 @@ host; Syncpress does not provide a production server.
 
 ## Deployment configuration
 
-The production URL for this example has not been selected. Before publishing
-the site, replace the placeholder `site.origin` and set `site.basePath` in
-`site.yaml` for the deployment target. Use `/` when the site is hosted at the
-origin root, or a leading-and-trailing-slash path such as `/docs/` when the site
-is hosted below the root.
+The example is published at <https://mit-sdg.github.io/syncpress/>. Its
+`site.yaml` sets `site.origin` to `https://mit-sdg.github.io` and
+`site.basePath` to `/syncpress/`. Generated site-absolute URLs therefore use
+the `/syncpress/` prefix.
 
-`public/site.webmanifest` is copied without rewriting. Its `start_url` must
-match the deployed base path. Update any other absolute URLs in copied public
-files at the same time. Do not deploy with the current
-`https://syncpress.example` placeholder.
+`public/site.webmanifest` is copied without rewriting. Its `start_url` is
+`/syncpress/`; update it together with `site.yaml` if the deployment location
+changes.
 
-## Publish and deploy
+## GitHub Pages deployment
 
 The example's exact dependency must exist in the npm registry before an
-independent checkout can install it:
+independent checkout can install it. For a later Syncpress release, publish the
+package first, update the example's exact dev dependency and lockfile, and then
+rebuild the site.
 
-1. Publish `@mit-sdg/syncpress@0.1.0` as described in the repository README.
-2. Check out or copy the `example` directory as the site project.
-3. Set `site.origin`, `site.basePath`, and the matching webmanifest URL for the
-   deployment target.
-4. Run `npm install` and `npm run build` in the site project.
-5. Deploy the resulting `dist` directory at the configured base path.
-
-For a later Syncpress release, update the example's exact dev dependency,
-publish that package version first, reinstall, and rebuild the site.
+The repository's Pages source is GitHub Actions. The `Deploy example site`
+workflow in `.github/workflows/pages.yml` runs when a push to `main` changes
+`example/**` or the workflow itself. It can also be started by manual dispatch.
+The workflow independently installs the example with `npm ci`, runs
+`npm run build`, and deploys `example/dist` to GitHub Pages.

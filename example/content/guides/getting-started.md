@@ -140,6 +140,6 @@ The footnote extension is enabled too.[^profiles]
 
 <p><a class="button" href="../assets/guide.txt?format=text#checklist" download>Download the content-root checklist</a></p>
 
-That link resolves from this source page to `content/assets/guide.txt`. Syncpress copies the file beside this page's output and applies `/field-notes/` to its final URL. [Return to the introduction](../index.md?from=guide#journal) to see the same rules applied to page links and images.
+That link resolves from this source page to `content/assets/guide.txt`. Syncpress copies the file beside this page's output and applies `/syncpress/` to its final URL. [Return to the introduction](../index.md?from=guide#journal) to see the same rules applied to page links and images.
 
 If any page, template, route, or reference is invalid, the command exits before reconciliation and leaves the preceding output tree in place. See [operations and diagnostics](../reference/operations.md) for failure categories and final-installation failures.

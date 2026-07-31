@@ -65,7 +65,7 @@ The [verbatim HTML example](../legal.html) demonstrates that authored tags remai
 
 Canonical routes are independent of deployment location. `site.basePath` is applied to supported site-absolute references during the final HTML pass. Authors normally write content-relative references or root-relative site references, not a base-path prefix.
 
-For this documentation, `/reference/content-routing/` is projected as `/field-notes/reference/content-routing/` in generated links. Syncpress applies the prefix once.
+For this documentation, `/reference/content-routing/` is projected as `/syncpress/reference/content-routing/` in generated links. Syncpress applies the prefix once.
 
 ## Output ownership
 

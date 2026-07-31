@@ -26,7 +26,7 @@ External, site-absolute, and fragment-only references do not perform content-fil
 [Configuration](./configuration.md?source=assets#paths)
 ```
 
-The generated target for this source is `/field-notes/reference/configuration/?source=assets#paths`.
+The generated target for this source is `/syncpress/reference/configuration/?source=assets#paths`.
 
 ## Content-relative assets
 

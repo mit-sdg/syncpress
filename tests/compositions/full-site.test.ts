@@ -2,13 +2,24 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { buildSite, inspectSite, serveSite, watchSite } from "../../src/edge.ts";
 
 const exampleDirectory = resolve(import.meta.dir, "../../example");
 const goldenPath = resolve(import.meta.dir, "../golden/example-site.json");
 
 type Golden = { files: Record<string, string> };
+
+async function copyExample(destination: string): Promise<void> {
+  await cp(exampleDirectory, destination, {
+    recursive: true,
+    filter(source) {
+      const path = relative(exampleDirectory, source);
+      return path !== "dist" && !path.startsWith(`dist${sep}`) &&
+        path !== "node_modules" && !path.startsWith(`node_modules${sep}`);
+    },
+  });
+}
 
 async function outputDigests(directory: string, prefix = ""): Promise<Record<string, string>> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -54,19 +65,19 @@ test("the example site produces its exact deterministic golden tree", async () =
     await expectGoldenTree(destination);
 
     const index = await readFile(join(destination, "index.html"), "utf8");
-    expect(index).toContain('href="/field-notes/guides/getting-started/?from=home#prerequisites"');
-    expect(index).toContain('href="/field-notes/posts/second/">Assets follow references, not conventions</a>');
+    expect(index).toContain('href="/syncpress/guides/getting-started/?from=home#prerequisites"');
+    expect(index).toContain('href="/syncpress/posts/second/">Assets follow references, not conventions</a>');
     expect(index).toContain('<source type="image/webp"');
-    expect(index).toContain('src="/field-notes/blue.png?variant=field-note#pixel"');
+    expect(index).toContain('src="/syncpress/blue.png?variant=field-note#pixel"');
     expect(index).toContain('class="field-image" data-fixture="responsive" sizes="(min-width: 48rem) 42rem, 100vw"');
     expect(index).toContain('<div class="excerpt-code"><p>The newest note appears first');
-    expect(index).toContain('<link rel="canonical" href="https://syncpress.example/field-notes/">');
+    expect(index).toContain('<link rel="canonical" href="https://mit-sdg.github.io/syncpress/">');
     expect(await readFile(join(destination, "legal", "index.html"), "utf8")).toContain(
       "This authored HTML passes through the verbatim profile for Syncpress Documentation.",
     );
     expect(await readFile(join(destination, ".nojekyll"), "utf8")).toBe("");
-    expect(await readFile(join(destination, "start", "index.html"), "utf8")).toContain('href="/field-notes/guides/getting-started/"');
-    expect(await readFile(join(destination, "sitemap.xml"), "utf8")).toContain("https://syncpress.example/field-notes/journal/1/");
+    expect(await readFile(join(destination, "start", "index.html"), "utf8")).toContain('href="/syncpress/guides/getting-started/"');
+    expect(await readFile(join(destination, "sitemap.xml"), "utf8")).toContain("https://mit-sdg.github.io/syncpress/journal/1/");
     expect(await readFile(join(destination, "feed.xml"), "utf8")).toContain("Assets follow references, not conventions");
     expect(await readFile(join(destination, "journal", "1", "index.html"), "utf8")).toContain("Field note archive");
     expect(await readFile(join(destination, "guides", "getting-started", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
@@ -84,13 +95,13 @@ test("renders without an origin and does not invent a canonical URL", async () =
   const project = await mkdtemp(join(tmpdir(), "syncpress-no-origin-site-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     const configuration = await readFile(configurationPath, "utf8");
     await writeFile(
       configurationPath,
       configuration
-        .replace("  origin: https://syncpress.example\n", "")
+        .replace("  origin: https://mit-sdg.github.io\n", "")
         .replace("  sitemap: true\n", "  sitemap: false\n")
         .replace(
           "  feed:\n    collection: posts\n    path: feed.xml\n    title: Syncpress Field Notes\n    description: Design notes from the Syncpress executable documentation.\n",
@@ -103,7 +114,7 @@ test("renders without an origin and does not invent a canonical URL", async () =
     const index = await readFile(join(project, "dist", "index.html"), "utf8");
     expect(index).toContain("Source file: <code>index.md</code>");
     expect(index).not.toContain('<link rel="canonical"');
-    expect(index).not.toContain("https://syncpress.example");
+    expect(index).not.toContain("https://mit-sdg.github.io");
   } finally {
     await rm(project, { recursive: true, force: true });
   }
@@ -113,7 +124,7 @@ test("collection cards preserve conditions, optional excerpts, and missing sort 
   const project = await mkdtemp(join(tmpdir(), "syncpress-collection-cards-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     await writeFile(
       configurationPath,
@@ -155,7 +166,7 @@ test("uses paths.output when no explicit destination is supplied", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-default-output-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const result = await buildSite(project);
     expect(result).toMatchObject({ pages: 19, written: 33, diagnostics: [] });
     expect(await readFile(join(project, "dist", "index.html"), "utf8")).toContain("Syncpress Documentation");
@@ -169,7 +180,7 @@ test("rejects a configured output symlink that escapes the project", async () =>
   const outside = await mkdtemp(join(tmpdir(), "syncpress-output-link-target-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await symlink(outside, join(project, "dist"));
 
     await expect(buildSite(project)).rejects.toThrow("Configured paths.output must stay inside the site directory");
@@ -184,13 +195,13 @@ test("generates a feed for a portable output path that is not a route", async ()
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     await writeFile(configurationPath, (await readFile(configurationPath, "utf8")).replace("path: feed.xml", "path: feeds/index.html"));
 
     await buildSite(project, "dist");
     expect(await readFile(join(destination, "feeds", "index.html"), "utf8")).toContain(
-      "https://syncpress.example/field-notes/feeds/index.html",
+      "https://mit-sdg.github.io/syncpress/feeds/index.html",
     );
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -201,7 +212,7 @@ test("normalizes XML-invalid feed metadata to well-formed XML text", async () =>
   const project = await mkdtemp(join(tmpdir(), "syncpress-xml-feed-site-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     await writeFile(
       configurationPath,
@@ -241,7 +252,7 @@ test("rejects feed dates that would be invalid or host-timezone dependent", asyn
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-feed-date-site-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const post = join(project, "content", "posts", "first.md");
     await writeFile(post, (await readFile(post, "utf8")).replace("date: 2026-07-28", "date: 2026-02-31T12:00:00"));
 
@@ -255,7 +266,7 @@ test("generated route collisions retain route diagnostics and finish deployment 
   const project = await mkdtemp(join(tmpdir(), "syncpress-deployment-route-collision-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     await writeFile(
       configurationPath,
@@ -275,7 +286,7 @@ test("invalid pagination work diagnoses and terminates without an incomplete que
   const project = await mkdtemp(join(tmpdir(), "syncpress-pagination-template-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     await writeFile(
       configurationPath,
@@ -293,7 +304,7 @@ test("reports multiple location-aware configuration errors before staging source
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await writeFile(
       join(project, "site.yaml"),
       [
@@ -322,7 +333,7 @@ test("reports a missing rendering profile after clearing prior diagnostics", asy
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     await writeFile(
       configurationPath,
@@ -375,7 +386,7 @@ test("the development server serves reconciled output with a live-reload client"
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("/__syncpress/live-reload");
-    expect(html).toContain("https://syncpress.example/field-notes/");
+    expect(html).toContain("https://mit-sdg.github.io/syncpress/");
     expect((await fetch(`http://${server.host}:${server.port}/missing`)).status).toBe(404);
   } finally {
     await server.close();
@@ -392,7 +403,7 @@ test("watch ignores its own reconciliation transactions", async () => {
   });
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await mkdir(join(project, "build-output"));
     await symlink("build-output", join(project, "dist"));
     const watcher = await watchSite(project, "dist", {
@@ -423,7 +434,7 @@ test("a missing local reference reports a diagnostic and preserves the prior des
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await writeFile(join(project, "content", "index.md"), "---\ntitle: Broken\n---\n[Missing](./assets/nope.txt)\n");
     await mkdir(destination);
     await writeFile(join(destination, "previous.txt"), "keep this file\n");
@@ -440,7 +451,7 @@ test("malformed front matter blocks publication without replacing prior output",
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await writeFile(join(project, "content", "about.md"), "---\ntitle: Unclosed\n");
     await mkdir(destination);
     await writeFile(join(destination, "previous.txt"), "keep this file\n");
@@ -457,7 +468,7 @@ test("body Liquid failures report their original source coordinate after front m
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await writeFile(join(project, "content", "index.md"), "---\ntitle: Broken\n---\n{{ missing.value }}\n");
     await mkdir(destination);
     await writeFile(join(destination, "previous.txt"), "keep this file\n");
@@ -474,7 +485,7 @@ test("a link to an unpublished document is not copied as an asset", async () => 
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const indexPath = join(project, "content", "index.md");
     await writeFile(indexPath, `${await readFile(indexPath, "utf8")}\n[Hidden draft](./drafts/hidden.md)\n`);
     await mkdir(destination);
@@ -492,7 +503,7 @@ test("two different local assets cannot silently claim one beside-page output pa
   const destination = join(project, "dist");
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await mkdir(join(project, "content", "one"));
     await mkdir(join(project, "content", "two"));
     await writeFile(join(project, "content", "one", "shared.txt"), "first\n");
@@ -513,7 +524,7 @@ test("an invalid asset output prefix fails before source staging", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-assets-site-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     const configurationPath = join(project, "site.yaml");
     const configuration = await readFile(configurationPath, "utf8");
     await writeFile(configurationPath, configuration.replace("assets: assets", "assets: ../outside"));
@@ -528,7 +539,7 @@ test("duplicate include and layout names are rejected before template reactions 
   const project = await mkdtemp(join(tmpdir(), "syncpress-duplicate-template-site-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await writeFile(join(project, "templates", "includes", "page.html"), "<p>duplicate</p>");
 
     await expect(buildSite(project, "dist")).rejects.toThrow("Duplicate logical Liquid template name");
@@ -542,7 +553,7 @@ test("a configured root cannot escape through an intermediate symbolic link", as
   const outside = await mkdtemp(join(tmpdir(), "syncpress-outside-root-"));
 
   try {
-    await cp(exampleDirectory, project, { recursive: true });
+    await copyExample(project);
     await mkdir(join(outside, "content"));
     await writeFile(join(outside, "content", "index.md"), "# Outside\n");
     await symlink(outside, join(project, "linked"));

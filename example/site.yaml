@@ -1,8 +1,8 @@
 site:
   title: Syncpress Documentation
   description: User and implementation documentation for the Syncpress static publishing generator.
-  origin: https://syncpress.example
-  basePath: /field-notes/
+  origin: https://mit-sdg.github.io
+  basePath: /syncpress/
   owner: the Syncpress project
   navigation:
     - label: Introduction
