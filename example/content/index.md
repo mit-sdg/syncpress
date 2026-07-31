@@ -4,9 +4,13 @@ description: Syncpress builds Markdown, HTML, templates, and local files into a 
 topics: [overview, site-building]
 ---
 
-Syncpress is a static site generator for documentation, blogs, portfolios, and other content-oriented sites. A project contains YAML policy, Markdown or HTML content, Liquid layouts, and ordinary files. A successful build writes a static directory with no server-side runtime.
+Syncpress builds documentation, blogs, portfolios, and other content-oriented
+sites from YAML policy, Markdown or HTML content, Liquid layouts, and ordinary
+files. A successful build writes a static directory with no server-side runtime.
 
-Install the public `@mit-sdg/syncpress` package from npm as a development dependency. It provides the `syncpress` executable and a programmatic API. This documentation is also an independently installable example site under [`example/`](https://github.com/mit-sdg/syncpress/tree/main/example), and the integration suite checks its complete output tree by SHA-256.
+Install the public `@mit-sdg/syncpress` package from npm as a development
+dependency. It provides the `syncpress` executable and a programmatic API. This
+documentation is also an independently installable [example site](https://github.com/mit-sdg/syncpress/tree/main/example).
 
 ## Start here
 
@@ -14,7 +18,8 @@ Install the public `@mit-sdg/syncpress` package from npm as a development depend
 2. Read [configuration](./reference/configuration.md), [content and routes](./reference/content-routing.md), [templates and data](./reference/templates.md), and [assets and images](./reference/assets.md) when changing a site.
 3. Use [commands, deployment, and diagnostics](./reference/operations.md) when running builds locally or in automation.
 4. Use the [programmatic API](./reference/programmatic-api.md) when invoking builds, inspection, watching, or the development server from TypeScript or JavaScript.
-5. Read [how Syncpress is built](./about.md) for the concept-and-reaction architecture.
+5. Read [implementation documentation](./about.md) only when working on the
+   Syncpress repository.
 
 ## What a build guarantees
 

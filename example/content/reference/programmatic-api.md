@@ -9,6 +9,9 @@ The public package root exposes the same filesystem edge used by the
 internal `buildSyncpress` application constructor and concept assembly are not
 public exports.
 
+The package is ESM-only. Import it from an ES module; CommonJS `require()` is
+not supported.
+
 ```ts
 import { buildSite } from "@mit-sdg/syncpress";
 

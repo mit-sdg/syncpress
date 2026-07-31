@@ -4,7 +4,9 @@ description: Authoritative behavior for configuring, authoring, building, and de
 topics: [reference, site-building]
 ---
 
-The user guide describes the current observable authoring, command-line, and programmatic contract. Begin with [Build a Syncpress site](../guides/getting-started.md) for one guided lifecycle.
+The user guide defines the current observable authoring, command-line, and
+programmatic contract. Begin with [Build a Syncpress site](../guides/getting-started.md)
+for one guided lifecycle.
 
 ## Project and authoring
 
@@ -20,6 +22,12 @@ The user guide describes the current observable authoring, command-line, and pro
 
 [Programmatic API](./programmatic-api.md) defines the package-root functions, result types, callbacks, and resource cleanup. The internal application assembly is not public API.
 
-## Implementation
+## Implementation documentation
 
-[How Syncpress is built](../about.md) explains the design boundaries, batch model, transactions, and publication gate. [Selected composition paths](../internals/reactions.md) traces representative routing, rendering, diagnostic, deployment, and reconciliation reactions.
+The following pages describe repository implementation. They are not extension
+API documentation and are not required to build a site.
+
+[How Syncpress is built](../about.md) explains the design boundaries, batch
+model, transactions, and publication gate. [Selected composition paths](../internals/reactions.md)
+traces representative routing, rendering, diagnostic, deployment, and
+reconciliation reactions.

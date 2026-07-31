@@ -5,16 +5,19 @@ featured: true
 topics: [guides, site-building]
 ---
 
-This introductory tutorial covers the smallest complete Syncpress lifecycle. It installs the public package, builds one site, inspects the result, and starts the development server. The [user guide](../reference/index.md) defines the complete configuration, authoring, command-line, and programmatic contracts.
+This introductory tutorial builds one Markdown page with a Liquid layout. It
+installs the public package, creates the required files, builds the site, and
+starts the development server. The [user guide](../reference/index.md) defines
+the complete configuration, authoring, command-line, and programmatic contract.
 
 <h2 id="prerequisites">Prerequisites</h2>
 
-- Node.js 24 (`>=24 <25`) and npm. The built package has been smoke-tested with Node.js 24.
+- Node.js `>=24 <25` and npm.
 - Alternatively, Bun `>=1.3.14 <1.4` can install and run the package.
 
 ## Install Syncpress and create the project boundary
 
-Create the project and install Syncpress 0.1.0 as a development dependency:
+Create the project and install Syncpress as a development dependency:
 
 ```sh
 mkdir notes
@@ -120,26 +123,18 @@ npx syncpress dev
 
 The development server listens on `127.0.0.1:3000` by default. It continues to serve the last successful output after a failed rebuild.
 
-## Features exercised by this tutorial page
+## Next steps
 
-The configured profile for this documentation recognizes tables, footnotes, ~~strikethrough~~, and bare addresses such as https://example.com. Raw authored HTML is enabled, so this page can render a named include inside Markdown.
+Add CSS to `public/styles.css`. Every regular file below `public/` is copied
+unchanged to the same output-relative path.
 
-| Input | Result |
-| --- | --- |
-| `content/index.md` | Derived route `/`, emitted as `index.html`. |
-| `templates/page.html` | Layout selected by the matching default. |
-| `public/styles.css` | Byte-for-byte output at `styles.css`. |
+For example, this [local checklist](../assets/guide.txt?format=text#checklist)
+is copied beside this page when the site builds. The source file is
+`content/assets/guide.txt`; it is not copied merely because it exists.
 
-{% render "callout.html", title: "This callout is a literal-name Liquid partial rendered by the page body." %}
-
-The footnote extension is enabled too.[^profiles]
-
-[^profiles]: The profile is declared once in `site.yaml`; each routed Markdown page uses it through the ordered defaults.
-
-<h2 id="verify-local-asset-handling">Verify local asset handling</h2>
-
-<p><a class="button" href="../assets/guide.txt?format=text#checklist" download>Download the content-root checklist</a></p>
-
-That link resolves from this source page to `content/assets/guide.txt`. Syncpress copies the file beside this page's output and applies `/syncpress/` to its final URL. [Return to the introduction](../index.md?from=guide#journal) to see the same rules applied to page links and images.
-
-If any page, template, route, or reference is invalid, the command exits before reconciliation and leaves the preceding output tree in place. See [operations and diagnostics](../reference/operations.md) for failure categories and final-installation failures.
+For content-relative links and local files, see [references and assets](../reference/assets.md).
+For front matter, routes, and publication controls, see [content and routes](../reference/content-routing.md).
+If a page, template, route, or reference is invalid, the command exits before
+reconciliation and leaves the preceding output tree in place. [Commands,
+deployment, and diagnostics](../reference/operations.md) lists failure classes
+and the limits of final output installation.

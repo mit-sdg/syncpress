@@ -3,64 +3,76 @@
 [![npm version](https://img.shields.io/npm/v/%40mit-sdg%2Fsyncpress)](https://www.npmjs.com/package/@mit-sdg/syncpress)
 [![CI](https://github.com/mit-sdg/syncpress/actions/workflows/ci.yml/badge.svg)](https://github.com/mit-sdg/syncpress/actions/workflows/ci.yml)
 
-Syncpress is a deterministic static publishing generator for Markdown, HTML,
-Liquid templates, and local files. A successful build produces an ordinary
-static directory with no server-side runtime. The source repository is
-<https://github.com/mit-sdg/syncpress>.
+Syncpress builds Markdown, HTML, Liquid templates, and local files into a
+deterministic static site. A successful build produces an ordinary directory of
+files; the deployed site has no Syncpress server-side runtime.
 
 ## Install
 
-Syncpress 0.1.0 is published to the npm registry as the public package
-`@mit-sdg/syncpress`. Install it as a development dependency:
+Install `@mit-sdg/syncpress` as a development dependency:
 
 ```sh
 npm install --save-dev @mit-sdg/syncpress
 ```
 
-or with Bun:
+The package supports Node.js `>=24 <25` and Bun `>=1.3.14 <1.4`. It is an ESM
+package. CommonJS `require()` is not supported.
+
+## Build a site
+
+A Syncpress project requires `site.yaml` plus `content/`, `templates/`, and
+`public/` directories. The following commands create and build the smallest
+useful site:
 
 ```sh
-bun add --dev @mit-sdg/syncpress
+mkdir notes && cd notes
+npm init -y
+npm install --save-dev @mit-sdg/syncpress
+mkdir content templates public
 ```
 
-The package requires Node.js 24 (`>=24 <25`) or Bun 1.3.14 or later in the 1.3
-series (`>=1.3.14 <1.4`). The built package has been smoke-tested with Node.js
-24.
+Create `site.yaml`:
 
-## Quick start
-
-A site directory contains `site.yaml` and the `content/`, `templates/`, and
-`public/` directories. See the [example project](example/README.md) for a
-complete independently installable site and the [authoring
-tutorial](example/content/guides/getting-started.md) for the smallest working
-configuration.
-
-Add project scripts that invoke the installed `syncpress` executable:
-
-```json
-{
-  "scripts": {
-    "build": "syncpress build .",
-    "dev": "syncpress dev .",
-    "inspect": "syncpress inspect"
-  }
-}
+```yaml
+defaults:
+  - match: "**/*.md"
+    values:
+      build:
+        template: page.html
+        markup: markdown
 ```
 
-Then build or serve the site:
+Create `content/index.md`:
+
+```md
+---
+title: Notes
+---
+
+# {{ page.data.title }}
+```
+
+Create `templates/page.html`:
+
+```liquid
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>{{ page.data.title }}</title></head>
+  <body><main>{{ page.content }}</main></body>
+</html>
+```
+
+Build the project:
 
 ```sh
-npm run build
-npm run dev
-npm run inspect -- /
+npx syncpress build
 ```
 
-The default output is `dist` under the site directory. `site.yaml` can select a
-different `paths.output`.
+The command writes `dist/index.html`. `npx syncpress dev` watches the project
+and serves successful builds on `127.0.0.1:3000`. The development server is not
+a production server.
 
-## Command-line interface
-
-Installing the package provides `syncpress`:
+## Commands
 
 ```text
 syncpress build [site-directory] [output-directory]
@@ -69,15 +81,17 @@ syncpress dev [--port PORT] [site-directory] [output-directory]
 syncpress inspect <page-or-route> [site-directory]
 ```
 
-The site directory defaults to the current directory. An omitted output
-directory uses `paths.output` from `site.yaml`, or `dist` when that setting is
-absent. The [operations reference](example/content/reference/operations.md)
-defines command behavior, diagnostics, watch mode, and reconciliation limits.
+The site directory defaults to the current directory. Without an explicit
+output directory, Syncpress uses `paths.output` from `site.yaml`, or `dist`.
+
+For configuration rules, content routing, templates, assets, deployment, and
+failure behavior, read the [documentation site](https://mit-sdg.github.io/syncpress/).
+The [example project](example/README.md) is a complete installable site.
 
 ## Programmatic API
 
 The package root exports `runCli`, `buildSite`, `inspectSite`, `watchSite`, and
-`serveSite`, together with their public TypeScript types:
+`serveSite`, along with their TypeScript types:
 
 ```ts
 import { buildSite } from "@mit-sdg/syncpress";
@@ -86,79 +100,18 @@ const result = await buildSite("./site");
 console.log(result.written);
 ```
 
-The internal application assembly, including `buildSyncpress`, is not a public
-export. See the [programmatic API
-reference](example/content/reference/programmatic-api.md) for signatures and
-lifecycle requirements.
+The internal application assembly is not public API. See the [programmatic API
+reference](https://mit-sdg.github.io/syncpress/reference/programmatic-api/) for
+function signatures, result values, callbacks, and cleanup requirements.
 
-## Package contents
+## Limitations
 
-The published package contains `dist`, public declarations under `types`, and
-this README. The build bundles Syncpress's internal TypeScript and Markdown
-specifications into the library and CLI artifacts under `dist`. Third-party
-runtime packages remain normal npm dependencies and are installed by the
-package manager.
+Syncpress does not provide server rendering, API routes, a database, executable
+configuration, or a plugin interface. Use a different system when a page depends
+on request-time state or arbitrary build-time code.
 
-## Publishing the npm package
+## Contributing and releases
 
-Normal releases use the `Publish npm package` workflow in
-`.github/workflows/release.yml`. Before the first release, configure an npm
-trusted publisher for repository `mit-sdg/syncpress` and workflow
-`release.yml`. The workflow authenticates through GitHub OIDC; it does not use
-an npm token.
-
-To release a version:
-
-1. Update the version in `package.json`.
-2. Install and verify the release from a clean checkout:
-
-```sh
-bun install --frozen-lockfile
-bun run check
-bun test
-npm pack --dry-run
-```
-
-3. Commit the version change.
-4. Create a tag whose name is `v` followed by the exact package version, such
-   as `v0.2.0`, and push the commit and tag.
-
-A pushed `v*` tag starts the release workflow. The workflow runs
-`bun run check` and `bun test`, rejects a tag that does not match
-`package.json`, and publishes the public package with npm trusted publishing.
-If that exact package version already exists, the workflow skips publication.
-
-After the workflow succeeds, verify the registry record:
-
-```sh
-version=$(node -p "require('./package.json').version")
-npm view "@mit-sdg/syncpress@$version" name version
-```
-
-## Contributor workflow
-
-Repository contributors use Bun 1.3.14 and the root scripts:
-
-```sh
-bun install
-bun run generate
-bun run check
-bun run principle
-bun test
-```
-
-`generate` writes `generated/syncpress.md` and `generated/wire.ts`. `check`
-compares declarations with concept implementations, checks generated artifacts,
-runs application diagnostics, and typechecks the repository. `principle` runs
-the direct concept Principle tests.
-
-The repository-only `bun run site ...` script executes `src/cli.ts` without an
-installed package. For example, `bun run site build ./example` builds the
-fixture while developing Syncpress. Consumer projects should use the installed
-`syncpress` executable through their own project scripts.
-
-To add behavior, update the relevant concept specification and implementation,
-register any new concept, connect it under `src/compositions/`, run
-`bun run generate`, review both generated files, and run `bun run check`.
-Generated files are derived from `generated.config.ts`; do not edit them by
-hand.
+Repository development is documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+Package release procedure and GitHub Pages maintenance are documented in
+[RELEASING.md](RELEASING.md).

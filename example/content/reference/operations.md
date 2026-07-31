@@ -20,9 +20,6 @@ syncpress inspect <page-or-route> [site-directory]
 Install `@mit-sdg/syncpress` as a development dependency and invoke
 `syncpress` from a project script or package runner. The repository's
 `bun run site ...` command is a contributor shortcut, not the consumer CLI.
-Package version 0.1.0 declares Node.js `>=24 <25` and Bun `>=1.3.14 <1.4` as
-its supported runtime ranges; the built artifact has been smoke-tested with
-Node.js 24.
 
 <h3 id="build"><code>build</code></h3>
 
