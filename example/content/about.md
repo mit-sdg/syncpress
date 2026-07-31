@@ -1,6 +1,8 @@
 ---
 title: How Syncpress is built
 description: The design boundaries, batch model, transactions, and selected composition paths behind Syncpress.
+group: implementation
+order: 1
 featured: true
 topics: [site-building, configuration]
 build:

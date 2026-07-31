@@ -1,6 +1,8 @@
 ---
 title: References, assets, and responsive images
 description: Local page links, content assets, public files, scanned HTML attributes, and raster image generation.
+group: guide
+order: 6
 topics: [assets, responsive-images, site-building]
 ---
 

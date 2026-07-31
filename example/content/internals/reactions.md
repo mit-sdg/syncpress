@@ -1,6 +1,8 @@
 ---
 title: Selected composition paths
 description: Representative reaction chains that show how Syncpress routes, renders, diagnoses, and publishes work.
+group: implementation
+order: 2
 topics: [architecture, reactions, concepts]
 ---
 

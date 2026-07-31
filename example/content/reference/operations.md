@@ -1,6 +1,8 @@
 ---
 title: Commands, deployment, and diagnostics
 description: Build, watch, serve, inspect, generate deployment artifacts, and interpret strict failures.
+group: guide
+order: 7
 topics: [commands, deployment, diagnostics, site-building]
 ---
 

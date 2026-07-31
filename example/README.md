@@ -27,6 +27,30 @@ This example configures `site.basePath: /syncpress/` for its GitHub Pages
 deployment. The built-in development server does not mount a base path, so set
 `site.basePath: /` when serving this project directly during local development.
 
+## Theme layout
+
+The presentation lives in two places. `public/styles.css` holds the whole design
+system: color tokens declared once and resolved per scheme with `light-dark()`,
+a fluid type scale, the page shell, and every component. `templates/` holds the
+three layouts and the includes they share.
+
+| Layout | Used by | Shape |
+| --- | --- | --- |
+| `page.html` | Home, verbatim HTML pages, generated archive pages | Single column; renders a hero when a page sets `hero: true`, and collection cards with a pager when `pagination` is present. |
+| `guide.html` | Guides, reference, and implementation pages | Three columns: section navigation, the document, and an on-page table of contents. |
+| `post.html` | Field notes | Single column with dated header and the remaining notes below. |
+
+The section navigation is built from the `startHere`, `userGuide`, and
+`implementation` collections, which select pages by their `group` front-matter
+value and order them by `order`. Adding a page to the sidebar is therefore a
+front-matter change, not a template change.
+
+The pages are complete without client-side code. `templates/includes/head.html`
+carries one small progressive-enhancement script that adds the light and dark
+theme toggle, heading anchors, the table of contents, and code copy buttons.
+Without it the site still renders, follows the operating system color scheme,
+and stays fully navigable.
+
 The published documentation is available at <https://mit-sdg.github.io/syncpress/>.
 Maintainers should use [RELEASING.md](../RELEASING.md) for package and Pages
 release procedure.
