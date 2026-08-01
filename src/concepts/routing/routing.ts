@@ -1,3 +1,11 @@
+import {
+  encodeSegment,
+  isPathSegment,
+  isText,
+  parseAddress,
+  pathSegments,
+} from "@syncpress/address";
+
 const INVALID_OWNER = "An owner must be a well-formed text identity.";
 const INVALID_BASE = "A base must be a canonical directory address.";
 const INVALID_ORIGIN = "An origin must be a canonical HTTP or HTTPS origin.";
@@ -298,13 +306,3 @@ export class RoutingConcept {
       .map(({ owner, address }) => ({ owner, address }));
   }
 }
-import {
-  encodeSegment,
-  isCanonicalAddress,
-  isPathSegment,
-  isText,
-  parseAddress,
-  pathSegments,
-} from "../../address.ts";
-
-export { isCanonicalAddress } from "../../address.ts";

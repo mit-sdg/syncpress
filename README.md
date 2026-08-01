@@ -100,9 +100,8 @@ const result = await buildSite("./site");
 console.log(result.written);
 ```
 
-The internal application assembly is not public API. See the [programmatic API
-reference](https://mit-sdg.github.io/syncpress/reference/programmatic-api/) for
-function signatures, result values, callbacks, and cleanup requirements.
+See the [programmatic API reference](https://mit-sdg.github.io/syncpress/reference/programmatic-api/)
+for function signatures, result values, callbacks, and cleanup requirements.
 
 ## Limitations
 

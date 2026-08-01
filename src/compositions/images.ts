@@ -1,5 +1,5 @@
 import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
 import { PAGE_PATTERNS, PARTS } from "./shared.ts";
 import { ImageAssetPathSetting, ImageRenditionSettings } from "./views.ts";
 import {
@@ -18,11 +18,11 @@ const {
   Rendering,
   Routing,
   Transcoding,
-} = concepts;
+} = conceptRefs;
 
 export const RasterBodyAssetReference = view(
   "primary raster body asset reference of source (source)",
-  ({ source }, { rendering, page, reference, raw, image, root, imagePath, name, content }, { pattern }) =>
+  ({ source }, { rendering, page, reference, raw, image, name, content }, { pattern, imagePath }) =>
     where(
       UnroutedContentBodyAsset({ source }).is({
         rendering,
@@ -31,7 +31,6 @@ export const RasterBodyAssetReference = view(
         raw,
         role: "image",
         asset: image,
-        root,
         sourcePath: imagePath,
         name,
         content,
@@ -43,7 +42,7 @@ export const RasterBodyAssetReference = view(
 
 export const ResponsiveBodyImageEmbedding = view(
   "responsive body image embedding (embedding)",
-  ({ embedding }, { rendering, page, reference, original }, { source, raw, image }) =>
+  ({ embedding }, { page, original }, { source, rendering, reference, raw, image }) =>
     where(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source, raw, role: "image" }),
@@ -79,7 +78,6 @@ export const RasterFallbacksStage = reaction(
     image,
     source,
     page,
-    rendering,
     name,
     path,
     content,

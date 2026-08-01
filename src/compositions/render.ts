@@ -1,6 +1,6 @@
 import { earlier, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
-import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { TRUSTED_COLLECTION_EXCERPTS } from "@syncpress/concepts/templating/templating";
 import { PAGE_CONTENT_PATH, PARTS } from "./shared.ts";
 import {
   CompletedPageRenderContext,
@@ -21,10 +21,10 @@ const {
   Rendering,
   Routing,
   Templating,
-} = concepts;
+} = conceptRefs;
 
-/** Begin fresh page and output attempts for every routed document in the render phase. */
-export const RoutedDocumentsBeginRendering = reaction(({ page }) =>
+/** Begin a fresh dependency result for every routed document in the render phase. */
+export const RenderPhaseBeginsPageDependencies = reaction(({ page }) =>
   when(Phasing.advance({}).responds({ phase: "render" }))
     .where(
       Routing._claims({}).is({ owner: page }),
@@ -237,8 +237,8 @@ export const SettledLayoutsFinish = reaction(({ rendering }) =>
   ),
 );
 
-/** A completed rendering publishes only while it remains the page's latest attempt. */
-export const FinishedRenderingsEmit = reaction(({ rendering, page, text, address, path }) =>
+/** Commit a completed page attempt only while it remains the latest rendering. */
+export const FinishedRenderingsCommitOutput = reaction(({ rendering, page, text, address, path }) =>
   when(Rendering.finish({ rendering }).responds({ subject: page, transitioned: true }))
     .where(
       Rendering._latest({ subject: page }).is({ rendering, stage: "completed" }),

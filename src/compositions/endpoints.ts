@@ -1,21 +1,25 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { no, view, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
 import { CONFIGURATION_PATH, PHASES, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 
-const { Configuring, Depending, Deploying, Diagnosing, Emitting, Filing, Governing, Phasing, Routing } = concepts;
+const { Configuring, Depending, Deploying, Diagnosing, Emitting, Filing, Governing, Phasing, Routing } = conceptRefs;
 
-/** Enumerate routed pages whose latest replacement attempt has not settled. */
-export const UnsettledRoutedPages = view(
-  "unsettled routed page",
-  (_inputs, { page }, _bindings) =>
+/** Enumerate routed owners without a current dependency result. */
+export const UnsettledRouteOwners = view(
+  "unsettled route owner",
+  (_inputs, { owner }, _bindings) =>
     where(
-      Routing._claims({}).is({ owner: page }),
-      no(Depending._current({ subject: page })),
+      Routing._claims({}).is({ owner }),
+      no(Depending._current({ subject: owner })),
     ),
 ).many();
 
-/** Load the staged site configuration and prepare a build sequence. */
+/**
+ * Load a configuration already staged in the project root and prepare a build
+ * sequence. The filesystem edge establishes that precondition before invoking
+ * this internal endpoint.
+ */
 export const ConfigureSite = endpoint("/site/configure", ({ destination, project, settings, source, sequence }) =>
   receive({ destination })
     .where(
@@ -30,14 +34,17 @@ export const ConfigureSite = endpoint("/site/configure", ({ destination, project
     .then(respond({ sequence })),
 );
 
-/** Publish only a completed deployment and diagnostically clean build. */
+/**
+ * Publish only a completed deployment and diagnostically clean build. The
+ * filesystem edge invokes this internal endpoint after its phase job settles.
+ */
 export const ReconcileSite = endpoint("/site/reconcile", ({ job, written, replaced, kept, removed }) =>
   receive({ job }).then(
     where(
       Phasing._outcome({ job }).is({ state: "finished" }),
       Diagnosing._clean({}).is({ clean: true }),
       Deploying._outcome({}).is({ state: "completed" }),
-      no(UnsettledRoutedPages({})),
+      no(UnsettledRouteOwners({})),
     )
       .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
       .then(respond({ written, replaced, kept, removed }))
@@ -51,14 +58,14 @@ export const ReconcileSite = endpoint("/site/reconcile", ({ job, written, replac
     where(
       Phasing._outcome({ job }).is({ state: "finished" }),
       Diagnosing._clean({}).is({ clean: true }),
-      UnsettledRoutedPages({}),
+      UnsettledRouteOwners({}),
     )
       .then(respond({ error: "BUILD_INCOMPLETE" }))
       .named("unsettled"),
     where(
       Phasing._outcome({ job }).is({ state: "finished" }),
       Diagnosing._clean({}).is({ clean: true }),
-      no(UnsettledRoutedPages({})),
+      no(UnsettledRouteOwners({})),
       no(Deploying._outcome({}).is({ state: "completed" })),
     )
       .then(respond({ error: "BUILD_INCOMPLETE" }))

@@ -19,6 +19,7 @@ import { routing } from "./concepts/routing/registry.ts";
 import { templating } from "./concepts/templating/registry.ts";
 import { transcoding } from "./concepts/transcoding/registry.ts";
 
+/** Bind every concept contract to the implementation used by Syncpress. */
 export const syncpressConcepts = conceptSet({
   Cataloging: cataloging,
   Configuring: configuring,
@@ -40,4 +41,7 @@ export const syncpressConcepts = conceptSet({
   Templating: templating,
   Transcoding: transcoding,
 });
+
+// `concepts` contains inert references for composition; assembled applications
+// expose the corresponding runtime instances through `application.concepts`.
 export const { concepts, vocabulary } = syncpressConcepts;

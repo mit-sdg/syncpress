@@ -601,7 +601,7 @@ active collection setting — inputs (); outputs (name, rule, text, direction, s
 ```
 
 ```view
-active default pattern setting — inputs (); outputs (rule, text); bindings (root, defaults) — answers any number of (rule, text)
+active default pattern setting — inputs (); outputs (text); bindings (root, defaults, rule) — answers any number of (text)
   where
     Configuring._active () has (root)
     Configuring._at (node: root, path: ["defaults"]) has (found: defaults)
@@ -655,7 +655,7 @@ active verbatim settings — inputs (); outputs (separator); bindings (root) —
 ```
 
 ```view
-beside-page output for page (page) and name (name) — inputs (page, name); outputs (pageAddress, pagePath, prefix, path); bindings () — answers at most one (pageAddress, pagePath, prefix, path)
+beside-page output for page (page) and name (name) — inputs (page, name); outputs (path); bindings (pageAddress, pagePath, prefix) — answers at most one (path)
   where
     Routing._address (owner: page) has (address: pageAddress)
     Routing._file (address: pageAddress) has (path: pagePath)
@@ -664,7 +664,7 @@ beside-page output for page (page) and name (name) — inputs (page, name); outp
 ```
 
 ```view
-content document file — inputs (); outputs (root, file, path, text); bindings (pattern) — answers any number of (root, file, path, text)
+content document file — inputs (); outputs (file, text); bindings (root, path, pattern) — answers any number of (file, text)
   where
     Filing._named (name: "content") has (root)
     Filing._under (prefix: "", root) has (file, path)
@@ -696,7 +696,7 @@ resolved local body reference of source (source) — inputs (source); outputs (r
 ```
 
 ```view
-unrouted content body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, role, asset, root, sourcePath, name, content); bindings () — answers any number of (rendering, page, reference, raw, role, asset, root, sourcePath, name, content)
+unrouted content body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, role, asset, sourcePath, name, content); bindings (root) — answers any number of (rendering, page, reference, raw, role, asset, sourcePath, name, content)
   where
     view "resolved local body reference of source (source)" with (source) has (page, raw, reference, rendering, role, target: asset)
     no Routing._address (owner: asset)
@@ -706,8 +706,8 @@ unrouted content body asset of source (source) — inputs (source); outputs (ren
 ```
 
 ```view
-copyable body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, asset, sourcePath, name, content); bindings (pattern) — answers any number of (rendering, page, reference, raw, asset, sourcePath, name, content)
-  where view "unrouted content body asset of source (source)" with (source) has (asset, content, name, page, raw, reference, rendering, sourcePath) and not (role: "image")
+copyable body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, asset, name, content); bindings (pattern, sourcePath) — answers any number of (rendering, page, reference, raw, asset, name, content)
+  where view "unrouted content body asset of source (source)" with (source) has (asset, content, name, page, raw, reference, rendering) and not (role: "image")
   where
     view "unrouted content body asset of source (source)" with (source) has (asset, content, name, page, raw, reference, rendering, role: "image", sourcePath)
     Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
@@ -719,13 +719,6 @@ declared site origin — inputs (); outputs (origin); bindings (root) — answer
   where
     Configuring._active () has (root)
     Configuring._at (node: root, path: ["site", "origin"]) has (value: origin)
-```
-
-```view
-effective conversion profile of page (page) — inputs (page); outputs (profile); bindings (name) — answers at most one (profile)
-  where
-    Rendering._latest (subject: page) has (profile: name)
-    Converting._profile (name) has (profile)
 ```
 
 ```view
@@ -774,15 +767,15 @@ matching catalog of page (page) — inputs (page); outputs (catalog, path); bind
 ```
 
 ```view
-primary raster body asset reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, image, root, imagePath, name, content); bindings (pattern) — answers any number of (rendering, page, reference, raw, image, root, imagePath, name, content)
+primary raster body asset reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, image, name, content); bindings (pattern, imagePath) — answers any number of (rendering, page, reference, raw, image, name, content)
   where
-    view "unrouted content body asset of source (source)" with (source) has (asset: image, content, name, page, raw, reference, rendering, role: "image", root, sourcePath: imagePath)
+    view "unrouted content body asset of source (source)" with (source) has (asset: image, content, name, page, raw, reference, rendering, role: "image", sourcePath: imagePath)
     Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
     Matching._matches (path: imagePath, pattern) has (matched: true)
 ```
 
 ```view
-responsive body image embedding (embedding) — inputs (embedding); outputs (rendering, page, reference, original); bindings (source, raw, image) — answers at most one (rendering, page, reference, original)
+responsive body image embedding (embedding) — inputs (embedding); outputs (page, original); bindings (source, rendering, reference, raw, image) — answers at most one (page, original)
   where
     Embedding._embedding (embedding) has (subject: reference)
     Referencing._reference (reference) has (raw, role: "image", source)
@@ -808,10 +801,10 @@ sitemap page — inputs (); outputs (owner, address, url); bindings () — answe
 ```
 
 ```view
-unsettled routed page — inputs (); outputs (page); bindings () — answers any number of (page)
+unsettled route owner — inputs (); outputs (owner); bindings () — answers any number of (owner)
   where
-    Routing._claims () has (owner: page)
-    no Depending._current (subject: page)
+    Routing._claims () has (owner)
+    no Depending._current (subject: owner)
 ```
 
 ## Formers
@@ -1525,7 +1518,7 @@ then
   Diagnosing.report (code: "MALFORMED_ATTRIBUTES", message: detail, severity: "error", source: path)
 ```
 
-### fullSite.EmittingStartsDeployment
+### fullSite.EmitPhaseStartsDeployment
 
 ```reaction
 when Phasing.advance (phase: "emit")
@@ -1660,7 +1653,7 @@ then
   Emitting.begin (producer)
 ```
 
-### fullSite.FinishedRenderingsEmit
+### fullSite.FinishedRenderingsCommitOutput
 
 ```reaction
 when Rendering.finish (rendering, subject: page, transitioned: true)
@@ -1673,18 +1666,18 @@ then
   Emitting.intend (content: text, medium: "text/html", path, producer: page)
 ```
 
-### fullSite.FinishedRenderingsEmit#2
+### fullSite.FinishedRenderingsCommitOutput#2
 
 ```reaction
-when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.FinishedRenderingsEmit
+when Emitting.intend (content: text, medium: "text/html", path, producer: page), asked by fullSite.FinishedRenderingsCommitOutput
 then
   Emitting.commit (producer: page)
 ```
 
-### fullSite.FinishedRenderingsEmit#3
+### fullSite.FinishedRenderingsCommitOutput#3
 
 ```reaction
-when Emitting.commit (producer: page), asked by fullSite.FinishedRenderingsEmit#2
+when Emitting.commit (producer: page), asked by fullSite.FinishedRenderingsCommitOutput#2
 then
   Depending.settle (subject: page)
 ```
@@ -2109,7 +2102,8 @@ when Phasing.advance (phase: "excerpt")
 where
   Routing._claims () has (owner: page)
   Documenting._document (subject: page) has (body)
-  view "effective conversion profile of page (page)" with (page) has (profile)
+  Rendering._latest (subject: page) has (profile: profileName)
+  Converting._profile (name: profileName) has (profile)
 then
   Converting.convert (part: "excerpt", profile, source: body, subject: page)
 ```
@@ -2196,7 +2190,7 @@ then
   Transcoding.admit (content, subject: image)
 ```
 
-### fullSite.PublicFilesEmit
+### fullSite.PublicFilesIntendOutput
 
 ```reaction
 when Phasing.advance (phase: "read")
@@ -2327,7 +2321,7 @@ when RequestBoundary.request (job, path: "/site/reconcile", requestId)
 where
   Phasing._outcome (job) has (state: "finished")
   Diagnosing._clean () has (clean: true)
-  no view "unsettled routed page"
+  no view "unsettled route owner"
   no Deploying._outcome () has (state: "completed")
 then
   RequestBoundary.respond (error: "BUILD_INCOMPLETE", requestId)
@@ -2372,7 +2366,7 @@ where
   Phasing._outcome (job) has (state: "finished")
   Diagnosing._clean () has (clean: true)
   Deploying._outcome () has (state: "completed")
-  no view "unsettled routed page"
+  no view "unsettled route owner"
 then
   Emitting.reconcile ()
 ```
@@ -2394,7 +2388,7 @@ when RequestBoundary.request (job, path: "/site/reconcile", requestId)
 where
   Phasing._outcome (job) has (state: "finished")
   Diagnosing._clean () has (clean: true)
-  view "unsettled routed page"
+  view "unsettled route owner"
 then
   RequestBoundary.respond (error: "BUILD_INCOMPLETE", requestId)
 ```
@@ -2435,6 +2429,17 @@ where
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: "RELATIVE_LAYOUT_REFERENCE", message: "A layout reference must be site-absolute, external, or fragment-only.", severity: "error", source: path)
+```
+
+### fullSite.RenderPhaseBeginsPageDependencies
+
+```reaction
+when Phasing.advance (phase: "render")
+where
+  Routing._claims () has (owner: page)
+  Rendering._latest (subject: page) has (stage: "started")
+then
+  Depending.begin (subject: page)
 ```
 
 ### fullSite.RenderedLayoutsScan
@@ -2567,17 +2572,6 @@ where
   view "routed deployment work (work)" with (work) has (address, owner)
 then
   Routing.claim (address, owner)
-```
-
-### fullSite.RoutedDocumentsBeginRendering
-
-```reaction
-when Phasing.advance (phase: "render")
-where
-  Routing._claims () has (owner: page)
-  Rendering._latest (subject: page) has (stage: "started")
-then
-  Depending.begin (subject: page)
 ```
 
 ### fullSite.SettingsClearRoutingOrigin

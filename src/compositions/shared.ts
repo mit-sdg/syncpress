@@ -26,7 +26,6 @@ export const DEFAULTS = {
   imageWidths: [480, 960, 1440],
   markdownExtensions: ["tables", "footnotes", "strikethrough", "autolinks"],
   markdownRaw: true,
-  outputPath: "dist",
   publicPath: "public",
   template: "page.html",
   templatesPath: "templates",
@@ -46,7 +45,6 @@ export const PROFILES = {
 } as const;
 
 export const PATHS = {
-  buildMarkup: ["build", "markup"],
   buildPublish: ["build", "publish"],
   buildRoute: ["build", "route"],
   buildTemplate: ["build", "template"],
@@ -66,7 +64,6 @@ export const PATHS = {
   markdownRaw: ["markdown", "raw"],
   pathsAssets: ["paths", "assets"],
   pathsContent: ["paths", "content"],
-  pathsOutput: ["paths", "output"],
   pathsPublic: ["paths", "public"],
   pathsTemplates: ["paths", "templates"],
   site: ["site"],

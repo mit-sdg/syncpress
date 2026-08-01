@@ -1,9 +1,9 @@
 import { earlier, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
-import { MAX_PAGE_LAYER_RANK, PARTS, PATHS, ROOTS } from "./shared.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { MAX_PAGE_LAYER_RANK, PATHS, ROOTS } from "./shared.ts";
 import { ContentDocumentFile } from "./views.ts";
 
-const { Configuring, Diagnosing, Documenting, Emitting, Filing, Layering, Matching, Phasing, Templating } = concepts;
+const { Configuring, Diagnosing, Documenting, Emitting, Filing, Layering, Matching, Phasing, Templating } = conceptRefs;
 
 export const ContentDocumentsParse = reaction(({ file, text }) =>
   when(Phasing.advance({}).responds({ phase: "read" }))
@@ -71,7 +71,7 @@ export const IncludeDefinitionFailuresDiagnose = reaction(({ root, file, path, t
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
 );
 
-export const PublicFilesEmit = reaction(({ root, file, path, content }) =>
+export const PublicFilesIntendOutput = reaction(({ root, file, path, content }) =>
   when(Phasing.advance({}).responds({ phase: "read" }))
     .where(
       Filing._named({ name: ROOTS.public }).is({ root }),

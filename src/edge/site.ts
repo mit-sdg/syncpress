@@ -8,10 +8,10 @@ import {
   DEFAULTS,
   PATHS,
   ROOTS,
-} from "../compositions/shared.ts";
-import { PageOperationalInspection } from "../compositions/views.ts";
-import type { SitePolicy } from "../concepts/governing/governing.ts";
-import { buildSyncpress, type Application } from "./application.ts";
+} from "@syncpress/compositions/shared";
+import { PageOperationalInspection } from "@syncpress/compositions/views";
+import type { SitePolicy } from "@syncpress/concepts/governing/governing";
+import { createSyncpressRuntime, type Application } from "./application.ts";
 
 type Configuring = Application["concepts"]["Configuring"];
 type SourceFile = { path: string; source: string };
@@ -335,14 +335,15 @@ async function validateProjectPolicy(application: Application, configuration: Ui
   return assessed.policy;
 }
 
-async function prepareSite(projectDirectory = ".", destination?: string) {
+/** Stage filesystem inputs and run every phase without reconciling the output tree. */
+async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string) {
   const siteDirectory = resolve(projectDirectory);
   await requireDirectory(siteDirectory, "site");
   const canonicalSiteDirectory = await canonicalPath(siteDirectory, "site directory");
 
   const configurationFile = join(siteDirectory, CONFIGURATION_PATH);
   const configuration = await readRequiredFile(configurationFile, CONFIGURATION_PATH);
-  const { application, gateway } = buildSyncpress();
+  const { application, gateway } = createSyncpressRuntime();
   const policy = await validateProjectPolicy(application, configuration);
   const outputDirectory = destination === undefined
     ? sourceDirectory(siteDirectory, policy.outputPath, "paths.output")
@@ -487,7 +488,7 @@ async function prepareSite(projectDirectory = ".", destination?: string) {
 }
 
 export async function buildSite(projectDirectory = ".", destination?: string) {
-  const { application, gateway, job, inputFiles, policy } = await prepareSite(projectDirectory, destination);
+  const { application, gateway, job, inputFiles, policy } = await stageAndRunSiteBuild(projectDirectory, destination);
   const reconciled = await gateway.invoke("/site/reconcile", { job });
   const diagnostics = await application.concepts.Diagnosing._all();
   if (!reconciled.ok) {
@@ -513,7 +514,7 @@ function leafPaths(value: unknown, prefix: string[] = []): string[][] {
 export async function inspectSite(projectDirectory: string, target: string) {
   const temporary = await mkdtemp(join(tmpdir(), "syncpress-inspect-"));
   try {
-    const { application } = await prepareSite(projectDirectory, join(temporary, "output"));
+    const { application } = await stageAndRunSiteBuild(projectDirectory, join(temporary, "output"));
     let owner: string | undefined;
     if (target.startsWith("/")) owner = (await application.concepts.Routing._owner({ address: target }))[0]?.owner;
     else {

@@ -1,9 +1,8 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
-import { PARTS, PATHS, ROOTS } from "./shared.ts";
-import { EffectiveConversionProfile } from "./views.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { PATHS, ROOTS } from "./shared.ts";
 
-const { Converting, Diagnosing, Documenting, Filing, Layering, Phasing, Rendering, Routing } = concepts;
+const { Diagnosing, Documenting, Filing, Layering, Phasing, Rendering, Routing } = conceptRefs;
 
 export const ExplicitRoutesClaim = reaction(({ page, root, address }) =>
   when(Phasing.advance({}).responds({ phase: "route" }))
@@ -90,25 +89,5 @@ export const ClaimedRoutesBeginRendering = reaction(({ page, path, data }) =>
 export const RenderingBeginningsDiagnose = reaction(({ page, error, detail, path }) =>
   when(Rendering.begin({ subject: page }).refuses({ error, detail }))
     .where(Filing._file({ file: page }).is({ path }))
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
-);
-
-export const PageExcerptsConvert = reaction(({ page, body, profile }) =>
-  when(Phasing.advance({}).responds({ phase: "excerpt" }))
-    .where(
-      Routing._claims({}).is({ owner: page }),
-      Documenting._document({ subject: page }).is({ body }),
-      EffectiveConversionProfile({ page }).is({ profile }),
-    )
-    .then(Converting.convert({ subject: page, part: PARTS.excerpt, profile, source: body })),
-);
-
-export const ExcerptConversionFailuresDiagnose = reaction(({ page, root, path, error, detail }) =>
-  when(Converting.convert({ subject: page, part: PARTS.excerpt }).refuses({ error, detail }))
-    .where(
-      earlier(Phasing.advance, {}, { phase: "excerpt" }),
-      Filing._named({ name: ROOTS.content }).is({ root }),
-      Filing._file({ file: page }).is({ root, path }),
-    )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
 );

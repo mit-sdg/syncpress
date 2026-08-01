@@ -1,22 +1,20 @@
 import { readFile, watch } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { CONFIGURATION_PATH } from "../compositions/shared.ts";
-import { GoverningConcept } from "../concepts/governing/governing.ts";
+import { CONFIGURATION_PATH } from "@syncpress/compositions/shared";
+import { GoverningConcept } from "@syncpress/concepts/governing/governing";
 import { buildSite, canonicalPath, containsPath, type BuildResult } from "./site.ts";
-
-type WatchedOutput = { directory: string; target: string };
 
 export type SiteWatcher = { close(): Promise<void> };
 
-async function watchedOutput(directory: string): Promise<WatchedOutput> {
-  return { directory, target: await canonicalPath(directory, "output directory") };
+async function canonicalOutputDirectory(directory: string): Promise<string> {
+  return canonicalPath(directory, "output directory");
 }
 
-function isOutputTransactionPath(output: WatchedOutput, candidate: string): boolean {
-  const parent = dirname(output.target);
+function isOutputTransactionPath(output: string, candidate: string): boolean {
+  const parent = dirname(output);
   if (!containsPath(parent, candidate)) return false;
   const [first] = relative(parent, candidate).split(sep);
-  return first?.startsWith(`.${basename(output.target)}.emitting-`) ?? false;
+  return first?.startsWith(`.${basename(output)}.emitting-`) ?? false;
 }
 
 async function configuredWatchOutputDirectory(siteDirectory: string, destination: string | undefined): Promise<string | undefined> {
@@ -37,10 +35,10 @@ export async function watchSite(
   options: { onBuild?: (result: BuildResult) => void; onError?: (error: unknown) => void } = {},
 ): Promise<SiteWatcher> {
   const siteDirectory = resolve(projectDirectory);
-  let current = await buildSite(siteDirectory, destination);
-  options.onBuild?.(current);
-  let output = await watchedOutput(resolve(siteDirectory, destination ?? current.policy.outputPath));
-  let rebuildingOutput: WatchedOutput | undefined;
+  const initial = await buildSite(siteDirectory, destination);
+  options.onBuild?.(initial);
+  let output = await canonicalOutputDirectory(resolve(siteDirectory, destination ?? initial.policy.outputPath));
+  let rebuildingOutput: string | undefined;
   const controller = new AbortController();
   let closed = false;
   let rebuilding = false;
@@ -56,11 +54,11 @@ export async function watchSite(
     rebuilding = true;
     try {
       const configuredOutput = await configuredWatchOutputDirectory(siteDirectory, destination);
-      if (configuredOutput !== undefined) output = await watchedOutput(configuredOutput);
+      if (configuredOutput !== undefined) output = await canonicalOutputDirectory(configuredOutput);
       rebuildingOutput = output;
-      current = await buildSite(siteDirectory, destination);
-      output = await watchedOutput(resolve(siteDirectory, destination ?? current.policy.outputPath));
-      options.onBuild?.(current);
+      const result = await buildSite(siteDirectory, destination);
+      output = await canonicalOutputDirectory(resolve(siteDirectory, destination ?? result.policy.outputPath));
+      options.onBuild?.(result);
     } catch (error) {
       options.onError?.(error);
     } finally {
@@ -87,7 +85,7 @@ export async function watchSite(
         const filename = event.filename === null ? undefined : resolve(siteDirectory, event.filename.toString());
         if (
           filename !== undefined &&
-          (containsPath(output.target, filename) ||
+          (containsPath(output, filename) ||
             (rebuildingOutput !== undefined && isOutputTransactionPath(rebuildingOutput, filename)))
         ) {
           continue;

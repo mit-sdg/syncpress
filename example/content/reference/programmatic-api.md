@@ -7,9 +7,7 @@ topics: [reference, commands, site-building]
 ---
 
 The public package root exposes the same filesystem edge used by the
-`syncpress` executable. Import these functions from `@mit-sdg/syncpress`. The
-internal `buildSyncpress` application constructor and concept assembly are not
-public exports.
+`syncpress` executable. Import these functions from `@mit-sdg/syncpress`.
 
 The package is ESM-only. Import it from an ES module; CommonJS `require()` is
 not supported.
@@ -124,5 +122,4 @@ responsible for handling the rejection.
 
 The package root exports `BuildResult`, `InspectionResult`, `Diagnostic`,
 `SitePolicy`, `SiteWatcher`, `DevelopmentServer`, and `FeedPolicy`. These types
-describe the values and handles returned by the public functions. No internal
-concept, gateway, wire, or application type is part of the package-root API.
+describe the values and handles returned by the public functions.

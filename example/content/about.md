@@ -17,7 +17,7 @@ This page assumes familiarity with concept design and sync-engine composition. I
 
 ## Package boundary
 
-The public npm package is `@mit-sdg/syncpress`. Its root exports the filesystem-edge operations `runCli`, `buildSite`, `inspectSite`, `watchSite`, and `serveSite` plus their public types. It does not export `buildSyncpress` or the internal application assembly. The [programmatic API reference](./reference/programmatic-api.md) defines the supported package boundary.
+The public npm package is `@mit-sdg/syncpress`. Its root exports the filesystem-edge operations `runCli`, `buildSite`, `inspectSite`, `watchSite`, and `serveSite` plus their public types. The [programmatic API reference](./reference/programmatic-api.md) defines their signatures, results, callbacks, and cleanup requirements.
 
 The package build bundles Syncpress's internal TypeScript and Markdown specifications into distribution artifacts under `dist`. Third-party runtime packages remain external package dependencies. Bundling changes distribution, not the concept boundaries or build lifecycle described below.
 
@@ -37,6 +37,8 @@ The concept boundaries separate decisions that can be specified and tested indep
 These boundaries keep filesystem policy out of content parsing and keep HTML policy out of routing. Composition can replace one cross-concept policy without giving either participating concept knowledge of the other.
 
 [`src/concept-set.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/concept-set.ts) lists the full inventory. Individual contracts remain in [`src/concepts/*/spec.md`](https://github.com/mit-sdg/syncpress/tree/main/src/concepts); this overview does not duplicate them.
+
+Composition is declarative rather than a pipeline object with a `run` method. [`src/compositions/full-site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/full-site.ts) exports inert views, formers, reactions, and endpoints; assembly discovers those declarations and connects them to fresh concept instances. Calling an assembled concept action records an occurrence, and matching reactions perform the cross-concept work.
 
 ## A batch uses explicit barriers
 
@@ -72,7 +74,7 @@ This reduces partially initialized cross-concept state. It also makes the same f
 
 At the render barrier, each routed page begins a Depending result and an Emitting replacement attempt. The composition tracks the source and every transitive body or layout template as inputs, fills and converts the body, resolves local references, renders the layout, and performs a final reference pass.
 
-Page output is committed only after the final scan completes. A failed transformation records a diagnostic, rejects the replacement attempt, and settles the dependency result as failed. Assets and responsive-image renditions are staged under producer claims before the page that refers to them commits.
+Page output is committed only after the final scan completes. A failed transformation records a diagnostic and leaves the replacement attempt and dependency result unsettled, so the publication gate cannot reconcile it. Assets and responsive-image renditions are staged under producer claims before the page that refers to them commits.
 
 The full chain is in [`src/compositions/render.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/render.ts), with reference and image branches in [`references.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/references.ts) and [`images.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/images.ts).
 
@@ -93,7 +95,7 @@ This gate is defined in [`src/compositions/endpoints.ts`](https://github.com/mit
 
 [`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) handles work that requires the operating system: validating project boundaries, reading directory entries, staging bytes, waiting for quiescence, writing the prepared tree, and watching for changes. It does not derive routes, interpret templates, or decide whether a build is publishable.
 
-[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The host reaches that application through the configure and reconcile protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts). This assembly is an implementation detail, not a package-root export.
+[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The configure and reconcile protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts) bracket initialization and publication; the host also stages files, advances phases, and reads inspection state through runtime concept instances.
 
 ## Selected composition paths
 

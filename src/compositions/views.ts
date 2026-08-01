@@ -1,5 +1,5 @@
 import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
 import { DEFAULTS, PAGE_PATTERNS, PARTS, PATHS, ROOTS } from "./shared.ts";
 
 const {
@@ -15,12 +15,12 @@ const {
   Referencing,
   Rendering,
   Routing,
-} = concepts;
+} = conceptRefs;
 
 /** Authored content files supported by the document pipeline. */
 export const ContentDocumentFile = view(
   "content document file",
-  (_inputs, { root, file, path, text }, { pattern }) => [
+  (_inputs, { file, text }, { root, path, pattern }) => [
     where(
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
@@ -37,16 +37,6 @@ export const ContentDocumentFile = view(
     ),
   ],
 ).many();
-
-/** The explicit or extension-derived conversion profile selected for a page. */
-export const EffectiveConversionProfile = view(
-  "effective conversion profile of page (page)",
-  ({ page }, { profile }, { name }) =>
-    where(
-      Rendering._latest({ subject: page }).is({ profile: name }),
-      Converting._profile({ name }).is({ profile }),
-    ),
-).optional();
 
 export const MarkdownSettings = view(
   "active markdown settings",
@@ -80,7 +70,7 @@ export const VerbatimSettings = view(
 
 export const DefaultPatternSetting = view(
   "active default pattern setting",
-  (_inputs, { rule, text }, { root, defaults }) =>
+  (_inputs, { text }, { root, defaults, rule }) =>
     where(
       Configuring._active({}).is({ root }),
       Configuring._at({ node: root, path: PATHS.defaults }).is({ found: defaults }),
@@ -249,22 +239,22 @@ export const PageOperationalInspection = former(
   (
     { owner },
     {
-       catalog,
+      catalog,
       name,
       index,
       rendering,
       renderingPath,
-       renderingProfile,
-       renderingTemplate,
-       renderingStage,
-       bodySource,
-       layoutSource,
-       historicalRendering,
-       historicalPath,
-       historicalProfile,
-       historicalTemplate,
-       historicalStage,
-       state,
+      renderingProfile,
+      renderingTemplate,
+      renderingStage,
+      bodySource,
+      layoutSource,
+      historicalRendering,
+      historicalPath,
+      historicalProfile,
+      historicalTemplate,
+      historicalStage,
+      state,
       reason,
       input,
       outputPath,
@@ -285,6 +275,7 @@ export const PageOperationalInspection = former(
       note,
     },
   ) =>
+    // each(...) retains the queried concept order for stable inspection output.
     form({
       rendering: where(
         whether(

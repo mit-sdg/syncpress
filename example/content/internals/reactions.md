@@ -51,7 +51,7 @@ Other local files, including SVG images, take the ordinary copy path. Both branc
 
 Expected domain failures are translated into Diagnosing actions near the reaction that has the necessary source evidence. Template selection failures know the page path; configuration assessment knows the YAML node; route contention knows both producers.
 
-The render chain does not treat a diagnostic as page completion. Failure reactions also reject the active Emitting attempt and settle Depending with a failed result. This is why the publication gate can distinguish a finished failing page from a routed page whose reaction chain never reached a terminal state.
+The render chain does not treat a diagnostic as page completion. Failure reactions report the problem but leave the active Emitting attempt and Depending result unsettled. The error diagnostic and unsettled routed owner both make the build ineligible for publication.
 
 The relevant terminal reactions are near the end of [`src/compositions/render.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/render.ts). Diagnostic ordering and source data remain owned by [Diagnosing](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/diagnosing/spec.md).
 
@@ -71,4 +71,4 @@ Only the finished-and-clean branch asks Emitting to reconcile and returns file c
 
 ## Reading the complete assembly
 
-Use the source composition for intent and [`generated/syncpress.md`](https://github.com/mit-sdg/syncpress/blob/main/generated/syncpress.md) for the expanded assembly. Generated files are review artifacts; changes begin in concept specifications, implementations, views, formers, reactions, or endpoints and are propagated with `bun run generate`. The package bundles these implementation inputs, but the package root exposes only the edge functions and public types; consumers cannot construct the internal assembly through `buildSyncpress`.
+Use the source composition for intent and [`generated/syncpress.md`](https://github.com/mit-sdg/syncpress/blob/main/generated/syncpress.md) for the expanded assembly. Generated files are review artifacts; changes begin in concept specifications, implementations, views, formers, reactions, or endpoints and are propagated with `bun run generate`.

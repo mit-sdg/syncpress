@@ -80,7 +80,6 @@ export const MEDIA_TYPE_BY_FORMAT = Object.freeze({
 } as const);
 
 export type ImageFormat = keyof typeof MEDIA_TYPE_BY_FORMAT;
-export type ImageAttributes = Readonly<Record<string, string>>;
 
 type Attribute = { name: string; value: string };
 type Offer = { offer: string; embedding: string; address: string; format: ImageFormat; width: number; order: number };

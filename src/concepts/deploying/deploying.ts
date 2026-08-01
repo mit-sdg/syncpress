@@ -1,4 +1,4 @@
-import { isCanonicalAddress, isText, pathSegments } from "../../address.ts";
+import { isCanonicalAddress, isText, pathSegments } from "@syncpress/address";
 
 export type DeploymentPolicy = {
   nojekyll: boolean;

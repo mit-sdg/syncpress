@@ -1,7 +1,7 @@
 import { earlier, each, former, no, reaction, view, when, where, whether } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
-import { TRUSTED_COLLECTION_EXCERPTS } from "../concepts/templating/templating.ts";
-import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PARTS } from "./shared.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { TRUSTED_COLLECTION_EXCERPTS } from "@syncpress/concepts/templating/templating";
+import { CONFIGURATION_PATH, PAGE_CONTENT_PATH } from "./shared.ts";
 import { ActiveSiteSettings } from "./views.ts";
 
 const {
@@ -15,10 +15,11 @@ const {
   Referencing,
   Routing,
   Templating,
-} = concepts;
+} = conceptRefs;
 
 const DEPLOYMENT_LAYOUT = "deployment-layout";
 
+// Cataloging owns this order. each(...) preserves it in deployment snapshots.
 const CatalogEntries = former(
   "the deployment entries of catalog (catalog)",
   ({ catalog }, { item, card }) =>
@@ -53,12 +54,13 @@ const HeldDeploymentLayoutReference = view(
 
 const SitemapUrls = former(
   "the sitemap urls",
+  // Routing._claims is already deterministically ordered; preserve that order.
   (_inputs, { owner, address, url }) =>
     each(SitemapPage({}).is({ owner, address, url })).form({ url }),
 );
 
 /** Start a finite deployment queue as part of the emit phase itself. */
-export const EmittingStartsDeployment = reaction(({ policy }) =>
+export const EmitPhaseStartsDeployment = reaction(({ policy }) =>
   when(Phasing.advance({}).responds({ phase: "emit" }))
     .where(Governing._publishing({}).is({ policy }))
     .then(Deploying.start({ policy })),

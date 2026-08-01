@@ -22,7 +22,7 @@ for one guided lifecycle.
 
 [Commands, deployment, and diagnostics](./operations.md) defines strict builds, watch mode, the development server, inspection, generated artifacts, failure reporting, and reconciliation limits.
 
-[Programmatic API](./programmatic-api.md) defines the package-root functions, result types, callbacks, and resource cleanup. The internal application assembly is not public API.
+[Programmatic API](./programmatic-api.md) defines the package-root functions, result types, callbacks, and resource cleanup.
 
 ## Implementation documentation
 

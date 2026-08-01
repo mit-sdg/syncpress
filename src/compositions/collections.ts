@@ -1,9 +1,9 @@
 import { reaction, view, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
 import { ROOTS } from "./shared.ts";
 import { CollectionSetting, PublicationCard } from "./views.ts";
 
-const { Cataloging, Filing, Matching, Phasing, Routing } = concepts;
+const { Cataloging, Filing, Matching, Phasing, Routing } = conceptRefs;
 
 /** Configured catalogs whose admitted path selector matches a routed content page. */
 export const MatchingCatalogOfPage = view(

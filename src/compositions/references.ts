@@ -1,8 +1,8 @@
 import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
 import { PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
-const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Rendering, Routing } = concepts;
+const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Rendering, Routing } = conceptRefs;
 
 const ASSET_MEDIUM = "application/octet-stream";
 
@@ -28,7 +28,7 @@ export const ResolvedLocalBodyReference = view(
 
 export const UnroutedContentBodyAsset = view(
   "unrouted content body asset of source (source)",
-  ({ source }, { rendering, page, reference, raw, role, asset, root, sourcePath, name, content }, _bindings) =>
+  ({ source }, { rendering, page, reference, raw, role, asset, sourcePath, name, content }, { root }) =>
     where(
       ResolvedLocalBodyReference({ source }).is({ rendering, page, reference, raw, role, target: asset }),
       no(Routing._address({ owner: asset })),
@@ -40,7 +40,7 @@ export const UnroutedContentBodyAsset = view(
 
 export const BesidePageOutput = view(
   "beside-page output for page (page) and name (name)",
-  ({ page, name }, { pageAddress, pagePath, prefix, path }, _bindings) =>
+  ({ page, name }, { path }, { pageAddress, pagePath, prefix }) =>
     where(
       Routing._address({ owner: page }).is({ address: pageAddress }),
       Routing._file({ address: pageAddress }).is({ path: pagePath }),
@@ -51,9 +51,9 @@ export const BesidePageOutput = view(
 
 const CopyableBodyAsset = view(
   "copyable body asset of source (source)",
-  ({ source }, { rendering, page, reference, raw, asset, sourcePath, name, content }, { pattern }) => [
+  ({ source }, { rendering, page, reference, raw, asset, name, content }, { pattern, sourcePath }) => [
     where(
-      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, asset, sourcePath, name, content }).is.not({ role: "image" }),
+      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, asset, name, content }).is.not({ role: "image" }),
     ),
     where(
       UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", asset, sourcePath, name, content }),

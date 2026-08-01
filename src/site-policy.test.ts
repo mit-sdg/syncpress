@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseSitePolicy } from "./site-policy.ts";
+import { parseSitePolicy } from "./concepts/governing/governing.ts";
 
 test("deployment redirects use the routing canonical-address contract", () => {
   const { problems } = parseSitePolicy(`

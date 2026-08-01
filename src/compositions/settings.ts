@@ -1,5 +1,5 @@
 import { earlier, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts as conceptRefs } from "@syncpress/concept-set";
 import {
   CONFIGURATION_PATH,
   PAGE_PATTERNS,
@@ -15,7 +15,7 @@ import {
   VerbatimSettings,
 } from "./views.ts";
 
-const { Cataloging, Configuring, Converting, Diagnosing, Matching, Phasing, Routing } = concepts;
+const { Cataloging, Configuring, Converting, Diagnosing, Matching, Phasing, Routing } = conceptRefs;
 
 /** Make the built-in source selectors available even when configuration has no rules. */
 export const FixedPatternsCompile = reaction(() =>

@@ -1,5 +1,5 @@
 import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Node } from "yaml";
-import { isCanonicalAddress } from "../../address.ts";
+import { isCanonicalAddress } from "@syncpress/address";
 
 export type ConfigurationProblem = {
   code: "INVALID_CONFIGURATION";
@@ -71,13 +71,13 @@ function problem(problems: ConfigurationProblem[], counter: LineCounter, node: N
   problems.push({ code: "INVALID_CONFIGURATION", message, ...location(counter, node) });
 }
 
-function stringValue(
+function stringValue<T extends string | undefined>(
   entries: Mapping | undefined,
   key: string,
-  otherwise: string | undefined,
+  otherwise: T,
   problems: ConfigurationProblem[],
   counter: LineCounter,
-): string | undefined {
+): string | T {
   const node = entries?.get(key);
   if (node === undefined) return otherwise;
   if (!isScalar(node) || typeof node.value !== "string") {
@@ -123,7 +123,7 @@ function checkKnownKeys(entries: Mapping, allowed: ReadonlySet<string>, label: s
   }
 }
 
-function portableDirectory(value: string): boolean {
+function portableRelativePath(value: string): boolean {
   return value !== "" &&
     value.isWellFormed() &&
     value.normalize("NFC") === value &&
@@ -132,14 +132,6 @@ function portableDirectory(value: string): boolean {
     !value.includes("\\") &&
     value.split("/").every((segment) =>
       segment !== "" && segment !== "." && segment !== ".." && !/[\u0000-\u001f\u007f]/u.test(segment));
-}
-
-function portableOutputPath(value: string): boolean {
-  return portableDirectory(value) && !value.includes("\u0000");
-}
-
-function canonicalAddress(value: string): boolean {
-  return isCanonicalAddress(value);
 }
 
 function externalRedirectTarget(value: string): boolean {
@@ -265,8 +257,8 @@ function parseFeed(node: Node | null | undefined, problems: ConfigurationProblem
   const title = stringValue(feed, "title", undefined, problems, counter);
   const description = stringValue(feed, "description", undefined, problems, counter);
   if (collection === undefined) problem(problems, counter, node, "deploy.feed needs a collection string.");
-  if (path === undefined || !portableOutputPath(path)) problem(problems, counter, feed.get("path"), "deploy.feed.path must be a portable output path.");
-  return collection === undefined || path === undefined ? undefined : { collection, path, ...(title === undefined ? {} : { title }), ...(description === undefined ? {} : { description }) };
+  if (!portableRelativePath(path)) problem(problems, counter, feed.get("path"), "deploy.feed.path must be a portable output path.");
+  return collection === undefined ? undefined : { collection, path, ...(title === undefined ? {} : { title }), ...(description === undefined ? {} : { description }) };
 }
 
 function parseRedirects(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): RedirectPolicy[] {
@@ -279,7 +271,7 @@ function parseRedirects(node: Node | null | undefined, problems: ConfigurationPr
   const policies: RedirectPolicy[] = [];
   const locations = new Map<string, Node | null>();
   for (const [from, target] of redirects) {
-    if (!canonicalAddress(from)) {
+    if (!isCanonicalAddress(from)) {
       problem(problems, counter, target, "Each redirect source must be a canonical site-relative route.");
       continue;
     }
@@ -287,7 +279,7 @@ function parseRedirects(node: Node | null | undefined, problems: ConfigurationPr
       problem(problems, counter, target, "Each redirect target must be a nonempty URL or canonical site-relative route.");
       continue;
     }
-    if (!canonicalAddress(target.value) && !externalRedirectTarget(target.value)) {
+    if (!isCanonicalAddress(target.value) && !externalRedirectTarget(target.value)) {
       problem(problems, counter, target, "Each redirect target must be a nonempty URL or canonical site-relative route.");
       continue;
     }
@@ -346,11 +338,10 @@ function parsePagination(node: Node | null | undefined, problems: ConfigurationP
     const template = stringValue(rule, "template", "page.html", problems, counter);
     const title = stringValue(rule, "title", undefined, problems, counter);
     if (collection === undefined) problem(problems, counter, ruleNode, `deploy.pagination.${name} needs a collection string.`);
-    if (route === undefined || route.split(":page").length !== 2 || !canonicalAddress(route.replace(":page", "1"))) {
+    if (route === undefined || route.split(":page").length !== 2 || !isCanonicalAddress(route.replace(":page", "1"))) {
       problem(problems, counter, rule.get("route"), `deploy.pagination.${name}.route must contain one :page in a canonical route.`);
     }
-    if (template === undefined) problem(problems, counter, ruleNode, `deploy.pagination.${name} needs a template string.`);
-    if (collection !== undefined && perPage !== undefined && route !== undefined && template !== undefined) {
+    if (collection !== undefined && perPage !== undefined && route !== undefined) {
       policies.push({ name, collection, perPage, route, template, ...(title === undefined ? {} : { title }) });
     }
   }
@@ -390,7 +381,7 @@ export function parseSitePolicy(source: string): { policy: SitePolicy; problems:
     checkKnownKeys(paths, PATH_KEYS, "paths", problems, counter);
     for (const key of PATH_KEYS) {
       const value = stringValue(paths, key, key === "output" ? DEFAULT_PATHS.output : undefined, problems, counter);
-      if (value !== undefined && !portableDirectory(value)) problem(problems, counter, paths.get(key), `paths.${key} must be a portable project-relative directory path.`);
+      if (value !== undefined && !portableRelativePath(value)) problem(problems, counter, paths.get(key), `paths.${key} must be a portable project-relative directory path.`);
       if (key === "output" && value !== undefined) outputPath = value;
     }
   }
