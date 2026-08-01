@@ -5,7 +5,7 @@
 
 Syncpress builds Markdown, HTML, Liquid templates, and local files into a
 deterministic static site. A successful build produces an ordinary directory of
-files; the deployed site has no Syncpress server-side runtime.
+files for deployment to a static host.
 
 ## Install
 
@@ -69,8 +69,8 @@ npx syncpress build
 ```
 
 The command writes `dist/index.html`. `npx syncpress dev` watches the project
-and serves successful builds on `127.0.0.1:3000`. The development server is not
-a production server.
+and serves successful builds on `127.0.0.1:3000`. Use this server only for local
+development.
 
 ## Commands
 
@@ -105,12 +105,13 @@ for function signatures, result values, callbacks, and cleanup requirements.
 
 ## Limitations
 
-Syncpress does not provide server rendering, API routes, a database, executable
-configuration, or a plugin interface. Use a different system when a page depends
-on request-time state or arbitrary build-time code.
+Syncpress targets build-time static pages. Pages that require request-time state,
+API routes, database access, arbitrary build-time code, or site-specific plugins
+require another system.
 
 ## Contributing and releases
 
 Repository development is documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 Package release procedure and GitHub Pages maintenance are documented in
-[RELEASING.md](RELEASING.md).
+[RELEASING.md](RELEASING.md). User-visible changes are recorded in the
+[changelog](CHANGELOG.md).

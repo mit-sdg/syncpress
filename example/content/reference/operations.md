@@ -21,7 +21,7 @@ syncpress inspect <page-or-route> [site-directory]
 
 Install `@mit-sdg/syncpress` as a development dependency and invoke
 `syncpress` from a project script or package runner. The repository's
-`bun run site ...` command is a contributor shortcut, not the consumer CLI.
+`bun run site ...` command is a contributor shortcut for running `src/cli.ts`.
 
 <h3 id="build"><code>build</code></h3>
 
@@ -39,13 +39,13 @@ Watch mode performs a strict initial build, monitors the project recursively, an
 
 Development mode combines watch behavior with a server for the reconciled destination. It listens on `127.0.0.1:3000` by default. `--port` accepts an integer from 1 through 65535. HTML responses receive a small EventSource client, and connected pages reload only after a successful build.
 
-The server is for local development. It is not a production HTTP server.
+Use this server only for local development.
 
-The current server maps request paths directly into the output directory and does not mount `site.basePath`. A project with a non-root base path therefore emits prefixed links that the development server does not resolve unless the output is mounted under that prefix by another local server. Use the built-in server directly only with `site.basePath: /`.
+The current server maps request paths directly into the output directory. A project with a non-root `site.basePath` emits prefixed links that require a local server mounted under that prefix. Use the built-in server directly with `site.basePath: /`.
 
 ### `inspect`
 
-`inspect` accepts a canonical route beginning with `/` or a content-root-relative page path. It reports the source, selected template and transitive partials, layered data origins, collection positions, dependencies, outputs, route claims, stale reasons, and diagnostics. Inspection uses an isolated application and does not reconcile the configured destination.
+`inspect` accepts a canonical route beginning with `/` or a content-root-relative page path. It reports the source, selected template and transitive partials, layered data origins, collection positions, dependencies, outputs, route claims, stale reasons, and diagnostics. Inspection uses an isolated application and leaves the configured destination unchanged.
 
 ## Deployment settings
 
@@ -53,7 +53,7 @@ Deployment work runs after authored pages have settled and participates in route
 
 ### Not-found page and `.nojekyll`
 
-`deploy.nojekyll: true` emits an empty `.nojekyll`. `deploy.requireNotFound: true` requires an authored document whose canonical route is `/404.html`; it does not synthesize the page.
+`deploy.nojekyll: true` emits an empty `.nojekyll`. `deploy.requireNotFound: true` requires an authored document whose canonical route is `/404.html`.
 
 ### Sitemap
 
@@ -70,7 +70,7 @@ deploy:
     description: Recent changes.
 ```
 
-The named collection must exist and `path` must be a portable output path. `site.origin` is required. Entry dates must be `YYYY-MM-DD` or timezone-qualified RFC 3339 values; host-local time is not inferred.
+The named collection must exist and `path` must be a portable output path. `site.origin` is required. Entry dates must be `YYYY-MM-DD` or timezone-qualified RFC 3339 values with an explicit offset.
 
 ### Redirects
 
@@ -81,7 +81,7 @@ deploy:
     /external/: https://example.com/reference
 ```
 
-Keys are canonical site-relative routes. Targets are canonical site-relative routes or HTTP(S) URLs. Redirect cycles and route collisions are errors. Redirect output is static HTML, so host-specific redirect semantics are not implied.
+Keys are canonical site-relative routes. Targets are canonical site-relative routes or HTTP(S) URLs. Redirect cycles and route collisions are errors. Redirect output uses static HTML; host-specific redirect behavior requires separate host configuration.
 
 ### Pagination
 
@@ -117,6 +117,6 @@ The host rejects project-boundary failures immediately, including missing roots,
 
 Build diagnostics accumulate independent domain failures. Current categories include malformed front matter, invalid configuration, malformed patterns, route and output collisions, missing profiles or templates, Liquid failures, conversion and image failures, invalid local references, unsupported relative layout references, and deployment failures.
 
-Diagnostics use the form `SEVERITY CODE source:line:column: message` when a source position is available. Configuration diagnostics point to YAML nodes. Liquid diagnostics point to the named template or authored body; body positions account for front matter. A generated reference does not receive an invented authored coordinate.
+Diagnostics use the form `SEVERITY CODE source:line:column: message` when a source position is available. Configuration diagnostics point to YAML nodes. Liquid diagnostics point to the named template or authored body; body positions account for front matter. Generated references omit authored coordinates.
 
-No warning downgrades a strict error in watch or development mode. The previous successful site remains available until a clean rebuild reconciles.
+Strict errors retain error severity in watch and development mode. The previous successful site remains available until a clean rebuild reconciles.

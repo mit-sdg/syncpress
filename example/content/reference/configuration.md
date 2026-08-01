@@ -65,7 +65,7 @@ The complete `site` mapping is available to Liquid as `site`. Syncpress addition
 | Key | Meaning |
 | --- | --- |
 | `basePath` | Canonical directory address projected onto supported site-absolute references in final HTML. It must begin and end with `/`; the default is `/`. |
-| `origin` | Exact HTTP(S) origin used for canonical URLs, sitemap entries, and Atom feed identifiers. It cannot contain credentials, a path, query, or fragment. A trailing `/` is accepted and normalized away. Sitemap and feed generation require it. |
+| `origin` | Exact HTTP(S) origin used for canonical URLs, sitemap entries, and Atom feed identifiers. Valid values contain a scheme, host, and optional canonical non-default port. Credentials, paths, queries, fragments, and explicit default ports are errors. A trailing `/` is accepted and normalized away. Sitemap and feed generation require it. |
 
 Other keys have no built-in meaning. A layout can read `site.title`, `site.navigation`, or any other configured value by its static member path.
 
@@ -109,7 +109,7 @@ Patterns are case-sensitive and match the complete slash-separated relative path
 
 ## `images`
 
-`widths` contains positive target widths. The defaults are 480, 960, and 1440 pixels. A rendition is not generated above the source's oriented width.
+`widths` contains positive target widths. The defaults are 480, 960, and 1440 pixels. The source's oriented width caps generated renditions.
 
 `formats` accepts `avif`, `gif`, `jpeg` or its `jpg` alias, `png`, `webp`, and the `original` sentinel. The defaults are `avif`, `webp`, and `original`. The exact original fallback is always present, even when `original` is omitted. Syncpress also generates smaller source-format renditions when the source encoder supports them. A requested format that cannot preserve an animated source is omitted. See [assets and responsive images](./assets.md).
 

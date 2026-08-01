@@ -6,7 +6,7 @@ order: 5
 topics: [collections, excerpts, site-building]
 ---
 
-A collection is a named, ordered set of routed pages. Collection names have no built-in semantics. A document with no route, including a document with `build.publish: false`, cannot become a collection member.
+A collection is a named, ordered set of routed pages. Collection names are author-defined. Collection membership requires a route, so documents with `build.publish: false` remain outside collections.
 
 ## Define a collection
 
@@ -52,13 +52,13 @@ excerpt
 source.path
 ```
 
-The card is a publication projection, not a page object. It does not contain full rendered body content. This prevents a collection layout from depending recursively on pages whose layouts depend on that collection.
+A card is a publication projection containing the fields above. Full rendered body content remains page-owned, which prevents recursive dependencies between collection layouts and page layouts.
 
 ## Ordering
 
 Ordering is total and deterministic. Present sort values compare by established type and value rules. Missing sort values follow present values even for descending order. Equal values break by source path and then internal item identity.
 
-Do not use source enumeration order as an implied publication order. Declare `sort` whenever order carries meaning.
+Declare `sort` whenever publication order carries meaning. Source enumeration order has no authoring semantics.
 
 ## Excerpts
 

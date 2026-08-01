@@ -115,7 +115,7 @@ npx syncpress build
 npx syncpress inspect /
 ```
 
-The build writes `dist/index.html` and `dist/styles.css`. `inspect` reports the route owner, selected template, data origins, dependencies, collection positions, outputs, and current diagnostics without replacing `dist`.
+The build writes `dist/index.html` and `dist/styles.css`. `inspect` reports the route owner, selected template, data origins, dependencies, collection positions, outputs, and current diagnostics while leaving `dist` unchanged.
 
 To serve successful builds and reload after source changes, run:
 
@@ -129,7 +129,7 @@ The development server listens on `127.0.0.1:3000` by default. It continues to s
 
 Open this [local checklist](../assets/guide.txt?format=text#checklist). The source
 file is `content/assets/guide.txt`; Syncpress copies it beside this page because
-the page links to it. An unreferenced content asset is not emitted.
+the page links to it. Unreferenced content assets remain source-only.
 
 ## Next steps
 

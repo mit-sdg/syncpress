@@ -6,15 +6,15 @@ order: 2
 topics: [architecture, reactions, concepts]
 ---
 
-This page assumes knowledge of sync-engine actions, queries, views, formers, causality, and endpoint composition. It follows selected paths where the reaction structure expresses a Syncpress design choice. It is not a reaction-by-reaction index.
+This page assumes knowledge of sync-engine actions, queries, views, formers, causality, and endpoint composition. It traces selected paths where reaction structure expresses a Syncpress design choice. The generated assembly provides the complete reaction index.
 
 ## Explicit and derived routes
 
 [`src/compositions/routes.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/routes.ts) gives explicit page policy priority over convention.
 
-When the route phase advances, a published page with `build.route` asks Routing to claim that address. A published page with no explicit value asks Routing to derive an address from its content path. A page with `build.publish: false` is released instead of routed.
+When the route phase advances, a published page with `build.route` asks Routing to claim that address. Routing derives an address from the content path when the page has no explicit value. A page with `build.publish: false` is withheld from routing.
 
-The alternatives are separate reactions because “no explicit route” is a current-state condition, while participation in the route phase is causal evidence. Routing refusals do not terminate the reaction engine. They become source-located diagnostics, allowing unrelated route failures to accumulate before reconciliation is refused.
+The alternatives are separate reactions because “no explicit route” is a current-state condition, while participation in the route phase is causal evidence. Routing refusals become source-located diagnostics, allowing unrelated route failures to accumulate before reconciliation is refused.
 
 ## Body before layout
 
@@ -37,7 +37,7 @@ The chain is distributed across [`render.ts`](https://github.com/mit-sdg/syncpre
 
 The body scan must complete before layout rendering because `page.content` includes retargeted page links and completed local embeddings. The final scan has a different policy: layouts may contain site-absolute or external references, but a relative layout reference is diagnosed because no content-relative source directory can be assigned to it.
 
-Originated and unoriginated contexts are distinct alternatives. When `site.origin` exists, the former includes `page.canonicalUrl`; the latter omits the key rather than supplying an invented or null canonical URL.
+Originated and unoriginated contexts are distinct alternatives. When `site.origin` exists, the context includes `page.canonicalUrl`. When `site.origin` is absent, the context omits that key.
 
 ## Local files fork by role and bytes
 
@@ -45,13 +45,13 @@ A resolved body reference to another document is answered with the routed addres
 
 Primary raster image references then take a longer path. Filename matching admits the reference to Transcoding, byte inspection establishes the actual format and dimensions, configured renditions are staged under digest-derived names, and Embedding forms the final `<picture>`. The reference is answered only after every promised rendition and the exact fallback have output intentions.
 
-Other local files, including SVG images, take the ordinary copy path. Both branches use the same Emitting producer claims, so an image optimization cannot silently overwrite a public file or another page's output.
+Other local files, including SVG images, take the ordinary copy path. Both branches use the same Emitting producer claims, which turn collisions with public files or page output into diagnostics.
 
 ## Diagnostics are part of settlement
 
 Expected domain failures are translated into Diagnosing actions near the reaction that has the necessary source evidence. Template selection failures know the page path; configuration assessment knows the YAML node; route contention knows both producers.
 
-The render chain does not treat a diagnostic as page completion. Failure reactions report the problem but leave the active Emitting attempt and Depending result unsettled. The error diagnostic and unsettled routed owner both make the build ineligible for publication.
+A render diagnostic leaves the active Emitting attempt and Depending result unsettled. The error diagnostic and unsettled routed owner both make the build ineligible for publication.
 
 The relevant terminal reactions are near the end of [`src/compositions/render.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/render.ts). Diagnostic ordering and source data remain owned by [Diagnosing](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/diagnosing/spec.md).
 
@@ -61,13 +61,13 @@ The relevant terminal reactions are near the end of [`src/compositions/render.ts
 
 The queue gives generated route claims deterministic priority and lets later artifacts observe earlier generated work. Pagination routes therefore exist before sitemap formation. A failed item is diagnosed and terminated before the queue advances; deployment reaches `completed` only after every item has a terminal result.
 
-This ordering is stricter than parallel generation, but it avoids making route and output collision results depend on reaction scheduling.
+Serial deployment reduces parallel generation and makes route and output collision results independent of reaction scheduling.
 
 ## Reconciliation is an endpoint alternative
 
-[`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts) does not expose Emitting reconciliation directly. The endpoint selects among finished-and-clean, incomplete, failed, unsettled, deployment-incomplete, and diagnosed-error alternatives.
+[`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts) centralizes the publication predicate by selecting among finished-and-clean, incomplete, failed, unsettled, deployment-incomplete, and diagnosed-error alternatives.
 
-Only the finished-and-clean branch asks Emitting to reconcile and returns file counts. The other branches return a build error without publishing. The host therefore does not reproduce the publication predicate in imperative code.
+The finished-and-clean branch asks Emitting to reconcile and returns file counts. Every other branch returns a build error and leaves the destination unchanged. The host relies on this endpoint for the publication predicate.
 
 ## Reading the complete assembly
 

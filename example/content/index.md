@@ -7,7 +7,7 @@ topics: [overview, site-building]
 
 Syncpress builds content-oriented sites from a YAML configuration file, Markdown
 or HTML content, Liquid layouts, and ordinary local files. A successful build
-writes a static directory that can be deployed without a server-side runtime.
+writes a directory for deployment to a static host.
 
 Install the public `@mit-sdg/syncpress` package from npm as a development
 dependency. It provides the `syncpress` executable and a programmatic API. This
@@ -21,9 +21,9 @@ documentation is also an independently installable [example site](https://github
 
 ## What a build guarantees
 
-Equal declared input bytes and configuration produce equal output bytes. The build does not use filesystem enumeration order, a clock, random identifiers, or undeclared environment values as publishing inputs. A build rejected before reconciliation does not replace the previous output tree. See [reconciliation failures](./reference/operations.md#build) for the filesystem assumptions at the final installation step.
+Equal declared source paths, file bytes, and configuration produce equal output bytes. Those declared values are the complete publishing inputs. A build rejected before reconciliation preserves the previous output tree. See [reconciliation failures](./reference/operations.md#build) for the filesystem assumptions at the final installation step.
 
-Syncpress does not provide server rendering, API routes, a database, executable configuration, or a plugin platform. Use another system when a page must depend on request-time state or arbitrary build-time code.
+Syncpress targets build-time static pages. Pages that require request-time state, API routes, database access, or arbitrary build-time code require another system.
 
 ## What this example covers
 

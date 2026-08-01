@@ -20,9 +20,9 @@ The scanner recognizes these locations:
 | `source`, `audio`, `video`, `script`, `iframe`, `embed`, `track` | `src` |
 | `video` | `poster` |
 
-CSS URLs, SVG-internal URLs, form actions, citations, `srcdoc`, and URL-bearing attributes outside this table are not scanned.
+Scanning is limited to the table above. CSS URLs, SVG-internal URLs, form actions, citations, and `srcdoc` remain unchanged.
 
-External, site-absolute, and fragment-only references do not perform content-file lookup. A content-relative document link is replaced by the document's canonical route. Safe query strings and fragments are retained.
+External, site-absolute, and fragment-only references bypass content-file lookup. A content-relative document link is replaced by the document's canonical route. Safe query strings and fragments are retained.
 
 ```md
 [Configuration](./configuration.md?source=assets#paths)
@@ -50,7 +50,7 @@ A local primary `<img src>` enters responsive processing when its source filenam
 
 1. resolves the source relative to the content page;
 2. validates the image and reads dimensions with EXIF orientation applied;
-3. generates configured width and format offers without upscaling;
+3. generates configured width and format offers up to the source width;
 4. copies the exact original as the fallback beside the page output;
 5. writes derived offers below `paths.assets` with digest-based names;
 6. replaces the `<img>` with `<picture>` after every required output is staged.
@@ -59,10 +59,10 @@ The generated fallback receives intrinsic `width` and `height`, `loading="lazy"`
 
 Configured formats may be `avif`, `gif`, `jpeg` or `jpg`, `png`, `webp`, and `original`. The exact original fallback is always emitted. Eligible widths below the source width also receive a source-format rendition, independently of the `original` sentinel. Animated output is generated only in a format that preserves animation.
 
-SVG and other filenames outside the raster-extension set use ordinary asset copying. Unsupported or corrupt bytes under an admitted raster filename are build errors; Syncpress does not silently retain a source that entered the raster path but failed validation.
+SVG and other filenames outside the raster-extension set use ordinary asset copying. Unsupported or corrupt bytes under an admitted raster filename are build errors.
 
 The [introduction](../index.md) contains both paths: `blue.png` becomes a responsive `<picture>`, while `mark.svg` is copied as an ordinary local asset.
 
 ## Output collisions
 
-Asset and rendition outputs participate in the same producer-claim checks as pages and deployment files. A public file, page-local copy, or generated rendition cannot silently replace output owned by another producer.
+Asset and rendition outputs participate in the same producer-claim checks as pages and deployment files. Emitting rejects a public file, page-local copy, or generated rendition that contests another producer's path.

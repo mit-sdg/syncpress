@@ -1,18 +1,20 @@
 # Releasing Syncpress
 
-This procedure is for package maintainers. Library users install and run the
-published package; they do not need these steps.
+This procedure is for package maintainers publishing a Syncpress release.
 
 ## Prerequisite
 
-Before the first release, configure npm trusted publishing for repository
-`mit-sdg/syncpress` and workflow `release.yml`. The release workflow requests a
-GitHub OIDC token and does not read an npm token from the repository.
+npm trusted publishing must authorize repository `mit-sdg/syncpress` and
+workflow `release.yml`. The release workflow authenticates through GitHub OIDC.
 
 ## Publish a package version
 
-1. Update `package.json` with the release version.
-2. From a clean checkout, run:
+1. Update `CHANGELOG.md`: move the applicable entries from `Unreleased` into a
+   section named for the release version and date, then update the `Unreleased`
+   comparison link to start at the new tag and add a link definition for the
+   released version.
+2. Update `package.json` with the release version.
+3. From a clean checkout, run:
 
    ```sh
    bun install --frozen-lockfile
@@ -21,8 +23,8 @@ GitHub OIDC token and does not read an npm token from the repository.
    npm pack --dry-run
    ```
 
-3. Commit the version change.
-4. Create and push a tag named `v` followed by the exact package version, such
+4. Commit the changelog and version changes.
+5. Create and push a tag named `v` followed by the exact package version, such
    as `v0.2.0`.
 
 A pushed `v*` tag starts `.github/workflows/release.yml`. The workflow checks

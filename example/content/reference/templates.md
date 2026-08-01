@@ -35,7 +35,7 @@ This page uses [`templates/guide.html`](https://github.com/mit-sdg/syncpress/blo
 | `page.content` | Layouts | Completed converted body HTML. |
 | `page.canonicalUrl` | Bodies and layouts when `site.origin` is valid | Absolute canonical URL including the base path. |
 
-Collection cards expose `data`, `url`, `excerpt`, and `source.path`. They do not expose another page's rendered `page.content`.
+Collection cards contain `data`, `url`, `excerpt`, and `source.path`. Rendered body content belongs to the current page's `page.content`.
 
 ## Escaping and trusted HTML
 
@@ -47,9 +47,9 @@ Ordinary interpolated values are HTML-escaped:
 ```
 {% endraw %}
 
-The `raw` filter is an identity operation and does not bypass escaping. Completed `page.content` is inserted without another escaping pass because Syncpress formed it from the body pipeline. When `markdown.raw` is true, that content can include authored HTML; Syncpress does not sanitize it. Rendered collection excerpts receive the same treatment only through the fixed `collections/*/*/excerpt` capability. No general-purpose author value becomes trusted HTML.
+The `raw` filter leaves its input unchanged, and ordinary output escaping still applies. Completed `page.content` is inserted as trusted HTML formed by the body pipeline. When `markdown.raw` is true, authored HTML passes through unsanitized. Rendered collection excerpts receive the same treatment through the fixed `collections/*/*/excerpt` capability. Other author values receive ordinary escaping.
 
-Ordinary Liquid output receives HTML text escaping. That escaping is not URI, CSS, or JavaScript sanitization. A template must not place unvalidated author data into `href`, `src`, inline style, or script contexts.
+Ordinary Liquid output receives HTML text escaping. URI, CSS, and JavaScript contexts require separate validation. A template must validate author data before placing it in `href`, `src`, inline style, or script contexts.
 
 The [verbatim HTML page](../legal.html#escaping) displays an input containing tags, an ampersand, and quotes as text.
 
@@ -67,7 +67,7 @@ Context paths must be static. `collections.posts` is supported; dynamic selectio
 ```
 {% endraw %}
 
-LiquidJS built-in tags and filters are otherwise available unless Syncpress rejects a construct needed to keep dependencies static and analyzable. Syncpress defines no author plugin interface for custom filters or tags.
+LiquidJS built-in tags and filters are available subject to the static-dependency restrictions above. Syncpress provides a fixed author-facing set of filters and tags.
 
 ## Evaluation order
 
@@ -80,7 +80,7 @@ For a normal Markdown page, the observable order is:
 5. Render the selected layout with completed `page.content`.
 6. Resolve final layout references and apply `site.basePath`.
 
-Relative references introduced by layouts are errors. A layout is not adjacent to a content page, so Syncpress cannot assign one unambiguous content-relative source. Use site-absolute, external, or fragment-only references in layouts.
+Layouts lack a content-relative source directory. Relative references introduced by layouts are errors; use site-absolute, external, or fragment-only references.
 
 ## Template failures
 

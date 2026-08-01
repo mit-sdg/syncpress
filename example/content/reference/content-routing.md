@@ -40,7 +40,7 @@ Only `build` is reserved in page data.
 | `build.route` | Claims one explicit canonical route. |
 | `build.publish` | Includes or withholds the document. The default is `true`. |
 
-An unpublished document is parsed and layered but receives no route, output, or collection card. Linking to an unpublished document is an error; Syncpress does not copy the source as an asset. This project keeps [`content/drafts/hidden.md`](https://github.com/mit-sdg/syncpress/blob/main/example/content/drafts/hidden.md) as an executable example.
+An unpublished document is parsed and layered while remaining outside routing, output, and collections. Links to unpublished documents are errors. This project keeps [`content/drafts/hidden.md`](https://github.com/mit-sdg/syncpress/blob/main/example/content/drafts/hidden.md) as an executable example.
 
 ## Derived routes
 
@@ -55,7 +55,7 @@ content/api/client.md            → /api/client/
 
 Directory routes emit `index.html`. A canonical file route such as `/404.html` emits that file directly. Explicit routes must be canonical and site-relative. Route collisions and invalid route forms are build errors.
 
-The source file for [how Syncpress is built](../about.md) is `content/about.md`, but its front matter claims `/internals/`. The source for the [not-found page](../not-found.html) claims `/404.html`.
+Front matter maps `content/about.md` to `/internals/` and the [not-found page](../not-found.html) to `/404.html`.
 
 ## Markdown and verbatim bodies
 
@@ -65,10 +65,10 @@ The [verbatim HTML example](../legal.html) demonstrates that authored tags remai
 
 ## Base paths
 
-Canonical routes are independent of deployment location. `site.basePath` is applied to supported site-absolute references during the final HTML pass. Authors normally write content-relative references or root-relative site references, not a base-path prefix.
+Canonical routes are independent of deployment location. Authors normally write content-relative or root-relative site references; the final HTML pass applies `site.basePath` to supported site-absolute references.
 
 For this documentation, `/reference/content-routing/` is projected as `/syncpress/reference/content-routing/` in generated links. Syncpress applies the prefix once.
 
 ## Output ownership
 
-Every page, copied asset, public file, generated rendition, redirect, and deployment artifact claims its output. Two producers cannot silently overwrite the same path. A collision produces a diagnostic identifying the competing producers, and reconciliation does not occur.
+Every page, copied asset, public file, generated rendition, redirect, and deployment artifact claims its output. Emitting rejects competing claims with a diagnostic that identifies the producers, and the build remains unreconciled.

@@ -1,13 +1,12 @@
 # Contributing to Syncpress
 
-This page is for changes to the Syncpress repository. It does not describe how
-to use the published package; see the [documentation site](https://mit-sdg.github.io/syncpress/)
-for site authoring and operation.
+This page covers changes to the Syncpress repository. The
+[documentation site](https://mit-sdg.github.io/syncpress/) covers installation,
+site authoring, and operation.
 
 ## Prerequisites
 
-The repository uses Bun 1.3.14. The package declares Node.js 24 for the built
-artifact, but repository scripts use Bun.
+Repository scripts require Bun 1.3.14. The built package supports Node.js 24.
 
 ## Verify a change
 
@@ -36,8 +35,7 @@ connect the behavior from `src/compositions/`. Regenerate artifacts before
 reviewing the resulting diff.
 
 The repository-only `bun run site ...` command runs `src/cli.ts` directly. For
-example, `bun run site build ./example` builds the documentation fixture. This
-command is not part of the published package interface.
+example, `bun run site build ./example` builds the documentation fixture.
 
 The example site is an output fixture. Changes to its authored content normally
 change `tests/golden/example-site.json`; update that file only after reviewing

@@ -41,8 +41,8 @@ relative destination is resolved from the project directory.
 reconciles the output only after the build reaches a clean terminal state. The
 result contains route-claim and input counts; written, replaced, retained, and
 removed file counts; the assessed site policy; and diagnostics. The `pages`
-field counts route claims, including redirects and generated pagination routes,
-not only authored pages.
+field counts all route claims: authored pages, redirects, and generated
+pagination routes.
 
 ## `inspectSite`
 
@@ -56,9 +56,9 @@ function inspectSite(
 `target` is a canonical route beginning with `/` or a content-root-relative
 page path. Inspection builds an isolated application model and returns source,
 route, template, data provenance, collection membership, dependency, output,
-claim, and diagnostic data for the selected page. It does not reconcile the
-configured destination. The promise rejects when no routed page or content
-source matches `target`.
+claim, and diagnostic data for the selected page. The configured destination
+remains unchanged. The promise rejects when no routed page or content source
+matches `target`.
 
 ## `watchSite`
 
@@ -101,9 +101,9 @@ resolved object reports the actual `host` and `port` and provides `close()`.
 Call `await server.close()` to stop the watcher, close live-reload clients, and
 close the HTTP server.
 
-The server is not a production server and does not mount `site.basePath`. See
-[development mode](./operations.md#dev) for request mapping and live-reload
-behavior.
+Use this server only for local development. It serves the output root directly.
+See [development mode](./operations.md#dev) for base-path behavior, request
+mapping, and live reload.
 
 ## `runCli`
 

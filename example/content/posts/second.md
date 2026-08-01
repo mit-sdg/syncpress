@@ -1,12 +1,12 @@
 ---
-title: Assets follow references, not conventions
+title: Assets follow explicit references
 date: 2026-07-29
 description: Local links, downloads, SVGs, and primary raster images each take an explicit output path through the build.
 featured: true
 topics: [assets, responsive-images]
 ---
 
-The `posts` collection sorts `data.date` in descending order, so this note appears before older entries. Its collection card contains publication data and an excerpt, not the fully rendered article.
+The `posts` collection sorts `data.date` in descending order, so this note appears before older entries. Its collection card is limited to publication data and an excerpt.
 
 <!--more-->
 

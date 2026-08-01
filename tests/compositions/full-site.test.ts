@@ -66,7 +66,7 @@ test("the example site produces its exact deterministic golden tree", async () =
 
     const index = await readFile(join(destination, "index.html"), "utf8");
     expect(index).toContain('href="/syncpress/guides/getting-started/?from=home#prerequisites"');
-    expect(index).toContain('href="/syncpress/posts/second/">Assets follow references, not conventions</a>');
+    expect(index).toContain('href="/syncpress/posts/second/">Assets follow explicit references</a>');
     expect(index).toContain('<source type="image/webp"');
     expect(index).toContain('src="/syncpress/blue.png?variant=field-note#pixel"');
     expect(index).toContain('class="field-image" data-fixture="responsive" sizes="(min-width: 48rem) 42rem, 100vw"');
@@ -78,7 +78,7 @@ test("the example site produces its exact deterministic golden tree", async () =
     expect(await readFile(join(destination, ".nojekyll"), "utf8")).toBe("");
     expect(await readFile(join(destination, "start", "index.html"), "utf8")).toContain('href="/syncpress/guides/getting-started/"');
     expect(await readFile(join(destination, "sitemap.xml"), "utf8")).toContain("https://mit-sdg.github.io/syncpress/journal/1/");
-    expect(await readFile(join(destination, "feed.xml"), "utf8")).toContain("Assets follow references, not conventions");
+    expect(await readFile(join(destination, "feed.xml"), "utf8")).toContain("Assets follow explicit references");
     expect(await readFile(join(destination, "journal", "1", "index.html"), "utf8")).toContain("Field note archive");
     expect(await readFile(join(destination, "guides", "getting-started", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
     expect(await readFile(join(destination, "legal", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");

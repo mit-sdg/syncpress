@@ -26,8 +26,8 @@ for one guided lifecycle.
 
 ## Implementation documentation
 
-The following pages describe repository implementation. They are not extension
-API documentation and are not required to build a site.
+The preceding pages define the site-authoring contract. The following pages
+document repository implementation for contributors.
 
 [How Syncpress is built](../about.md) explains the design boundaries, batch
 model, transactions, and publication gate. [Selected composition paths](../internals/reactions.md)

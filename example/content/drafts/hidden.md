@@ -1,6 +1,6 @@
 ---
 title: Unpublished working note
-description: A source file that demonstrates publication control without creating a public route.
+description: An unpublished source file that demonstrates publication control.
 build:
   publish: false
 ---
