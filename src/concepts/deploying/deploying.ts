@@ -257,6 +257,12 @@ function deploymentEntries(value: unknown): CollectionEntry[] {
   }
 }
 
+function paginationEntries(value: unknown): CollectionEntry[] {
+  const entries = deploymentEntries(value);
+  if (entries.some(({ card }) => !isRecord(card) || text(card.url) === "")) throw new InvalidEntries();
+  return entries;
+}
+
 function sitemapUrls(value: unknown): Array<{ url: string }> {
   if (!isDenseArray(value) || value.some((entry) => !isRecord(entry) || !webUrl(entry.url))) {
     throw new InvalidUrls();
@@ -342,7 +348,7 @@ function paginationBody(entries: readonly CollectionEntry[]): string {
   const items = entries.map(({ card }) => {
     const values = record(card);
     const data = record(values.data);
-    const url = text(values.url, "#");
+    const url = text(values.url);
     const title = text(data.title, "Untitled page");
     const excerpt = text(values.excerpt);
     return `<li><a href="${htmlEscape(url)}">${htmlEscape(title)}</a>${excerpt === "" ? "" : `<div>${excerpt}</div>`}</li>`;
@@ -484,7 +490,7 @@ export class DeployingConcept {
     template: string;
     entries: unknown;
   }): { deployment: string; work: string; pages: number } {
-    const entries = deploymentEntries(rawEntries);
+    const entries = paginationEntries(rawEntries);
     const plan = this.#active(work, "pagination-plan") as PaginationPlanWork;
     if (plan.deployment !== deployment) throw new WorkNotCurrent();
     const current = this.#current(deployment, work);

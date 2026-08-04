@@ -52,6 +52,7 @@
       var entries = [];
 
       Array.prototype.forEach.call(prose.querySelectorAll("h2, h3"), function (heading) {
+        if (heading.querySelector("a")) return;
         var id = heading.id;
         if (!id) {
           id = slug(heading.textContent || "");

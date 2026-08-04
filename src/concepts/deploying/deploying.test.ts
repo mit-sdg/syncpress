@@ -158,6 +158,12 @@ test("refuses stale work and malformed supplied facts", () => {
     deployment: started.deployment,
     work: started.work!,
     template: "template:1",
+    entries: [{ item: "missing-url", card: { data: { title: "Missing URL" } } }],
+  })).toThrow(InvalidEntries);
+  expect(() => deploying.divide({
+    deployment: started.deployment,
+    work: started.work!,
+    template: "template:1",
     entries: {} as never,
   })).toThrow(InvalidEntries);
   const sparseEntries = new Array(1) as Array<{ item: string; card: unknown }>;
