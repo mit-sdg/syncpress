@@ -1,6 +1,6 @@
 import { watch } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
-import { buildSiteForWatch, containsPath, type BuildResult } from "./site.ts";
+import { buildSite, containsPath, type BuildResult } from "./site.ts";
 
 export type SiteWatcher = { close(): Promise<void> };
 
@@ -18,9 +18,9 @@ export async function watchSite(
   options: { onBuild?: (result: BuildResult, outputDirectory: string) => void; onError?: (error: unknown) => void } = {},
 ): Promise<SiteWatcher> {
   const siteDirectory = resolve(projectDirectory);
-  const initial = await buildSiteForWatch(siteDirectory, destination);
+  const initial = await buildSite(siteDirectory, destination);
   let output = initial.outputDirectory;
-  options.onBuild?.(initial.result, output);
+  options.onBuild?.(initial, output);
   let rebuildingOutput: string | undefined;
   const controller = new AbortController();
   let closed = false;
@@ -31,11 +31,10 @@ export async function watchSite(
   const rebuild = async (): Promise<void> => {
     if (closed) return;
     try {
-      const built = await buildSiteForWatch(siteDirectory, destination, async (nextOutput) => {
-        rebuildingOutput = nextOutput;
-      });
+      rebuildingOutput = output;
+      const built = await buildSite(siteDirectory, destination);
       output = built.outputDirectory;
-      options.onBuild?.(built.result, output);
+      options.onBuild?.(built, output);
     } catch (error) {
       options.onError?.(error);
     } finally {

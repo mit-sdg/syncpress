@@ -51,6 +51,7 @@ assess (source: Text) : return (policy: Policy, sources: Values)
 ```queries
 _policy () : optional (policy: Policy)
 _paths () : optional (content: Path, templates: Path, public: Path, assets: Path, output: Path)
+_sources () : many (name: Name, path: Path)
 _site () : optional (site: Values, base: Address)
 _origin () : optional (origin: Origin)
 _markdown () : optional (extensions: Values, raw: Flag, separator: Text)
@@ -61,6 +62,10 @@ _deployment () : optional (nojekyll: Flag, requireNotFound: Flag, sitemap: Flag)
 _publishing () : optional (policy: Policy)
 _problems () : many (code: Code, message: Text, line: Number, column: Number)
 ```
+
+`_sources` answers the same content, templates, and public source plan `assess`
+returns, in that fixed order, so a caller can rediscover it without repeating an
+assessment.
 
 Problems retain parser discovery order. Actions and queries return deep copies.
 Invalid product policy is retained assessment evidence and an

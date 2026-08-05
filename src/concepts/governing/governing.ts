@@ -677,6 +677,12 @@ export class GoverningConcept {
     return this.#valid(({ paths }) => ({ ...paths }));
   }
 
+  _sources(): SiteSource[] {
+    return this.#assessment === undefined || this.#assessment.problems.length > 0
+      ? []
+      : siteSources(this.#assessment.policy);
+  }
+
   _site(): { site: SiteValues; base: string }[] {
     return this.#valid(({ site }) => ({ site: structuredClone(site), base: typeof site.basePath === "string" ? site.basePath : "/" }));
   }

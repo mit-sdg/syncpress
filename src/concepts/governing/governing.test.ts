@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { GoverningConcept } from "./governing.ts";
+import { GoverningConcept, InvalidConfiguration } from "./governing.ts";
 import { governing as registration } from "./registry.ts";
 
 test("its principle: replace one isolated, location-aware policy assessment", () => {
@@ -177,10 +177,27 @@ test("publishing strings satisfy the deployment owner's nonempty contract", () =
   ]);
 });
 
+test("the source plan is rediscoverable and disappears with an invalid assessment", () => {
+  const governing = new GoverningConcept();
+  expect(governing._sources()).toEqual([]);
+
+  const assessed = governing.assess({ source: "paths:\n  content: pages\n" });
+  expect(governing._sources()).toEqual(assessed.sources);
+  expect(governing._sources()).toEqual([
+    { name: "content", path: "pages" },
+    { name: "templates", path: "templates" },
+    { name: "public", path: "public" },
+  ]);
+
+  expect(() => governing.assess({ source: "paths:\n  content: ../outside\n" })).toThrow(InvalidConfiguration);
+  expect(governing._sources()).toEqual([]);
+});
+
 test("registry promises distinguish the current assessment from its problems", () => {
   expect(registration.specification.queries.map(({ name, promise }) => [name, promise])).toEqual([
     ["_policy", "optional"],
     ["_paths", "optional"],
+    ["_sources", "many"],
     ["_site", "optional"],
     ["_origin", "optional"],
     ["_markdown", "optional"],

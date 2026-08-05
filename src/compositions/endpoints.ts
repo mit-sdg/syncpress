@@ -1,18 +1,16 @@
+/**
+ * The application boundary. One request runs one complete site build or
+ * inspection: the endpoint records what the host wants, starts the phase
+ * sequence, and answers at the settlement frontier where that job reaches a
+ * terminal state. Every step in between belongs to a reaction.
+ */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { CONFIGURATION_PATH, PHASES, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { PHASES, PHASE_SEQUENCE, PLACES } from "./shared.ts";
 import { InspectionOwner, SiteBuildSummary, SiteInspection } from "./views.ts";
 
-const { Depending, Deploying, Diagnosing, Emitting, Filing, Governing, Phasing, Routing } = conceptRefs;
-
-/** Translate one host file into Filing through the portable application boundary. */
-export const StageSiteFile = endpoint("/site/stage", ({ name, filePath, encoded, root }) =>
-  receive({ name, filePath, encoded })
-    .then(Filing.open({ name }).responds({ root }))
-    .then(Filing.placeBase64({ root, path: filePath, encoded }).responds({}))
-    .then(respond({})),
-);
+const { Depending, Deploying, Diagnosing, Emitting, Locating, Phasing, Routing } = conceptRefs;
 
 /** Enumerate routed owners without a current dependency result. */
 export const UnsettledRouteOwners = view(
@@ -24,87 +22,127 @@ export const UnsettledRouteOwners = view(
     ),
 ).many();
 
-/** Interpret the staged project configuration once and expose only valid policy. */
-export const AssessSite = endpoint("/site/assess", ({ project, settings, source, policy, sources }) =>
-  receive({})
-    .where(
-      Filing._named({ name: ROOTS.project }).is({ root: project }),
-      Filing._at({ root: project, path: CONFIGURATION_PATH }).is({ file: settings }),
-      Filing._text({ file: settings }).is({ text: source }),
-    )
-    .then(Governing.assess({ source }).responds({ policy, sources }))
-    .then(respond({ policy, sources })),
+/** A job that reached a terminal state, whatever that state turned out to be. */
+export const SettledSiteBuild = view(
+  "the settled site build of sequence (sequence)",
+  ({ sequence }, { job, state }) =>
+    where(Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state })),
+).optional();
+
+/** A finished job whose work left nothing to diagnose, deploy, or wait for. */
+export const PublishableSiteBuild = view(
+  "the publishable site build of sequence (sequence)",
+  ({ sequence }, { job }) =>
+    where(
+      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "finished" }),
+      Diagnosing._clean({}).is({ clean: true }),
+      Deploying._outcome({}).is({ state: "completed" }),
+      no(UnsettledRouteOwners({})),
+    ),
+).optional();
+
+/* Build: stage the host project, run every phase, then publish a clean result. */
+
+export const BuildSiteAtDestination = endpoint(
+  "/site/build",
+  ({ directory, destination, sequence, job, written, replaced, kept, removed }) =>
+    receive({ directory, destination })
+      .where(computations.isTextValue({ value: destination }))
+      .then(Locating.request({ name: PLACES.base, path: directory }).responds({}))
+      .then(Locating.request({ name: PLACES.destination, path: destination }).responds({}))
+      .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
+      .then(Phasing.start({ sequence }).responds({ job }))
+      .afterFlowSettles()
+      .then(
+        where(PublishableSiteBuild({ sequence }).is({ job }))
+          .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
+          .then(respond({ written, replaced, kept, removed, summary: SiteBuildSummary({}) }))
+          .named("published"),
+        where(
+          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._clean({}).is({ clean: false }),
+        )
+          .then(respond({ error: "BUILD_HAS_ERRORS" }))
+          .named("errors"),
+        where(
+          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._clean({}).is({ clean: true }),
+          no(PublishableSiteBuild({ sequence })),
+        )
+          .then(respond({ error: "BUILD_INCOMPLETE" }))
+          .named("incomplete"),
+        where(SettledSiteBuild({ sequence }).is({ job, state: "failed" }))
+          .then(respond({ error: "BUILD_FAILED" }))
+          .named("failed"),
+      ),
+  { input: { required: ["directory"], defaults: { destination: null } } },
 );
 
-export const RejectUnstagedProject = endpoint("/site/assess", () =>
-  receive({})
-    .where(no(Filing._named({ name: ROOTS.project })))
-    .then(respond({ error: "PROJECT_NOT_STAGED" })),
+export const BuildSiteAtConfiguredOutput = endpoint(
+  "/site/build",
+  ({ directory, destination, sequence, job, written, replaced, kept, removed }) =>
+    receive({ directory, destination })
+      .where(computations.isAbsentValue({ value: destination }))
+      .then(Locating.request({ name: PLACES.base, path: directory }).responds({}))
+      .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
+      .then(Phasing.start({ sequence }).responds({ job }))
+      .afterFlowSettles()
+      .then(
+        where(PublishableSiteBuild({ sequence }).is({ job }))
+          .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
+          .then(respond({ written, replaced, kept, removed, summary: SiteBuildSummary({}) }))
+          .named("published"),
+        where(
+          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._clean({}).is({ clean: false }),
+        )
+          .then(respond({ error: "BUILD_HAS_ERRORS" }))
+          .named("errors"),
+        where(
+          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._clean({}).is({ clean: true }),
+          no(PublishableSiteBuild({ sequence })),
+        )
+          .then(respond({ error: "BUILD_INCOMPLETE" }))
+          .named("incomplete"),
+        where(SettledSiteBuild({ sequence }).is({ job, state: "failed" }))
+          .then(respond({ error: "BUILD_FAILED" }))
+          .named("failed"),
+      ),
 );
 
-export const RejectUnstagedConfiguration = endpoint("/site/assess", ({ project }) =>
-  receive({})
-    .where(
-      Filing._named({ name: ROOTS.project }).is({ root: project }),
-      no(Filing._at({ root: project, path: CONFIGURATION_PATH })),
-    )
-    .then(respond({ error: "CONFIGURATION_NOT_STAGED" })),
-);
+/* Inspect: stage and run the same phases, then report one page's provenance. */
 
-/** Answer deterministically when the staged configuration is not UTF-8 text. */
-export const RejectNonTextSiteConfiguration = endpoint("/site/assess", ({ project, settings }) =>
-  receive({})
-    .where(
-      Filing._named({ name: ROOTS.project }).is({ root: project }),
-      Filing._at({ root: project, path: CONFIGURATION_PATH }).is({ file: settings }),
-      no(Filing._text({ file: settings })),
-    )
-    .then(respond({ error: "INVALID_TEXT" })),
-);
-
-/** Direct output and prepare the phase sequence from an already valid assessment. */
-export const ConfigureSite = endpoint("/site/configure", ({ destination, sequence }) =>
-  receive({ destination })
-    .where(Governing._policy({}))
-    .then(Emitting.direct({ destination }).responds({}))
+export const InspectSite = endpoint("/site/inspect", ({ directory, target, sequence, job, owner }) =>
+  receive({ directory, target })
+    .then(Locating.request({ name: PLACES.base, path: directory }).responds({}))
     .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
-    .then(respond({ sequence })),
-);
-
-export const RejectUnassessedConfiguration = endpoint("/site/configure", ({ destination }) =>
-  receive({ destination })
-    .where(no(Governing._policy({})))
-    .then(respond({ error: "CONFIGURATION_NOT_ASSESSED" })),
-);
-
-/** Prepare the phase sequence without directing or materializing output. */
-export const PrepareSite = endpoint("/site/prepare", ({ sequence }) =>
-  receive({})
-    .where(Governing._policy({}))
-    .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
-    .then(respond({ sequence })),
-);
-
-export const RejectUnassessedPreparation = endpoint("/site/prepare", () =>
-  receive({})
-    .where(no(Governing._policy({})))
-    .then(respond({ error: "CONFIGURATION_NOT_ASSESSED" })),
-);
-
-export const InspectSite = endpoint("/site/inspect", ({ target, owner }) =>
-  receive({ target }).then(
-    where(InspectionOwner({ target }).is({ owner }))
-      .then(respond({ owner, inspection: SiteInspection({ owner }) }))
-      .named("found"),
-    where(no(InspectionOwner({ target })))
-      .then(respond({ error: "INSPECTION_TARGET_NOT_FOUND" }))
-      .named("missing"),
-  ),
+    .then(Phasing.start({ sequence }).responds({ job }))
+    .afterFlowSettles()
+    .then(
+      where(
+        SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+        InspectionOwner({ target }).is({ owner }),
+      )
+        .then(respond({ owner, inspection: SiteInspection({ owner }) }))
+        .named("found"),
+      where(
+        SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+        no(InspectionOwner({ target })),
+      )
+        .then(respond({ error: "INSPECTION_TARGET_NOT_FOUND" }))
+        .named("missing"),
+      where(SettledSiteBuild({ sequence }).is({ job, state: "failed" }))
+        .then(respond({ error: "BUILD_FAILED" }))
+        .named("failed"),
+    ),
 );
 
 export const ReadSiteSummary = endpoint("/site/summary", () =>
   receive({}).then(respond({ summary: SiteBuildSummary({}) })),
 );
+
+/* Phase progression: each phase begins only once the previous one settles. */
 
 /** Advance the first phase only after all work caused by its announcement settles. */
 export const AdvanceStartedSiteBuild = reaction(({ sequence, job, attempt }) =>
@@ -120,71 +158,4 @@ export const AdvanceSiteBuild = reaction(({ job, attempt, nextAttempt }) =>
     .afterFlowSettles()
     .where(Phasing._job({ job }).is({ name: PHASE_SEQUENCE, state: "running", attempt: nextAttempt }))
     .then(Phasing.advance({ job, attempt: nextAttempt })),
-);
-
-/**
- * Publish only a completed deployment and diagnostically clean build. The
- * filesystem edge invokes this internal endpoint after its phase job settles.
- */
-export const ReconcileSite = endpoint("/site/reconcile", ({ job, sequence, written, replaced, kept, removed }) =>
-  receive({ job }).then(
-    where(
-      Phasing._job({ job }).is({ sequence, name: PHASE_SEQUENCE }),
-      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "finished" }),
-      Diagnosing._clean({}).is({ clean: true }),
-      Deploying._outcome({}).is({ state: "completed" }),
-      no(UnsettledRouteOwners({})),
-    )
-      .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
-      .then(respond({ written, replaced, kept, removed }))
-      .named("reconcile"),
-    where(no(Phasing._job({ job })))
-      .then(respond({ error: "BUILD_NOT_COMPLETE" }))
-      .named("incomplete"),
-    where(Phasing._job({ job }).is.not({ name: PHASE_SEQUENCE }))
-      .then(respond({ error: "BUILD_NOT_COMPLETE" }))
-      .named("wrong-sequence"),
-    where(
-      Phasing._job({ job }).is({ sequence, name: PHASE_SEQUENCE }),
-      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "running" }),
-    )
-      .then(respond({ error: "BUILD_NOT_COMPLETE" }))
-      .named("running"),
-    where(
-      Phasing._job({ job }).is({ sequence, name: PHASE_SEQUENCE }),
-      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "failed" }),
-    )
-      .then(respond({ error: "BUILD_FAILED" }))
-      .named("failed"),
-    where(
-      Phasing._job({ job }).is({ sequence, name: PHASE_SEQUENCE }),
-      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "finished" }),
-      Diagnosing._clean({}).is({ clean: true }),
-      UnsettledRouteOwners({}),
-    )
-      .then(respond({ error: "BUILD_INCOMPLETE" }))
-      .named("unsettled"),
-    where(
-      Phasing._job({ job }).is({ sequence, name: PHASE_SEQUENCE }),
-      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "finished" }),
-      Diagnosing._clean({}).is({ clean: true }),
-      no(UnsettledRouteOwners({})),
-      no(Deploying._outcome({}).is({ state: "completed" })),
-    )
-      .then(respond({ error: "BUILD_INCOMPLETE" }))
-      .named("deployment-incomplete"),
-    where(
-      Phasing._job({ job }).is({ sequence, name: PHASE_SEQUENCE }),
-      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "finished" }),
-      Diagnosing._clean({}).is({ clean: false }),
-    )
-      .then(respond({ error: "BUILD_HAS_ERRORS" }))
-      .named("errors"),
-    where(
-      Phasing._job({ job }).is({ sequence, name: PHASE_SEQUENCE }),
-      no(Phasing._latest({ sequence }).is({ job })),
-    )
-      .then(respond({ error: "BUILD_SUPERSEDED" }))
-      .named("superseded"),
-  ),
 );

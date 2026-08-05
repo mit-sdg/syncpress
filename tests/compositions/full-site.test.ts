@@ -10,6 +10,9 @@ const goldenPath = resolve(import.meta.dir, "../golden/example-site.json");
 
 type Golden = { files: Record<string, string> };
 
+/** Tests that build the complete example site more than once need more than one default timeout. */
+const BUILD_TEST_TIMEOUT_MS = 30_000;
+
 async function copyExample(destination: string): Promise<void> {
   await cp(exampleDirectory, destination, {
     recursive: true,
@@ -89,7 +92,7 @@ test("the example site produces its exact deterministic golden tree", async () =
   } finally {
     await rm(destination, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("renders without an origin and does not invent a canonical URL", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-no-origin-site-"));
@@ -393,7 +396,7 @@ test("inspect reports route ownership, template provenance, collection membershi
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("the development server serves reconciled output with a live-reload client", async () => {
   const destination = await mkdtemp(join(tmpdir(), "syncpress-dev-server-"));
@@ -453,7 +456,7 @@ test("watch ignores its own reconciliation transactions", async () => {
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("a missing local reference reports a diagnostic and preserves the prior destination", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-site-"));

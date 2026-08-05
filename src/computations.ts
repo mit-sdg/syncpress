@@ -216,6 +216,7 @@ const optional = (value: string | undefined): string | null => value ?? null;
 /** Pure calculations available to portable Syncpress composition. */
 export const syncpressComputations = {
   isTextValue: ({ value }: { value: unknown }) => typeof value === "string" && value.isWellFormed(),
+  isAbsentValue: ({ value }: { value: unknown }) => value === null || value === undefined,
   deriveAddress: ({ path }: { path: unknown }) => optional(deriveAddress(path)),
   addressOutputPath: ({ address }: { address: unknown }) => optional(addressOutputPath(address)),
   outputPathAddress: ({ path }: { path: unknown }) => optional(outputPathAddress(path)),

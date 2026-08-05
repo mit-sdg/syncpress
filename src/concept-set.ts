@@ -11,11 +11,13 @@ import { emitting } from "./concepts/emitting/registry.ts";
 import { filing } from "./concepts/filing/registry.ts";
 import { governing } from "./concepts/governing/registry.ts";
 import { layering } from "./concepts/layering/registry.ts";
+import { locating } from "./concepts/locating/registry.ts";
 import { matching } from "./concepts/matching/registry.ts";
 import { phasing } from "./concepts/phasing/registry.ts";
 import { referencing } from "./concepts/referencing/registry.ts";
 import { rendering } from "./concepts/rendering/registry.ts";
 import { routing } from "./concepts/routing/registry.ts";
+import { scanning } from "./concepts/scanning/registry.ts";
 import { templating } from "./concepts/templating/registry.ts";
 import { transcoding } from "./concepts/transcoding/registry.ts";
 
@@ -33,11 +35,13 @@ export const syncpressConcepts = conceptSet(
     Filing: filing,
     Governing: governing,
     Layering: layering,
+    Locating: locating,
     Matching: matching,
     Phasing: phasing,
     Referencing: referencing,
     Rendering: rendering,
     Routing: routing,
+    Scanning: scanning,
     Templating: templating,
     Transcoding: transcoding,
   },

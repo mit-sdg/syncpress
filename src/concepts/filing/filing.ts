@@ -188,6 +188,16 @@ export class FilingConcept {
     }
   }
 
+  _files(): { file: string; root: string; path: string }[] {
+    return [...this.#rootsByID.keys()]
+      .flatMap((root) =>
+        [...this.#fileIDsByRoot.get(root)!.values()]
+          .map((file) => this.#filesByID.get(file)!)
+          .sort((left, right) => comparePaths(left.path, right.path))
+      )
+      .map(({ file, root, path }) => ({ file, root, path }));
+  }
+
   _at({ root, path }: { root: string; path: string }): { file: string; digest: string }[] {
     if (pathStatus(path) !== "canonical") return [];
     const file = this.#fileIDsByRoot.get(root)?.get(path);

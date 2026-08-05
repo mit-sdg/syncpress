@@ -53,6 +53,9 @@ contains no backslash, NUL, ASCII control character, or DEL. A directory prefix
 is either empty, meaning the root, or a path in the same form. Hosts translate
 native paths to this form before placing files.
 
+`_files` answers every file Filing holds, grouped by the order its roots were
+opened and, within each root, in ascending UTF-8 byte order of their paths.
+
 `_under` treats its prefix as a directory, not an arbitrary text prefix, and
 answers descendants in ascending UTF-8 byte order of their complete paths.
 Optional and many queries answer no rows for unknown identities, unknown roots,
@@ -138,6 +141,7 @@ _named (name: Name) : optional (root: Root)
 _file (file: File) : optional (root: Root, path: Path, name: Name, content: Bytes, digest: Digest)
 _text (file: File) : optional (text: Text)
 _at (root: Root, path: Path) : optional (file: File, digest: Digest)
+_files () : many (file: File, root: Root, path: Path)
 _under (root: Root, prefix: Directory) : many (file: File, path: Path, digest: Digest)
 _resolve (file: File, address: Address) : optional (target: File, path: Path)
 _resolution (file: File, address: Address) : one (status: ResolutionStatus)

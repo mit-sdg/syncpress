@@ -32,14 +32,14 @@ export const AssessedConfigurationProblemsDiagnose = reaction(({ code, message, 
 
 /** Make the built-in source selectors available even when configuration has no rules. */
 export const SettingsPhasesRetractDiagnostics = reaction(() =>
-  when(Phasing.start({}).responds({ name: PHASE_SEQUENCE, phase: "settings" })).then(
+  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "settings", transitioned: true })).then(
     Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }),
   ),
 );
 
 export const FixedPatternsCompile = reaction(() =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }))
+    .where(earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }))
     .then(
       Matching.compile({ text: PAGE_PATTERNS.markdown }).named("markdown"),
       Matching.compile({ text: PAGE_PATTERNS.html }).named("html"),
@@ -50,7 +50,7 @@ export const FixedPatternsCompile = reaction(() =>
 export const SettingsRebaseRouting = reaction(({ base }) =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._site({}).is({ base }),
     )
     .then(Routing.rebase({ base })),
@@ -59,7 +59,7 @@ export const SettingsRebaseRouting = reaction(({ base }) =>
 export const SettingsRebaseFailuresDiagnose = reaction(({ base, detail }) =>
   when(Routing.rebase({ base }).refuses({ error: "INVALID_BASE", detail }))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._site({}).is({ base }),
     )
     .then(
@@ -77,7 +77,7 @@ export const SettingsRebaseFailuresDiagnose = reaction(({ base, detail }) =>
 export const SettingsReoriginRouting = reaction(({ origin }) =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._origin({}).is({ origin }),
     )
     .then(Routing.reorigin({ origin })),
@@ -87,7 +87,7 @@ export const SettingsReoriginRouting = reaction(({ origin }) =>
 export const SettingsClearRoutingOrigin = reaction(() =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._policy({}),
       no(Governing._origin({})),
     )
@@ -97,7 +97,7 @@ export const SettingsClearRoutingOrigin = reaction(() =>
 export const SettingsReoriginFailuresDiagnose = reaction(({ origin, detail }) =>
   when(Routing.reorigin({ origin }).refuses({ error: "INVALID_ORIGIN", detail }))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._origin({}).is({ origin }),
     )
     .then(
@@ -114,7 +114,7 @@ export const SettingsReoriginFailuresDiagnose = reaction(({ origin, detail }) =>
 export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, separator }) =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ extensions, raw, separator }),
     )
     .then(
@@ -139,7 +139,7 @@ export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ extensions, r
     }).refuses({ error, detail }),
   )
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ extensions, raw, separator }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
@@ -148,7 +148,7 @@ export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ extensions, r
 export const SettingsDeclareVerbatimProfile = reaction(({ separator }) =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ separator }),
     )
     .then(
@@ -173,7 +173,7 @@ export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ separator, er
     }).refuses({ error, detail }),
   )
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ separator }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
@@ -182,7 +182,7 @@ export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ separator, er
 export const SettingsCompileDefaultPatterns = reaction(({ text }) =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._defaults({}).is({ text }),
     )
     .then(Matching.compile({ text })),
@@ -191,7 +191,7 @@ export const SettingsCompileDefaultPatterns = reaction(({ text }) =>
 export const SettingsDefaultPatternFailuresDiagnose = reaction(({ text, error, detail }) =>
   when(Matching.compile({ text }).refuses({ error, detail }))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._defaults({}).is({ text }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
@@ -199,14 +199,14 @@ export const SettingsDefaultPatternFailuresDiagnose = reaction(({ text, error, d
 
 export const SettingsResetCatalogs = reaction(() =>
   when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }))
+    .where(earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }))
     .then(Cataloging.reset({})),
 );
 
 export const SettingsDeclareCatalogs = reaction(({ name, match, direction, sort, condition }) =>
   when(Cataloging.reset({}).responds({}))
     .where(
-      earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._collections({}).is({ name, match, direction, sort, condition }),
     )
     .then(Cataloging.declare({ name, selector: match, direction, sort, condition })),
@@ -216,7 +216,7 @@ export const SettingsCollectionDeclarationFailuresDiagnose = reaction(
   ({ error, detail }) =>
     when(Cataloging.declare({}).refuses({ error, detail }))
       .where(
-        earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "settings" }),
+        earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       )
       .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );

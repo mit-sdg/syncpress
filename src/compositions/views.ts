@@ -1,6 +1,6 @@
 import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
-import { PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
+import { PAGE_PATTERNS, PARTS, PLACES, ROOTS } from "./shared.ts";
 
 const {
   Cataloging,
@@ -11,12 +11,26 @@ const {
   Filing,
   Governing,
   Layering,
+  Locating,
   Matching,
   Referencing,
   Rendering,
   Routing,
   Templating,
 } = conceptRefs;
+
+/** Wherever this run publishes: an explicit destination, or the configured output. */
+export const PublicationPlace = view("the publication place", (_inputs, { place, destination }) => [
+  where(
+    Locating._named({ name: PLACES.destination }).is({ place }),
+    Locating._place({ place }).is({ real: destination }),
+  ),
+  where(
+    no(Locating._named({ name: PLACES.destination })),
+    Locating._named({ name: PLACES.output }).is({ place }),
+    Locating._place({ place }).is({ real: destination }),
+  ),
+]).optional();
 
 export const InspectionOwner = view(
   "the inspection owner of target (target)",
@@ -31,9 +45,15 @@ export const InspectionOwner = view(
 
 export const SiteBuildSummary = former(
   "the site build summary",
-  (_inputs, { owner, severity, code, message, source, line, column }) =>
-    form({
+  (_inputs, { owner, file, policy, destination, severity, code, message, source, line, column }) =>
+    where(
+      whether(Governing._policy({}).is({ policy })),
+      whether(PublicationPlace({}).is({ destination })),
+    ).form({
       pages: each(Routing._claims({}).is({ owner })).count(),
+      files: each(Filing._files({}).is({ file })).count(),
+      policy,
+      destination,
       diagnostics: each(Diagnosing._all({}).is({ severity, code, message, source, line, column })).form({
         severity,
         code,

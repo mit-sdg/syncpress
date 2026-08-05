@@ -13,25 +13,55 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type AppWideError = never;
 
 export type SyncpressWire = {
-  "/site/assess": {
-    input: Record<string, never>;
-    output: {
-      "policy": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Governing"]["assess"]>>, ["policy"]>>;
-      "sources": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Governing"]["assess"]>>, ["sources"]>>;
-    };
-    error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONFIGURATION_NOT_STAGED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "INCOMPATIBLE_PROFILE" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_BASE" | "INVALID_CLAIM" | "INVALID_CONDITION" | "INVALID_CONFIGURATION" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DATA" | "INVALID_DIMENSION" | "INVALID_DIRECTION" | "INVALID_ENTRIES" | "INVALID_FIELD" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_ORIGIN" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PRODUCER" | "INVALID_PROFILE" | "INVALID_REDIRECT" | "INVALID_SELECTOR" | "INVALID_SUBJECT" | "INVALID_TEMPLATE" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "MALFORMED_PATTERN" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "PROJECT_NOT_STAGED" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNKNOWN_SOURCE" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_EXTENSION" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_PROFILE_KIND" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PENDING" | "WORK_NOT_PREPARED" };
-  };
-  "/site/configure": {
+  "/site/build": {
     input: {
-      "destination": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Emitting"]["direct"]>[0], ["destination"]>>;
+      "destination"?: Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["request"]>[0], ["path"]>>;
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["request"]>[0], ["path"]>>;
     };
     output: {
-      "sequence": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Phasing"]["declare"]>>, ["sequence"]>>;
+      "kept": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["kept"]>>;
+      "removed": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["removed"]>>;
+      "replaced": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["replaced"]>>;
+      "summary": {
+        "destination": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Locating"]["_place"]>>>, ["real"]>> | null;
+        "diagnostics": {
+          "code": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["code"]>>;
+          "column": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["column"]>>;
+          "line": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["line"]>>;
+          "message": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["message"]>>;
+          "severity": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["severity"]>>;
+          "source": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["source"]>>;
+        }[];
+        "files": number;
+        "pages": number;
+        "policy": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Governing"]["_policy"]>>>, ["policy"]>> | null;
+      };
+      "written": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["written"]>>;
+    } | {
+      "kept": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["kept"]>>;
+      "removed": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["removed"]>>;
+      "replaced": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["replaced"]>>;
+      "summary": {
+        "destination": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Locating"]["_place"]>>>, ["real"]>> | null;
+        "diagnostics": {
+          "code": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["code"]>>;
+          "column": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["column"]>>;
+          "line": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["line"]>>;
+          "message": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["message"]>>;
+          "severity": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["severity"]>>;
+          "source": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["source"]>>;
+        }[];
+        "files": number;
+        "pages": number;
+        "policy": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Governing"]["_policy"]>>>, ["policy"]>> | null;
+      };
+      "written": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["written"]>>;
     };
-    error: { error: AppWideError | "CONFIGURATION_NOT_ASSESSED" | "DESTINATION_UNAVAILABLE" | "INVALID_DESTINATION" | "INVALID_INPUT" | "INVALID_PHASES" | "INVALID_TEXT" | "NO_PHASES" | "PHASE_REPEATED" };
+    error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "BUILD_FAILED" | "BUILD_HAS_ERRORS" | "BUILD_INCOMPLETE" | "COLLECTION_NOT_FOUND" | "CONVERSION_FAILED" | "DEPLOYMENT_ACTIVE" | "DESTINATION_NOT_DIRECTED" | "DESTINATION_UNAVAILABLE" | "DIAGNOSTIC_NOT_FOUND" | "DIRECTORY_MISSING" | "DIRECTORY_UNREADABLE" | "DIRECTORY_UNSUPPORTED" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "ENTRY_NOT_FOUND" | "ENTRY_UNNAMEABLE" | "ENTRY_UNREADABLE" | "ENTRY_UNSUPPORTED" | "FILE_MISSING" | "INCOMPATIBLE_PROFILE" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_BASE" | "INVALID_CARD" | "INVALID_CLAIM" | "INVALID_CONDITION" | "INVALID_CONFIGURATION" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DATA" | "INVALID_DESTINATION" | "INVALID_DIMENSION" | "INVALID_DIRECTION" | "INVALID_ENTRIES" | "INVALID_FIELD" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_ORIGIN" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PHASES" | "INVALID_POLICY" | "INVALID_PRODUCER" | "INVALID_PROFILE" | "INVALID_RANK" | "INVALID_REDIRECT" | "INVALID_SELECTOR" | "INVALID_SUBJECT" | "INVALID_SURVEY" | "INVALID_TEMPLATE" | "INVALID_TEMPLATE_ORIGIN" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_VALUES" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "JOB_NOT_RUNNING" | "LOCATION_MISSING" | "LOCATION_NOT_DIRECTORY" | "LOCATION_UNRESOLVABLE" | "MALFORMED_ATTRIBUTES" | "MALFORMED_PATTERN" | "NOT_BEGUN" | "NOT_BUILDING" | "NOT_CLAIMED" | "NOT_GROUNDED" | "NO_PHASES" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PATH_LEAVES_ROOT" | "PHASE_REPEATED" | "PROFILE_NOT_FOUND" | "RANK_TAKEN" | "RECONCILIATION_FAILED" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "ROOT_NOT_FOUND" | "SEQUENCE_ACTIVE" | "SEQUENCE_NOT_FOUND" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NAME_TAKEN" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNKNOWN_SOURCE" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_EXTENSION" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_PROFILE_KIND" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PENDING" | "WORK_NOT_PREPARED" };
   };
   "/site/inspect": {
     input: {
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["request"]>[0], ["path"]>>;
       "target": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Routing"]["_owner"]>[0], ["address"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["_at"]>[0], ["path"]>]>>;
     };
     output: {
@@ -119,40 +149,13 @@ export type SyncpressWire = {
       };
       "owner": Jsonify<OneOf<[AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_owner"]>>>, ["owner"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Filing"]["_at"]>>>, ["file"]>]>>;
     };
-    error: { error: AppWideError | "INSPECTION_TARGET_NOT_FOUND" | "INVALID_INPUT" };
-  };
-  "/site/prepare": {
-    input: Record<string, never>;
-    output: {
-      "sequence": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Phasing"]["declare"]>>, ["sequence"]>>;
-    };
-    error: { error: AppWideError | "CONFIGURATION_NOT_ASSESSED" | "INVALID_PHASES" | "INVALID_TEXT" | "NO_PHASES" | "PHASE_REPEATED" };
-  };
-  "/site/reconcile": {
-    input: {
-      "job": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Phasing"]["_job"]>[0], ["job"]>>;
-    };
-    output: {
-      "kept": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["kept"]>>;
-      "removed": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["removed"]>>;
-      "replaced": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["replaced"]>>;
-      "written": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["written"]>>;
-    };
-    error: { error: AppWideError | "BUILD_FAILED" | "BUILD_HAS_ERRORS" | "BUILD_INCOMPLETE" | "BUILD_NOT_COMPLETE" | "BUILD_SUPERSEDED" | "DESTINATION_NOT_DIRECTED" | "INVALID_INPUT" | "RECONCILIATION_FAILED" };
-  };
-  "/site/stage": {
-    input: {
-      "encoded": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["placeBase64"]>[0], ["encoded"]>>;
-      "filePath": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["placeBase64"]>[0], ["path"]>>;
-      "name": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["open"]>[0], ["name"]>>;
-    };
-    output: Record<string, never>;
-    error: { error: AppWideError | "INVALID_ENCODING" | "INVALID_INPUT" | "INVALID_PATH" | "PATH_LEAVES_ROOT" | "ROOT_NOT_FOUND" };
+    error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "BUILD_FAILED" | "COLLECTION_NOT_FOUND" | "CONVERSION_FAILED" | "DEPLOYMENT_ACTIVE" | "DESTINATION_UNAVAILABLE" | "DIAGNOSTIC_NOT_FOUND" | "DIRECTORY_MISSING" | "DIRECTORY_UNREADABLE" | "DIRECTORY_UNSUPPORTED" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "ENTRY_NOT_FOUND" | "ENTRY_UNNAMEABLE" | "ENTRY_UNREADABLE" | "ENTRY_UNSUPPORTED" | "FILE_MISSING" | "INCOMPATIBLE_PROFILE" | "INSPECTION_TARGET_NOT_FOUND" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_BASE" | "INVALID_CARD" | "INVALID_CLAIM" | "INVALID_CONDITION" | "INVALID_CONFIGURATION" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DATA" | "INVALID_DESTINATION" | "INVALID_DIMENSION" | "INVALID_DIRECTION" | "INVALID_ENTRIES" | "INVALID_FIELD" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_ORIGIN" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PHASES" | "INVALID_POLICY" | "INVALID_PRODUCER" | "INVALID_PROFILE" | "INVALID_RANK" | "INVALID_REDIRECT" | "INVALID_SELECTOR" | "INVALID_SUBJECT" | "INVALID_SURVEY" | "INVALID_TEMPLATE" | "INVALID_TEMPLATE_ORIGIN" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_VALUES" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "JOB_NOT_RUNNING" | "LOCATION_MISSING" | "LOCATION_NOT_DIRECTORY" | "LOCATION_UNRESOLVABLE" | "MALFORMED_ATTRIBUTES" | "MALFORMED_PATTERN" | "NOT_BEGUN" | "NOT_BUILDING" | "NOT_CLAIMED" | "NOT_GROUNDED" | "NO_PHASES" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PATH_LEAVES_ROOT" | "PHASE_REPEATED" | "PROFILE_NOT_FOUND" | "RANK_TAKEN" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "ROOT_NOT_FOUND" | "SEQUENCE_ACTIVE" | "SEQUENCE_NOT_FOUND" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NAME_TAKEN" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNKNOWN_SOURCE" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_EXTENSION" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_PROFILE_KIND" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PENDING" | "WORK_NOT_PREPARED" };
   };
   "/site/summary": {
     input: Record<string, never>;
     output: {
       "summary": {
+        "destination": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Locating"]["_place"]>>>, ["real"]>> | null;
         "diagnostics": {
           "code": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["code"]>>;
           "column": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["column"]>>;
@@ -161,7 +164,9 @@ export type SyncpressWire = {
           "severity": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["severity"]>>;
           "source": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["source"]>>;
         }[];
+        "files": number;
         "pages": number;
+        "policy": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Governing"]["_policy"]>>>, ["policy"]>> | null;
       };
     };
     error: { error: AppWideError };

@@ -1,12 +1,6 @@
-import type { InvocationResult } from "@mit-sdg/sync-engine/boundary";
-import { Buffer } from "node:buffer";
-import { lstat, readdir, readFile, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { SyncpressWire } from "../../generated/wire.ts";
-import { CONFIGURATION_PATH, ROOTS } from "@syncpress/compositions/shared";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { createSyncpressRuntime, type Gateway } from "./application.ts";
 
-type SourceFile = { path: string; source: string };
 type Diagnostic = {
   severity: "error" | "warning";
   code: string;
@@ -20,190 +14,18 @@ type FormedDiagnostic = Omit<Diagnostic, "source" | "line" | "column"> & {
   line: number | null;
   column: number | null;
 };
+type Summary = { pages: number; files: number; diagnostics: FormedDiagnostic[] };
 
-const destinationTails = new Map<string, Promise<void>>();
+/**
+ * A build or inspection is a batch operation whose answer waits for the work
+ * rather than for a clock, so it uses the largest wait the boundary accepts.
+ */
+const BATCH_TIMEOUT_MS = 2_147_483_647;
 
-async function acquireDestination(destination: string): Promise<() => void> {
-  const previous = destinationTails.get(destination) ?? Promise.resolve();
-  let unlock!: () => void;
-  const held = new Promise<void>((resolve) => {
-    unlock = resolve;
-  });
-  const tail = previous.then(() => held);
-  destinationTails.set(destination, tail);
-  await previous;
-
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    unlock();
-    void tail.finally(() => {
-      if (destinationTails.get(destination) === tail) destinationTails.delete(destination);
-    });
-  };
-}
-
-function errorCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
-    ? error.code
-    : undefined;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function describe(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && value !== null && "error" in value && typeof value.error === "string") {
-    return value.error;
-  }
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function gatewayError(error: { kind: "domain"; value: unknown } | { kind: "framework"; code: string; detail?: string }): string {
-  return error.kind === "domain" ? describe(error.value) : error.detail ?? error.code;
-}
-
-function gatewayValue<T>(result: InvocationResult<T, unknown>, context: string): T {
-  if (!result.ok) throw new Error(`${context}: ${gatewayError(result.error)}`);
-  return result.value;
-}
-
-async function readSiteSummary(gateway: Gateway) {
-  return gatewayValue<SyncpressWire["/site/summary"]["output"]>(
-    await gateway.invoke("/site/summary", {}),
-    "Could not read the site build summary",
-  ).summary;
-}
-
+/** Whether one host path is at or below another. */
 export function containsPath(parent: string, child: string): boolean {
   const path = relative(parent, child);
   return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
-}
-
-function pathsOverlap(left: string, right: string): boolean {
-  return containsPath(left, right) || containsPath(right, left);
-}
-
-export async function canonicalPath(path: string, name: string): Promise<string> {
-  try {
-    return await realpath(path);
-  } catch (error) {
-    const code = errorCode(error);
-    if (code !== "ENOENT" && code !== "ENOTDIR") {
-      throw new Error(`Could not resolve ${name} ${path}: ${errorMessage(error)}`);
-    }
-  }
-
-  const parent = dirname(path);
-  return parent === path ? path : join(await canonicalPath(parent, name), basename(path));
-}
-
-async function requireDirectory(directory: string, name: string): Promise<void> {
-  let status: Awaited<ReturnType<typeof lstat>>;
-  try {
-    status = await lstat(directory);
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") throw new Error(`Required ${name} directory is missing: ${directory}`);
-    if (errorCode(error) === "ENOTDIR") throw new Error(`Required ${name} directory is not a directory: ${directory}`);
-    throw new Error(`Could not inspect required ${name} directory ${directory}: ${errorMessage(error)}`);
-  }
-
-  if (status.isSymbolicLink()) throw new Error(`Required ${name} directory must not be a symbolic link: ${directory}`);
-  if (!status.isDirectory()) throw new Error(`Required ${name} directory is not a directory: ${directory}`);
-}
-
-async function readRequiredFile(file: string, name: string): Promise<Uint8Array> {
-  let status: Awaited<ReturnType<typeof lstat>>;
-  try {
-    status = await lstat(file);
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") throw new Error(`Required ${name} is missing: ${file}`);
-    throw new Error(`Could not inspect required ${name} ${file}: ${errorMessage(error)}`);
-  }
-
-  if (status.isSymbolicLink()) throw new Error(`Required ${name} must not be a symbolic link: ${file}`);
-  if (!status.isFile()) throw new Error(`Required ${name} is not a regular file: ${file}`);
-
-  try {
-    return new Uint8Array(await readFile(file));
-  } catch (error) {
-    throw new Error(`Could not read required ${name} ${file}: ${errorMessage(error)}`);
-  }
-}
-
-async function sourceFiles(directory: string, name: string): Promise<SourceFile[]> {
-  const files: SourceFile[] = [];
-
-  async function visit(current: string, prefix: string): Promise<void> {
-    let entries: { name: string }[];
-    try {
-      entries = await readdir(current, { withFileTypes: true });
-    } catch (error) {
-      throw new Error(`Could not read ${name} directory ${current}: ${errorMessage(error)}`);
-    }
-    entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
-
-    for (const entry of entries) {
-      const source = join(current, entry.name);
-      const path = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-      let status: Awaited<ReturnType<typeof lstat>>;
-      try {
-        status = await lstat(source);
-      } catch (error) {
-        throw new Error(`Could not inspect ${name} entry ${source}: ${errorMessage(error)}`);
-      }
-
-      if (status.isSymbolicLink()) throw new Error(`Symbolic links are not allowed in ${name}: ${source}`);
-      if (status.isDirectory()) {
-        await visit(source, path);
-      } else if (status.isFile()) {
-        files.push({ path, source });
-      } else {
-        throw new Error(`Non-regular entry is not allowed in ${name}: ${source}`);
-      }
-    }
-  }
-
-  await visit(directory, "");
-  return files;
-}
-
-function sourceDirectory(siteDirectory: string, configured: string, name: string): string {
-  const directory = resolve(siteDirectory, configured);
-  if (!containsPath(siteDirectory, directory)) {
-    throw new Error(`Configured ${name} must stay inside the site directory.`);
-  }
-  return directory;
-}
-
-async function stageBytes(
-  gateway: Gateway,
-  name: string,
-  filePath: string,
-  content: Uint8Array,
-  context: string,
-): Promise<void> {
-  gatewayValue<SyncpressWire["/site/stage"]["output"]>(
-    await gateway.invoke("/site/stage", { name, filePath, encoded: Buffer.from(content).toString("base64") }),
-    context,
-  );
-}
-
-async function placeFile(gateway: Gateway, name: string, path: string, source: string): Promise<void> {
-  let content: Uint8Array;
-  try {
-    content = new Uint8Array(await readFile(source));
-  } catch (error) {
-    throw new Error(`Could not read source file ${source}: ${errorMessage(error)}`);
-  }
-  await stageBytes(gateway, name, path, content, `Could not stage source file ${source}`);
 }
 
 function formatDiagnostics(diagnostics: readonly Diagnostic[]): string {
@@ -226,182 +48,78 @@ function normalizeDiagnostics(diagnostics: readonly FormedDiagnostic[]): Diagnos
   }));
 }
 
-/** Stage the configuration and engine-authored source plan into a fresh model. */
-async function stageSite(projectDirectory = ".") {
-  const siteDirectory = resolve(projectDirectory);
-  await requireDirectory(siteDirectory, "site");
-  const canonicalSiteDirectory = await canonicalPath(siteDirectory, "site directory");
+function reason(error: { kind: "domain"; value: unknown } | { kind: "framework"; code: string; detail?: string }): string {
+  if (error.kind !== "domain") return error.detail ?? error.code;
+  return typeof error.value === "string" ? error.value : JSON.stringify(error.value);
+}
 
-  const configurationFile = join(siteDirectory, CONFIGURATION_PATH);
-  const configuration = await readRequiredFile(configurationFile, CONFIGURATION_PATH);
-  const { gateway, startBuild } = createSyncpressRuntime();
-  await stageBytes(gateway, ROOTS.project, CONFIGURATION_PATH, configuration, `Could not stage ${CONFIGURATION_PATH}`);
+async function readSummary(gateway: Gateway): Promise<Summary> {
+  const summary = await gateway.invoke("/site/summary", {});
+  if (!summary.ok) throw new Error(`Could not read the site build summary: ${reason(summary.error)}`);
+  return summary.value.summary as unknown as Summary;
+}
 
-  const assessed = await gateway.invoke("/site/assess", {});
-  if (!assessed.ok) {
-    await gateway.whenIdle();
-    const summary = await readSiteSummary(gateway) as { pages: number; diagnostics: FormedDiagnostic[] };
-    throw new Error(
-      `Invalid ${CONFIGURATION_PATH}: ${gatewayError(assessed.error)}\n\n${formatDiagnostics(normalizeDiagnostics(summary.diagnostics))}`,
-    );
-  }
-  const policy = assessed.value.policy;
-  const sourceRoots = assessed.value.sources.map(({ name, path }) => ({
-    name,
-    directory: sourceDirectory(siteDirectory, path, `paths.${name}`),
-  }));
-  for (const source of sourceRoots) await requireDirectory(source.directory, source.name);
-  const canonicalSourceRoots = await Promise.all(
-    sourceRoots.map(async (source) => ({
-      ...source,
-      canonicalDirectory: await canonicalPath(source.directory, `${source.name} directory`),
-    })),
+/** The failure to raise: the answer the application gave, and every diagnostic that explains it. */
+async function refusal(gateway: Gateway, context: string, detail: string): Promise<Error> {
+  await gateway.whenIdle();
+  const { diagnostics } = await readSummary(gateway);
+  return new Error(`${context}: ${detail}\n\nDiagnostics:\n${formatDiagnostics(normalizeDiagnostics(diagnostics))}`);
+}
+
+/** Build the project rooted at one host directory into one reconciled output tree. */
+export async function buildSite(projectDirectory = ".", destination?: string) {
+  const { gateway } = createSyncpressRuntime();
+  const directory = resolve(projectDirectory);
+  const built = await gateway.invoke(
+    "/site/build",
+    destination === undefined ? { directory } : { directory, destination },
+    { timeoutMs: BATCH_TIMEOUT_MS },
   );
-  for (const source of canonicalSourceRoots) {
-    if (!containsPath(canonicalSiteDirectory, source.canonicalDirectory)) {
-      throw new Error(
-        `Configured paths.${source.name} must stay inside the site directory after resolving symbolic links: ${source.directory}`,
-      );
-    }
-  }
+  if (!built.ok) throw await refusal(gateway, "Could not build the site", reason(built.error));
 
-  let inputFiles = 1;
-  for (const source of canonicalSourceRoots) {
-    const files = await sourceFiles(source.directory, source.name);
-    inputFiles += files.length;
-    for (const file of files) await placeFile(gateway, source.name, file.path, file.source);
+  const { summary, ...counts } = built.value;
+  if (summary.destination === null) {
+    throw await refusal(gateway, "Could not build the site", "the published output directory is unknown");
   }
-
   return {
-    gateway,
-    startBuild,
-    inputFiles,
-    policy,
-    siteDirectory,
-    canonicalSiteDirectory,
-    configurationFile,
-    sourceRoots: canonicalSourceRoots,
+    pages: summary.pages,
+    inputFiles: summary.files,
+    policy: summary.policy,
+    outputDirectory: summary.destination,
+    ...counts,
+    diagnostics: normalizeDiagnostics(summary.diagnostics as FormedDiagnostic[]),
   };
 }
 
-/** Run a staged model with publication directed at one validated destination. */
-async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string) {
-  const staged = await stageSite(projectDirectory);
-  const {
-    gateway,
-    startBuild,
-    policy,
-    siteDirectory,
-    canonicalSiteDirectory,
-    configurationFile,
-    sourceRoots,
-  } = staged;
-  const outputDirectory = destination === undefined
-    ? sourceDirectory(siteDirectory, policy.paths.output, "paths.output")
-    : resolve(siteDirectory, destination);
-  const comparableOutputDirectory = await canonicalPath(outputDirectory, "output directory");
-  if (destination === undefined && !containsPath(canonicalSiteDirectory, comparableOutputDirectory)) {
-    throw new Error(
-      `Configured paths.output must stay inside the site directory after resolving symbolic links: ${outputDirectory}`,
-    );
-  }
-  for (const source of sourceRoots) {
-    if (pathsOverlap(source.canonicalDirectory, comparableOutputDirectory)) {
-      throw new Error(
-        `Output directory overlaps configured ${source.name} directory: ${outputDirectory} and ${source.directory}`,
-      );
-    }
-  }
-  if (containsPath(comparableOutputDirectory, await canonicalPath(configurationFile, CONFIGURATION_PATH))) {
-    throw new Error(`Output directory overlaps ${CONFIGURATION_PATH}: ${outputDirectory} and ${configurationFile}`);
-  }
-
-  const releaseDestination = await acquireDestination(comparableOutputDirectory);
-  try {
-    const configured = gatewayValue<SyncpressWire["/site/configure"]["output"]>(
-      await gateway.invoke("/site/configure", { destination: outputDirectory }),
-      "Could not configure the site build",
-    );
-    const job = await startBuild(configured.sequence);
-    return {
-      gateway,
-      job,
-      inputFiles: staged.inputFiles,
-      policy,
-      outputDirectory: comparableOutputDirectory,
-      releaseDestination,
-    };
-  } catch (error) {
-    releaseDestination();
-    throw error;
-  }
-}
-
-/** Internal watch entry that updates output exclusion before reconciliation writes. */
-export async function buildSiteForWatch(
-  projectDirectory = ".",
-  destination?: string,
-  beforeReconcile?: (outputDirectory: string) => Promise<void>,
-) {
-  const { gateway, job, inputFiles, policy, outputDirectory, releaseDestination } = await stageAndRunSiteBuild(
-    projectDirectory,
-    destination,
-  );
-  try {
-    await beforeReconcile?.(outputDirectory);
-    const reconciled = await gateway.invoke("/site/reconcile", { job });
-    const summary = await readSiteSummary(gateway) as { pages: number; diagnostics: FormedDiagnostic[] };
-    const diagnostics = normalizeDiagnostics(summary.diagnostics);
-    if (!reconciled.ok) {
-      throw new Error(
-        `Could not reconcile the site build: ${gatewayError(reconciled.error)}\n\nDiagnostics:\n${formatDiagnostics(diagnostics)}`,
-      );
-    }
-
-    return {
-      result: { pages: summary.pages, inputFiles, policy, ...reconciled.value, diagnostics },
-      outputDirectory,
-    };
-  } finally {
-    releaseDestination();
-  }
-}
-
-export async function buildSite(projectDirectory = ".", destination?: string) {
-  return (await buildSiteForWatch(projectDirectory, destination)).result;
-}
-
-/** Build an isolated application model and report the current provenance for one page or route. */
+/** Report the current provenance of one page or route without publishing anything. */
 export async function inspectSite(projectDirectory: string, target: string) {
-  const { gateway, startBuild } = await stageSite(projectDirectory);
-  const prepared = gatewayValue<SyncpressWire["/site/prepare"]["output"]>(
-    await gateway.invoke("/site/prepare", {}),
-    "Could not prepare the site model",
+  const { gateway } = createSyncpressRuntime();
+  const inspected = await gateway.invoke(
+    "/site/inspect",
+    { directory: resolve(projectDirectory), target },
+    { timeoutMs: BATCH_TIMEOUT_MS },
   );
-  await startBuild(prepared.sequence);
-
-  const inspected = await gateway.invoke("/site/inspect", { target });
   if (!inspected.ok) {
-    if (inspected.error.kind !== "domain" || inspected.error.value !== "INSPECTION_TARGET_NOT_FOUND") {
-      throw new Error(`Could not inspect the site model: ${gatewayError(inspected.error)}`);
-    }
-    const summary = await readSiteSummary(gateway) as { pages: number; diagnostics: FormedDiagnostic[] };
-    throw new Error(`No routed page or content source matches ${JSON.stringify(target)}.\n\nDiagnostics:\n${formatDiagnostics(normalizeDiagnostics(summary.diagnostics))}`);
+    const detail = reason(inspected.error);
+    throw detail === "INSPECTION_TARGET_NOT_FOUND"
+      ? await refusal(gateway, "No routed page or content source matches", JSON.stringify(target))
+      : await refusal(gateway, "Could not inspect the site model", detail);
   }
+
   const { owner, inspection } = inspected.value;
   const source = inspection.source.path === null ? undefined : inspection.source;
   const template = inspection.template.name === null || inspection.template.digest === null
     ? undefined
     : inspection.template;
-  const diagnostics = inspection.diagnostics.map(({ related, source, line, column, ...diagnostic }) => ({
+  const diagnostics = inspection.diagnostics.map(({ related, source: origin, line, column, ...diagnostic }) => ({
     ...diagnostic,
-    source: source ?? undefined,
+    source: origin ?? undefined,
     line: line ?? undefined,
     column: column ?? undefined,
-    related: related.map(({ line, column, ...relation }) => ({
+    related: related.map(({ line: relatedLine, column: relatedColumn, ...relation }) => ({
       ...relation,
-      line: line ?? undefined,
-      column: column ?? undefined,
+      line: relatedLine ?? undefined,
+      column: relatedColumn ?? undefined,
     })),
   }));
 

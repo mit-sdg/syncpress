@@ -6,6 +6,7 @@ export const DIAGNOSTIC_SCOPES = {
   configuration: "configuration-assessment",
   rendering: "page-rendering",
   settings: "configuration-settings",
+  staging: "project-staging",
 } as const;
 
 export const ROOTS = {
@@ -16,7 +17,15 @@ export const ROOTS = {
   templates: "templates",
 } as const;
 
-export const PHASES = ["settings", "read", "route", "excerpt", "collect", "render", "emit"];
+/** Locating names for the host locations one run records, grounds, and admits. */
+export const PLACES = {
+  base: "site",
+  destination: "destination",
+  output: "output",
+  settings: "settings",
+} as const;
+
+export const PHASES = ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"];
 export const PHASE_SEQUENCE = "site-build";
 
 export const PAGE_PATTERNS = {

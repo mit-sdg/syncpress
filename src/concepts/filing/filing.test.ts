@@ -222,6 +222,29 @@ test("lists directory descendants in deterministic UTF-8 byte order", () => {
   );
 });
 
+test("lists every held file by root in opening order and by path within a root", () => {
+  const filing = new FilingConcept();
+  const content = filing.open({ name: "content" }).root;
+  const templates = filing.open({ name: "templates" }).root;
+  expect(filing._files()).toEqual([]);
+
+  const page = filing.place({ root: templates, path: "page.html", content: bytes("page") });
+  const second = filing.place({ root: content, path: "posts/second.md", content: bytes("second") });
+  const about = filing.place({ root: content, path: "about.md", content: bytes("about") });
+
+  expect(filing._files()).toEqual([
+    { file: about.file, root: content, path: "about.md" },
+    { file: second.file, root: content, path: "posts/second.md" },
+    { file: page.file, root: templates, path: "page.html" },
+  ]);
+
+  filing.discard({ file: second.file });
+  expect(filing._files()).toEqual([
+    { file: about.file, root: content, path: "about.md" },
+    { file: page.file, root: templates, path: "page.html" },
+  ]);
+});
+
 test("resolves URI references within one root and reports every other outcome", () => {
   const filing = new FilingConcept();
   const root = filing.open({ name: "content" }).root;
