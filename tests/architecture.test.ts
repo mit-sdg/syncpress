@@ -51,10 +51,11 @@ test("host adapters never read concept state or import implementations", async (
  * application and invokes its endpoints.
  */
 test("host adapters reach the host only through concepts", async () => {
-  for (const file of await typescriptFiles(join(root, "src", "edge"))) {
+  const adapters = [...await typescriptFiles(join(root, "src", "edge")), join(root, "src", "cli.ts")];
+  for (const file of adapters) {
     const source = await readFile(file, "utf8");
     expect(source, file).not.toMatch(/from\s+["']node:/);
-    expect(source, file).not.toMatch(/\bprocess\.(?!argv\b)/);
+    expect(source, file).not.toMatch(/\bprocess\.|\bconsole\./);
     expect(source, file).not.toMatch(/\bsetTimeout\b|\bsetInterval\b/);
   }
 });
@@ -66,10 +67,11 @@ test("composition asks concepts for host work instead of doing it", async () => 
   }
 });
 
-/** Pure calculations stay pure, so composition can reach them through `compute`. */
-test("computations import nothing from the host", async () => {
+/** Computations may use pure host path projection, but never perform host effects. */
+test("computations perform no host effects", async () => {
   const source = await readFile(join(root, "src", "computations.ts"), "utf8");
-  expect(source).not.toMatch(/from\s+["']node:/);
+  expect(source).not.toMatch(/from\s+["']node:(?:fs|http|https|net|process|timers)/);
+  expect(source).not.toMatch(/\bprocess\.|\bconsole\.|\bsetTimeout\b|\bsetInterval\b/);
 });
 
 /**

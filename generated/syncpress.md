@@ -7,25 +7,6 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
-### Attending
-
-**Purpose.** Hold a process open until the operator running it asks it to stop, so a
-long-running command ends on request instead of being killed mid-work.
-
-**Principle.** Ada starts a hold. Nothing returns while she leaves the process running.
-She presses Ctrl-C; the hold ends and reports that it was interrupted. The
-process is free to finish its own work before exiting. A later hold waits again,
-because ending one hold does not end the ability to hold another.
-
-Actions:
-
-- `hold (…)`
-
-Queries (standing questions the state answers):
-
-- `_hold (hold)` — promises at most one row
-- `_holding (…)` — promises exactly one row
-
 ### Cataloging
 
 **Purpose.** Admit projected items into named catalogs under declared conditions and keep
@@ -58,10 +39,9 @@ Queries (standing questions the state answers):
 
 ### Commanding
 
-**Purpose.** Interpret one operator's command line into a checked request, and answer that
-operator on their own streams, so every misuse is refused the same way and every
-report — including the one line a finished run is worth — reaches the same
-place.
+**Purpose.** Own one Syncpress operator interaction from process arguments through reports
+and a stop request, so grammar, streams, signals, and exit status cannot drift
+across unrelated boundary adapters.
 
 **Principle.** Ada runs the tool with no arguments and gets the help request, whose answer is
 the usage text. She runs `build ./site out` and gets a build request rooted at
@@ -70,12 +50,16 @@ request on port 8080 with the default directory. She runs `inspect /posts/first/
 and gets an inspect request for that target. She runs `build a b c` and is
 refused, with the usage text attached. Reporting a line puts it on the operator's
 ordinary output; summarizing a run puts one counted sentence there; announcing a
-served directory puts its address there; warning them puts it on their error
-output, and all of them are remembered in the order they were said.
+served directory puts its address there; and warning them puts it on their error
+output. A hold ends
+when she interrupts the process, and a failed command records a nonzero process
+exit status.
 
 Actions:
 
 - `announce (directory, host, port)` — may refuse `INVALID_REPORT`
+- `exit (code)` — may refuse `INVALID_REPORT`
+- `hold (…)`
 - `interpret (arguments)` — may refuse `INVALID_ARGUMENTS`, `INVALID_USAGE`
 - `say (text)` — may refuse `INVALID_REPORT`
 - `summarize (files, kept, pages, removed, replaced, written)` — may refuse `INVALID_REPORT`
@@ -83,9 +67,9 @@ Actions:
 
 Queries (standing questions the state answers):
 
+- `_hold (hold)` — promises at most one row
+- `_holding (…)` — promises exactly one row
 - `_misuse (…)` — promises exactly one row
-- `_reports (…)` — promises any number of rows
-- `_request (request)` — promises at most one row
 - `_usage (…)` — promises exactly one row
 
 ### Converting
@@ -194,8 +178,9 @@ Queries (standing questions the state answers):
 
 ### Diagnosing
 
-**Purpose.** Keep the problems found during a task together, so people can see everything
-that needs attention and know when no errors remain.
+**Purpose.** Keep the problems found during a task together and record whether aggregate
+delivery was interrupted, so people can see everything available without a
+second terminal report racing an earlier failure.
 
 **Principle.** Ada checks two records. She reports an error in one, a warning in the other, and
 another error later in the first. Reading the list gives both errors before the
@@ -208,14 +193,17 @@ check clean; clearing leaves no problems at all.
 Actions:
 
 - `clear (…)`
+- `interrupt (…)`
 - `relate (column, diagnostic, line, note, source)` — may refuse `DIAGNOSTIC_NOT_FOUND`, `INVALID_LOCATION`, `INVALID_TEXT`
 - `report (code, column, line, message, scope, severity, source)` — may refuse `INVALID_LOCATION`, `INVALID_TEXT`, `UNKNOWN_SEVERITY`
+- `resume (…)`
 - `retract (scope, source)` — may refuse `INVALID_TEXT`
 
 Queries (standing questions the state answers):
 
 - `_all (…)` — promises any number of rows
 - `_clean (…)` — promises exactly one row
+- `_delivery (…)` — promises exactly one row
 - `_errors (…)` — promises any number of rows
 - `_for (source)` — promises any number of rows
 - `_related (diagnostic)` — promises any number of rows
@@ -296,7 +284,7 @@ Actions:
 - `abort (attempt, producer)` — may refuse `INVALID_PRODUCER`, `NOT_BEGUN`, `STALE_ATTEMPT`
 - `begin (producer)` — may refuse `ATTEMPT_EXHAUSTED`, `INVALID_PRODUCER`
 - `commit (attempt, producer)` — may refuse `INVALID_PRODUCER`, `NOT_BEGUN`, `STALE_ATTEMPT`
-- `direct (destination)` — may refuse `DESTINATION_UNAVAILABLE`, `INVALID_DESTINATION`
+- `direct (destination, prefix)` — may refuse `DESTINATION_UNAVAILABLE`, `INVALID_DESTINATION`
 - `intend (attempt, claim, content, medium, path, producer)` — may refuse `INVALID_CLAIM`, `INVALID_CONTENT`, `INVALID_MEDIUM`, `INVALID_PATH`, `INVALID_PRODUCER`, `PATH_CONTESTED`, `PATH_LEAVES_DESTINATION`, `STALE_ATTEMPT`
 - `reconcile (…)` — may refuse `DESTINATION_NOT_DIRECTED`, `RECONCILIATION_FAILED`
 - `retract (producer)` — may refuse `INVALID_PRODUCER`
@@ -310,24 +298,27 @@ Queries (standing questions the state answers):
 - `_orphans (…)` — promises any number of rows
 - `_pending (…)` — promises any number of rows
 - `_producers (path)` — promises any number of rows
-- `_staging (destination)` — promises exactly one row
 
 ### Filing
 
-**Purpose.** Keep files in named trees and say whether saving a file changed its contents.
+**Purpose.** Keep authoritative named byte trees and replace a host-backed tree only after
+its complete readable contents are known, so readers never observe a partial
+import.
 
-**Principle.** Ada opens a tree called notes and saves a page and a picture in it. Reading the
-page gives back the exact bytes she saved, the same text when those bytes are
-UTF-8, and a stable fingerprint. Saving the same bytes reports no change;
-saving different bytes keeps the same file identity and reports a change.
-Listings have one predictable path order. The page can find the picture from a
-link such as `./picture.png`, but a link cannot climb outside the tree. Removing
-the page makes later lookups miss it, and removing it again is refused. A second
-named tree remains separate.
+**Principle.** Ada loads a host directory called notes. Reading its page gives back the exact
+bytes loaded, the same text when those bytes are UTF-8, and a stable
+fingerprint. She changes one file, removes another, and loads notes again; the
+surviving file keeps its identity, the omitted file disappears, and readers see
+the new tree only after the whole load succeeds. A later load encounters a
+symbolic link and reports a problem without changing the preceding tree. The
+page can find a picture from `./picture.png`, but a link cannot climb outside
+the logical tree.
 
 Actions:
 
 - `discard (file)` — may refuse `FILE_NOT_FOUND`
+- `loadFile (name, path, source)` — may refuse `INVALID_PATH`, `INVALID_SOURCE`, `PATH_LEAVES_ROOT`
+- `loadTree (directory, name)` — may refuse `INVALID_SOURCE`
 - `open (name)`
 - `place (content, path, root)` — may refuse `INVALID_PATH`, `PATH_LEAVES_ROOT`, `ROOT_NOT_FOUND`
 - `placeBase64 (encoded, path, root)` — may refuse `INVALID_ENCODING`, `INVALID_PATH`, `PATH_LEAVES_ROOT`, `ROOT_NOT_FOUND`
@@ -409,9 +400,9 @@ Queries (standing questions the state answers):
 
 ### Locating
 
-**Purpose.** Record which host locations a run wants, ground one base directory, and admit
-named locations under it with symbolic links resolved, so every location a build
-later reads or writes is already known to be inside or outside that base.
+**Purpose.** Record which host locations a run wants and observe their resolution-time
+containment and overlap under one base, so composition can reject an unsafe
+location plan before asking another owner to use it.
 
 **Principle.** Ada records that the base should be `/srv/site` and that output should go to
 `build`. Grounding the recorded base succeeds because it is a real directory.
@@ -426,8 +417,8 @@ location admitted under the previous one.
 
 Actions:
 
-- `admit (name, path)` — may refuse `INVALID_LOCATION`, `LOCATION_UNRESOLVABLE`, `NOT_GROUNDED`
-- `ground (path)` — may refuse `INVALID_LOCATION`, `LOCATION_MISSING`, `LOCATION_NOT_DIRECTORY`, `LOCATION_UNRESOLVABLE`
+- `admit (name, path)` — may refuse `INVALID_LOCATION`, `NOT_GROUNDED`
+- `ground (path)` — may refuse `INVALID_LOCATION`
 - `request (name, path)` — may refuse `INVALID_LOCATION`
 
 Queries (standing questions the state answers):
@@ -581,32 +572,6 @@ Queries (standing questions the state answers):
 - `_owner (address)` — promises at most one row
 - `_url (target)` — promises at most one row
 
-### Scanning
-
-**Purpose.** Read ordinary files from host directories in one predictable order, refusing
-anything that is not a plain file, so a build sees a complete, link-free
-snapshot of what an author wrote.
-
-**Principle.** Ada surveys `/srv/site/content` and gets a survey listing `about.md` and
-`posts/first.md`, in that order, each named by a portable path rather than a
-host path. She reads `posts/first.md` from the survey and gets its exact bytes.
-She reads a file she did not survey and is refused. She surveys a directory
-holding a symbolic link and the whole survey is refused, so no partial snapshot
-exists. Surveying the same directory again replaces the earlier survey for that
-label with what the directory holds now, under the same survey identity.
-
-Actions:
-
-- `absorb (path)` — may refuse `ENTRY_UNREADABLE`, `ENTRY_UNSUPPORTED`, `FILE_MISSING`, `INVALID_SURVEY`
-- `read (path, survey)` — may refuse `ENTRY_NOT_FOUND`, `ENTRY_UNREADABLE`
-- `survey (directory, label)` — may refuse `DIRECTORY_MISSING`, `DIRECTORY_UNREADABLE`, `DIRECTORY_UNSUPPORTED`, `ENTRY_UNNAMEABLE`, `ENTRY_UNSUPPORTED`, `INVALID_SURVEY`
-
-Queries (standing questions the state answers):
-
-- `_entry (survey)` — promises any number of rows
-- `_labelled (label)` — promises at most one row
-- `_survey (survey)` — promises at most one row
-
 ### Serving
 
 **Purpose.** Answer host requests from one directory of already-published files, never
@@ -617,17 +582,16 @@ host actually gave it. Until she points it at a directory it tells every reader
 the site is unavailable. She points it at a published output directory, and a
 request for `/` answers that directory's `index.html` with a small script that
 listens for reload notices. A request for a missing path answers not found. A
-request that climbs out of the directory, or reaches it through a symbolic link
-that leaves it, answers forbidden without reading the file. After a rebuild she
-refreshes the server, and every listening reader is told to reload. Closing the
+request that climbs out of the directory, or reaches a symbolic link, answers
+forbidden without reading the file. After a rebuild she publishes the
+reconciled directory, and every listening reader is told to reload. Closing the
 server ends the listeners and stops answering.
 
 Actions:
 
-- `close (server)` — may refuse `SERVER_NOT_FOUND`
+- `close (server)` — may refuse `SERVER_CLOSE_FAILED`, `SERVER_NOT_FOUND`
 - `open (host, port)` — may refuse `ADDRESS_UNAVAILABLE`, `INVALID_SERVER`
-- `refresh (server)` — may refuse `SERVER_NOT_OPEN`
-- `serve (directory, server)` — may refuse `INVALID_SERVER`, `SERVER_NOT_OPEN`
+- `publish (directory, server)` — may refuse `INVALID_SERVER`, `PUBLICATION_UNAVAILABLE`, `SERVER_NOT_OPEN`
 
 Queries (standing questions the state answers):
 
@@ -707,8 +671,8 @@ Queries (standing questions the state answers):
 burst instead of once per event, and never in response to paths the watcher was
 told to disregard.
 
-**Principle.** Ada observes `/srv/site`, letting a burst settle after 75 milliseconds, and
-tells the watch to disregard `/srv/site/dist`. She attends the watch and waits.
+**Principle.** Ada observes `/srv/site`, letting a burst settle after 75 milliseconds, with
+`/srv/site/dist` excluded before observation starts. She attends the watch and waits.
 Saving three files in quick succession reports one settled change, not three.
 Attending again waits, because that burst was already reported. Files written
 under `/srv/site/dist` report nothing at all. A burst that settles while nobody
@@ -717,14 +681,13 @@ whoever is attending and stops the observation for good.
 
 Actions:
 
-- `attend (watch, within)` — may refuse `INVALID_WATCH`, `WATCH_NOT_FOUND`
+- `attend (watch, within)` — may refuse `INVALID_WATCH`, `WATCH_FAILED`, `WATCH_NOT_FOUND`
 - `close (watch)` — may refuse `WATCH_NOT_FOUND`
-- `disregard (prefix, watch)` — may refuse `INVALID_WATCH`, `WATCH_NOT_OPEN`
-- `observe (directory, settling)` — may refuse `DIRECTORY_MISSING`, `DIRECTORY_UNOBSERVABLE`, `DIRECTORY_UNSUPPORTED`, `INVALID_WATCH`
+- `observe (directory, excluded, prefix, settling)` — may refuse `DIRECTORY_MISSING`, `DIRECTORY_UNOBSERVABLE`, `DIRECTORY_UNSUPPORTED`, `INVALID_WATCH`
 
 Queries (standing questions the state answers):
 
-- `_disregarded (watch)` — promises any number of rows
+- `_excluded (watch)` — promises any number of rows
 - `_open (…)` — promises any number of rows
 - `_watch (watch)` — promises at most one row
 
@@ -934,6 +897,13 @@ the publication place — inputs (); outputs (place, destination); bindings () �
 ```
 
 ```view
+the publication transaction prefix of destination (destination) — inputs (destination); outputs (prefix); bindings () — answers at most one (prefix)
+  where
+    prefix is publicationTransactionPrefix (destination)
+    isTextValue (value: prefix)
+```
+
+```view
 unsettled route owner — inputs (); outputs (owner); bindings () — answers any number of (owner)
   where
     Routing._claims () has (owner)
@@ -944,6 +914,7 @@ unsettled route owner — inputs (); outputs (owner); bindings () — answers an
 the publishable site build of sequence (sequence) — inputs (sequence); outputs (job); bindings () — answers at most one (job)
   where
     Phasing._latest (sequence) has (job, name: "site-build", state: "finished")
+    Diagnosing._delivery () has (interrupted: false)
     Diagnosing._clean () has (clean: true)
     Deploying._outcome () has (state: "completed")
     no view "unsettled route owner"
@@ -1240,12 +1211,12 @@ then
   Referencing.answer (form: "address", reference, value: url)
 ```
 
-### fullSite.AdmittedConfigurationIsRead
+### fullSite.AdmittedConfigurationIsLoaded
 
 ```reaction
-when Locating.admit (name: "settings", path)
+when Locating.admit (name: "settings", path, status: "admitted")
 then
-  Scanning.absorb (path)
+  Filing.loadFile (name: "project", path: "site.yaml", source: path)
 ```
 
 ### fullSite.AdmittedRasterImagesRender
@@ -1258,14 +1229,14 @@ then
   Transcoding.render (formats, original, widths)
 ```
 
-### fullSite.AdmittedSourceRootsAreSurveyed
+### fullSite.AdmittedSourceRootsAreLoaded
 
 ```reaction
-when Locating.admit (name: root, path: directory, contained: true, real, resolved: true)
+when Locating.admit (name: root, path: directory, contained: true, real, resolved: true, status: "admitted")
 where
   Governing._sources () has (name: root, path: directory)
 then
-  Scanning.survey (directory: real, label: root)
+  Filing.loadTree (directory: real, name: root)
 ```
 
 ### fullSite.AdvanceSiteBuild
@@ -1498,6 +1469,7 @@ when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtConfiguredOutpu
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
+  Diagnosing._delivery () has (interrupted: false)
   Diagnosing._clean () has (clean: false)
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
 then
@@ -1511,6 +1483,7 @@ when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtConfiguredOutpu
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "failed")
+  Diagnosing._delivery () has (interrupted: false)
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
 then
   RequestBoundary.respond (error: "BUILD_FAILED", requestId)
@@ -1523,6 +1496,7 @@ when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtConfiguredOutpu
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
+  Diagnosing._delivery () has (interrupted: false)
   Diagnosing._clean () has (clean: true)
   no view "the publishable site build of sequence (sequence)" with (sequence)
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
@@ -1594,6 +1568,7 @@ when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtDestination#4
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
+  Diagnosing._delivery () has (interrupted: false)
   Diagnosing._clean () has (clean: false)
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
 then
@@ -1607,6 +1582,7 @@ when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtDestination#4
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "failed")
+  Diagnosing._delivery () has (interrupted: false)
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
 then
   RequestBoundary.respond (error: "BUILD_FAILED", requestId)
@@ -1619,6 +1595,7 @@ when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtDestination#4
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
+  Diagnosing._delivery () has (interrupted: false)
   Diagnosing._clean () has (clean: true)
   no view "the publishable site build of sequence (sequence)" with (sequence)
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
@@ -1844,9 +1821,11 @@ then
 ### fullSite.ConfiguredOutputDirectsPublication
 
 ```reaction
-when Locating.admit (name: "output", path: directory, contained: true, real, resolved: true)
+when Locating.admit (name: "output", path: directory, contained: true, real, resolved: true, status: "admitted")
+where
+  view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
 then
-  Emitting.direct (destination: real)
+  Emitting.direct (destination: real, prefix)
 ```
 
 ### fullSite.ContentDocumentsParse
@@ -2047,9 +2026,11 @@ then
 ### fullSite.DestinationDirectsPublication
 
 ```reaction
-when Locating.admit (name: "destination", path: directory, real)
+when Locating.admit (name: "destination", path: directory, real, status: "admitted")
+where
+  view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
 then
-  Emitting.direct (destination: real)
+  Emitting.direct (destination: real, prefix)
 ```
 
 ### fullSite.DividedPaginationsDispatch
@@ -2115,7 +2096,7 @@ then
 ### fullSite.EscapingConfiguredOutputDiagnoses
 
 ```reaction
-when Locating.admit (name: "output", path: directory, place: admitted)
+when Locating.admit (name: "output", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -2125,7 +2106,7 @@ then
 ### fullSite.EscapingContentRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "content", path: directory, place: admitted)
+when Locating.admit (name: "content", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -2135,7 +2116,7 @@ then
 ### fullSite.EscapingPublicRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "public", path: directory, place: admitted)
+when Locating.admit (name: "public", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -2145,7 +2126,7 @@ then
 ### fullSite.EscapingTemplateRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "templates", path: directory, place: admitted)
+when Locating.admit (name: "templates", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -2186,6 +2167,14 @@ then
   Deploying.dispatch (deployment, work)
 ```
 
+### fullSite.FaultInterruptsAggregateDelivery
+
+```reaction
+when any action is faulted
+then
+  Diagnosing.interrupt ()
+```
+
 ### fullSite.FeedWorkPrepares
 
 ```reaction
@@ -2196,17 +2185,6 @@ where
   Governing._site () has (site)
 then
   Deploying.feed (entries: former "the deployment entries of catalog (catalog)" with (catalog), site, work)
-```
-
-### fullSite.FiledConfigurationIsAssessed
-
-```reaction
-when Filing.place (path: "site.yaml", root, file)
-where
-  Filing._named (name: "project") has (root)
-  Filing._text (file) has (text)
-then
-  Governing.assess (source: text)
 ```
 
 ### fullSite.FilledBodiesConvert
@@ -2358,7 +2336,7 @@ then
 ### fullSite.GroundedSiteAdmitsConfiguration
 
 ```reaction
-when Locating.ground ()
+when Locating.ground (status: "grounded")
 then
   Locating.admit (name: "settings", path: "site.yaml")
 ```
@@ -2368,13 +2346,13 @@ then
 ```reaction
 when RequestBoundary.request (path: "/cli/hold", requestId)
 then
-  Attending.hold ()
+  Commanding.hold ()
 ```
 
 ### fullSite.HoldUntilStopped#2
 
 ```reaction
-when Attending.hold (reason), asked by fullSite.HoldUntilStopped
+when Commanding.hold (reason), asked by fullSite.HoldUntilStopped
 where
   earlier, RequestBoundary.request (path: "/cli/hold", requestId)
 then
@@ -2439,6 +2417,7 @@ when Phasing.start (sequence, job), asked by fullSite.InspectSite#3
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "failed")
+  Diagnosing._delivery () has (interrupted: false)
   earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
 then
   RequestBoundary.respond (error: "BUILD_FAILED", requestId)
@@ -2451,6 +2430,7 @@ when Phasing.start (sequence, job), asked by fullSite.InspectSite#3
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
+  Diagnosing._delivery () has (interrupted: false)
   earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
   view "the inspection owner of target (target)" with (target) has (owner)
 then
@@ -2464,6 +2444,7 @@ when Phasing.start (sequence, job), asked by fullSite.InspectSite#3
 at the flow's settlement frontier
 where
   view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
+  Diagnosing._delivery () has (interrupted: false)
   earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
   no view "the inspection owner of target (target)" with (target)
 then
@@ -2611,6 +2592,17 @@ then
   Diagnosing.report (code: error, column, line, message: detail, scope: "page-rendering", severity: "error", source)
 ```
 
+### fullSite.LoadedConfigurationIsAssessed
+
+```reaction
+when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
+where
+  Filing._named (name: "project") has (root)
+  Filing._text (file) has (text)
+then
+  Governing.assess (source: text)
+```
+
 ### fullSite.LocateGroundsSiteDirectory
 
 ```reaction
@@ -2622,10 +2614,20 @@ then
   Locating.ground (path)
 ```
 
-### fullSite.LocateRetractsStagingDiagnostics
+### fullSite.LocateResumesDiagnosticDelivery
 
 ```reaction
 when Phasing.start (name: "site-build", phase: "locate")
+then
+  Diagnosing.resume ()
+```
+
+### fullSite.LocateRetractsStagingDiagnostics
+
+```reaction
+when Diagnosing.resume ()
+where
+  earlier, Phasing.start (name: "site-build", phase: "locate")
 then
   Diagnosing.retract (scope: "project-staging", source: "site.yaml")
 ```
@@ -2816,59 +2818,21 @@ then
 
 ```reaction
 when RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
+where
+  isTextValue (value: output)
+  view "the publication transaction prefix of destination (destination)" with (destination: output) has (prefix)
 then
-  Watching.observe (directory, settling)
+  Watching.observe (directory, excluded: output, prefix, settling)
 ```
 
 ### fullSite.OpenSiteWatch#2
 
 ```reaction
-when Watching.observe (directory, settling, watch), asked by fullSite.OpenSiteWatch
-where
-  earlier, RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
-then
-  Watching.disregard (prefix: output, watch)
-```
-
-### fullSite.OpenSiteWatch#3
-
-```reaction
-when Watching.disregard (prefix: output, watch), asked by fullSite.OpenSiteWatch#2
-where
-  Emitting._staging (destination: output) has (prefix)
-then
-  Watching.disregard (prefix, watch)
-```
-
-### fullSite.OpenSiteWatch#4
-
-```reaction
-when Watching.disregard (prefix, watch), asked by fullSite.OpenSiteWatch#3
+when Watching.observe (directory, excluded: output, prefix, settling, watch), asked by fullSite.OpenSiteWatch
 where
   earlier, RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
 then
   RequestBoundary.respond (requestId, watch)
-```
-
-### fullSite.OpenedProjectFilesConfiguration
-
-```reaction
-when Filing.open (name: "project", root)
-where
-  earlier, Scanning.absorb (content)
-then
-  Filing.place (content, path: "site.yaml", root)
-```
-
-### fullSite.OpenedSourceRootReadsEntries
-
-```reaction
-when Filing.open (name: root)
-where
-  Scanning._labelled (label: root) has (survey)
-  Scanning._entry (survey) has (path)
-then
-  Scanning.read (path, survey)
 ```
 
 ### fullSite.OriginlessFeedsDiagnose
@@ -3088,21 +3052,13 @@ then
 ```reaction
 when RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
 then
-  Serving.serve (directory, server)
+  Serving.publish (directory, server)
 ```
 
 ### fullSite.PublishSiteOutput#2
 
 ```reaction
-when Serving.serve (directory, server), asked by fullSite.PublishSiteOutput
-then
-  Serving.refresh (server)
-```
-
-### fullSite.PublishSiteOutput#3
-
-```reaction
-when Serving.refresh (server, readers), asked by fullSite.PublishSiteOutput#2
+when Serving.publish (directory, server, readers), asked by fullSite.PublishSiteOutput
 where
   earlier, RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
 then
@@ -3224,31 +3180,20 @@ then
   Emitting.intend (attempt: emissionAttempt, claim: rendition, content, medium: mediaType, path, producer: page)
 ```
 
-### fullSite.ReadConfigurationOpensProject
-
-```reaction
-when Scanning.absorb ()
-then
-  Filing.open (name: "project")
-```
-
-### fullSite.ReadEntriesAreFiled
-
-```reaction
-when Scanning.read (path, survey, content)
-where
-  Scanning._survey (survey) has (label)
-  Filing._named (name: label) has (root)
-then
-  Filing.place (content, path, root)
-```
-
 ### fullSite.ReadSiteSummary
 
 ```reaction
 when RequestBoundary.request (path: "/site/summary", requestId)
 then
   RequestBoundary.respond (requestId, summary: former "the site build summary")
+```
+
+### fullSite.RefusalInterruptsAggregateDelivery
+
+```reaction
+when any action is refused
+then
+  Diagnosing.interrupt ()
 ```
 
 ### fullSite.RejectedDeploymentsDispatch
@@ -3415,6 +3360,24 @@ then
 when Commanding.say (text), asked by fullSite.SayToOperator
 where
   earlier, RequestBoundary.request (path: "/cli/say", requestId, text)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### fullSite.SetCommandLineExit
+
+```reaction
+when RequestBoundary.request (code, path: "/cli/exit", requestId)
+then
+  Commanding.exit (code)
+```
+
+### fullSite.SetCommandLineExit#2
+
+```reaction
+when Commanding.exit (code), asked by fullSite.SetCommandLineExit
+where
+  earlier, RequestBoundary.request (code, path: "/cli/exit", requestId)
 then
   RequestBoundary.respond (requestId)
 ```
@@ -3663,14 +3626,6 @@ then
   Deploying.dispatch (deployment, work)
 ```
 
-### fullSite.SurveyedSourceRootOpensFiling
-
-```reaction
-when Scanning.survey (label: root)
-then
-  Filing.open (name: root)
-```
-
 ### fullSite.TemplateDefinitionFailuresDiagnose
 
 ```reaction
@@ -3732,7 +3687,7 @@ then
 ### fullSite.UndecodableConfigurationDiagnoses
 
 ```reaction
-when Filing.place (path: "site.yaml", root, file)
+when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
 where
   Filing._named (name: "project") has (root)
   no Filing._text (file)
@@ -3751,9 +3706,17 @@ then
 ### fullSite.UngroundableSiteDirectoryDiagnoses
 
 ```reaction
-when refused Locating.ground (path, detail, error)
+when Locating.ground (path, code, detail, status: "problem")
 then
-  Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.UnloadableSourceRootDiagnoses
+
+```reaction
+when Filing.loadTree (name: root, code, detail, status: "problem")
+then
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: root)
 ```
 
 ### fullSite.UnprojectableDeploymentLayoutReferencesDiagnose:diagnose
@@ -3816,25 +3779,17 @@ then
 ### fullSite.UnreadableConfigurationDiagnoses
 
 ```reaction
-when refused Scanning.absorb (path, detail, error)
+when Filing.loadFile (name: "project", path: "site.yaml", code, detail, status: "problem")
 then
-  Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.UnreadableEntryDiagnoses
-
-```reaction
-when refused Scanning.read (path, survey, detail, error)
-then
-  Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: path)
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
 ```
 
 ### fullSite.UnresolvableLocationDiagnoses
 
 ```reaction
-when refused Locating.admit (name, path, detail, error)
+when Locating.admit (name, path, code, detail, status: "problem")
 then
-  Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
 ```
 
 ### fullSite.UnretargetableClaimedBodyReferencesDiagnose
@@ -3878,14 +3833,6 @@ then
   Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", scope: "page-rendering", severity: "error", source: sourcePath)
 ```
 
-### fullSite.UnsurveyableSourceRootDiagnoses
-
-```reaction
-when refused Scanning.survey (directory, label: root, detail, error)
-then
-  Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: root)
-```
-
 ### fullSite.WarnOperator
 
 ```reaction
@@ -3912,6 +3859,7 @@ the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
 - `/cli/announce` — requires `files`, `kept`, `pages`, `removed`, `replaced`, `written`
+- `/cli/exit` — requires `code`
 - `/cli/interpret` — requires `arguments`
 - `/cli/say` — requires `text`
 - `/cli/serving` — requires `directory`, `host`, `port`

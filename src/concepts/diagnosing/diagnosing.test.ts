@@ -198,6 +198,11 @@ test("related locations are optional, idempotent, stable, and totally ordered", 
 
 test("source retraction and clearing have exact repeated-work lifecycle semantics", () => {
   const diagnosing = new DiagnosingConcept();
+  expect(diagnosing._delivery()).toEqual({ interrupted: false });
+  expect(diagnosing.interrupt()).toEqual({ changed: true });
+  expect(diagnosing.interrupt()).toEqual({ changed: false });
+  expect(diagnosing.resume()).toEqual({ changed: true });
+  expect(diagnosing._delivery()).toEqual({ interrupted: false });
   const global = report(diagnosing, { code: "GLOBAL", source: undefined, line: undefined, column: undefined });
   const alpha = report(diagnosing, { code: "ALPHA", source: "alpha", line: undefined, column: undefined });
   const beta = report(diagnosing, { code: "BETA", source: "beta", line: undefined, column: undefined });
@@ -227,6 +232,7 @@ test("source retraction and clearing have exact repeated-work lifecycle semantic
   expect(diagnosing.clear()).toEqual({ count: 0 });
   expect(diagnosing._all()).toEqual([]);
   expect(diagnosing._clean()).toEqual({ clean: true });
+  expect(diagnosing._delivery()).toEqual({ interrupted: false });
 });
 
 test("actions reject malformed runtime values atomically and lookup queries stay total", () => {
@@ -333,6 +339,7 @@ test("registry exposes every declared refusal and exact query cardinality", asyn
     ["_related", "many"],
     ["_rendered", "one"],
     ["_clean", "one"],
+    ["_delivery", "one"],
   ]);
 
   const set = conceptSet({ Diagnosing: registeredDiagnosing });

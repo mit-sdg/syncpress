@@ -74,6 +74,10 @@ open.
 reconciliation. It records every regular file and non-directory entry already
 there. Reconciliation re-inspects the destination, prepares the complete
 intended tree beside it, and installs that tree only after preparation succeeds.
+Within one process, reconciliation attempts for the same resolved destination
+enter a FIFO and re-inspect after acquiring it; different destinations remain
+independent. The FIFO is process-local, so separate processes must not share a
+transaction prefix concurrently.
 After atomically moving an existing destination aside, it verifies that tree is
 still the exact snapshot used during preparation. A concurrent process that
 changed the destination is restored and reconciliation is refused rather than
@@ -97,6 +101,7 @@ stable.
 
 ```state
 an optional Destination Root
+an optional Transaction Prefix Path
 
 a set of Producers with
   a producer Producer
@@ -135,8 +140,8 @@ one path only when their exact bytes agree.
 ## Actions
 
 ```actions
-direct (destination: Root) : return (destination: Root, existing: Number)
-  where destination is empty, malformed, the filesystem root, or an existing non-directory
+direct (destination: Root, prefix: Path) : return (destination: Root, existing: Number)
+  where destination or prefix is empty or malformed, destination is the filesystem root or an existing non-directory, or prefix is not a distinct sibling prefix
   then
     refuse INVALID_DESTINATION "A destination must name a directory other than the filesystem root."
   where destination cannot be inspected
@@ -146,7 +151,7 @@ direct (destination: Root) : return (destination: Root, existing: Number)
   then
     leave an absent destination absent
     record every regular file and non-directory entry it currently holds
-    replace the previously directed destination only after inspection succeeds
+    replace the previously directed destination and transaction prefix only after inspection succeeds
     return destination and the number of recorded entries
 
 begin (producer: Producer) : return (producer: Producer, attempt: Number)
@@ -269,7 +274,6 @@ _attempt (producer: Producer) : optional (attempt: Number)
 _open (producer: Producer) : optional (attempt: Number)
 _pending () : many (path: Path, digest: Digest)
 _orphans () : many (path: Path)
-_staging (destination: Path) : one (prefix: Path)
 ```
 
 `_intent` and `_byProducer` read active intents only. `_intent` has at most one
@@ -280,10 +284,11 @@ reservation does it report staged producers. `_pending` lists active artifacts
 whose emitted entry is absent, non-regular, or byte-different.
 `_orphans` lists recorded destination entries with no active intent. Unknown or
 invalid identities and paths make optional and many queries answer no rows.
-`_staging` reports the path prefix reconciliation stages a destination's work
-under, whether or not that destination is the directed one, so an observer can
-tell Emitting's own transactions apart from anyone else's writing. It answers an
-empty prefix for a destination that could never be directed.
+
+The application supplies the transaction prefix when it directs publication.
+Emitting requires a distinct sibling prefix and uses it only for temporary
+installation trees; this keeps application naming policy out of Emitting's
+query vocabulary.
 
 Emitting owns artifact bytes, collision-safe destination paths, producer
 attempts, and exact destination reconciliation. It does not decide what a

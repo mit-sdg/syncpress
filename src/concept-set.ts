@@ -1,6 +1,5 @@
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { syncpressComputations } from "./computations.ts";
-import { attending } from "./concepts/attending/registry.ts";
 import { cataloging } from "./concepts/cataloging/registry.ts";
 import { commanding } from "./concepts/commanding/registry.ts";
 import { converting } from "./concepts/converting/registry.ts";
@@ -19,7 +18,6 @@ import { phasing } from "./concepts/phasing/registry.ts";
 import { referencing } from "./concepts/referencing/registry.ts";
 import { rendering } from "./concepts/rendering/registry.ts";
 import { routing } from "./concepts/routing/registry.ts";
-import { scanning } from "./concepts/scanning/registry.ts";
 import { serving } from "./concepts/serving/registry.ts";
 import { templating } from "./concepts/templating/registry.ts";
 import { transcoding } from "./concepts/transcoding/registry.ts";
@@ -28,7 +26,6 @@ import { watching } from "./concepts/watching/registry.ts";
 /** Bind every concept contract to the implementation used by Syncpress. */
 export const syncpressConcepts = conceptSet(
   {
-    Attending: attending,
     Cataloging: cataloging,
     Commanding: commanding,
     Converting: converting,
@@ -47,7 +44,6 @@ export const syncpressConcepts = conceptSet(
     Referencing: referencing,
     Rendering: rendering,
     Routing: routing,
-    Scanning: scanning,
     Serving: serving,
     Templating: templating,
     Transcoding: transcoding,

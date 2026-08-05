@@ -59,6 +59,7 @@ test("the example site produces its exact deterministic golden tree", async () =
     expect(first).toMatchObject({
       pages: 21,
       inputFiles: 38,
+      outputDirectory: destination,
       written: 35,
       replaced: 0,
       kept: 0,
@@ -88,6 +89,22 @@ test("the example site produces its exact deterministic golden tree", async () =
 
     const second = await buildSite(exampleDirectory, destination);
     expect(second).toMatchObject({ written: 0, replaced: 0, kept: 35, removed: 0, diagnostics: [] });
+    await expectGoldenTree(destination);
+  } finally {
+    await rm(destination, { recursive: true, force: true });
+  }
+}, BUILD_TEST_TIMEOUT_MS);
+
+test("concurrent builds serialize reconciliation at one destination", async () => {
+  const destination = await mkdtemp(join(tmpdir(), "syncpress-concurrent-site-"));
+  try {
+    const results = await Promise.all([
+      buildSite(exampleDirectory, destination),
+      buildSite(exampleDirectory, destination),
+    ]);
+    expect(results.map(({ outputDirectory }) => outputDirectory)).toEqual([destination, destination]);
+    expect(results.map(({ written }) => written).sort((left, right) => left - right)).toEqual([0, 35]);
+    expect(results.map(({ kept }) => kept).sort((left, right) => left - right)).toEqual([0, 35]);
     await expectGoldenTree(destination);
   } finally {
     await rm(destination, { recursive: true, force: true });

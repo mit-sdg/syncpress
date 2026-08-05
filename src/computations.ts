@@ -1,4 +1,5 @@
 import picomatch from "picomatch";
+import { basename, dirname, join, resolve as resolveNative } from "node:path";
 
 type AddressKind = "relative" | "absolute" | "external" | "fragment";
 type ParsedAddress = { address: string; segments: string[]; directory: boolean };
@@ -213,10 +214,18 @@ function compileGlob(pattern: string): (path: string) => boolean {
 
 const optional = (value: string | undefined): string | null => value ?? null;
 
+export function publicationTransactionPrefix(destination: unknown): string | null {
+  if (typeof destination !== "string" || destination === "" || !destination.isWellFormed()) return null;
+  const resolved = resolveNative(destination);
+  if (dirname(resolved) === resolved) return null;
+  return join(dirname(resolved), `.${basename(resolved)}.emitting-`);
+}
+
 /** Pure calculations available to portable Syncpress composition. */
 export const syncpressComputations = {
   isTextValue: ({ value }: { value: unknown }) => typeof value === "string" && value.isWellFormed(),
   isAbsentValue: ({ value }: { value: unknown }) => value === null || value === undefined,
+  publicationTransactionPrefix: ({ destination }: { destination: unknown }) => publicationTransactionPrefix(destination),
   deriveAddress: ({ path }: { path: unknown }) => optional(deriveAddress(path)),
   addressOutputPath: ({ address }: { address: unknown }) => optional(addressOutputPath(address)),
   outputPathAddress: ({ path }: { path: unknown }) => optional(outputPathAddress(path)),

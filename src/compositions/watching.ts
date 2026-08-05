@@ -6,18 +6,18 @@
  */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { where } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { PublicationTransactionPrefix } from "./calculations.ts";
 
-const { Emitting, Watching } = conceptRefs;
+const { Watching } = conceptRefs;
 
 export const OpenSiteWatch = endpoint("/watch/open", ({ directory, settling, output, watch, prefix }) =>
   receive({ directory, settling, output })
-    .then(Watching.observe({ directory, settling }).responds({ watch }))
-    .then(Watching.disregard({ watch, prefix: output }).responds({}))
-    .then(
-      where(Emitting._staging({ destination: output }).is({ prefix }))
-        .then(Watching.disregard({ watch, prefix }).responds({})),
+    .where(
+      computations.isTextValue({ value: output }),
+      PublicationTransactionPrefix({ destination: output }).is({ prefix }),
     )
+    .then(Watching.observe({ directory, settling, excluded: output, prefix }).responds({ watch }))
     .then(respond({ watch })),
 );
 

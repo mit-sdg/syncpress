@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "node:net";
-import { InvalidServer, ServerNotFound, ServerNotOpen, ServingConcept } from "./serving.ts";
+import { InvalidServer, PublicationUnavailable, ServerNotFound, ServerNotOpen, ServingConcept } from "./serving.ts";
 
 /** Ask for a path exactly as written, past the normalization a URL client would apply. */
 function rawStatus(host: string, port: number, path: string): Promise<number> {
@@ -52,7 +52,11 @@ describe("Serving", () => {
       await writeFile(join(published, "index.html"), "<html><body>Home</body></html>\n");
       await writeFile(join(published, "posts", "index.html"), "<html><body>Posts</body></html>\n");
       await writeFile(join(published, "styles.css"), "body{}\n");
-      serving.serve({ server: opened.server, directory: published });
+      expect(await serving.publish({ server: opened.server, directory: published })).toEqual({
+        server: opened.server,
+        directory: published,
+        readers: 0,
+      });
 
       const home = await fetch(`${origin}/`);
       expect(home.status).toBe(200);
@@ -71,19 +75,17 @@ describe("Serving", () => {
       await writeFile(join(outside, "secret.txt"), "not public\n");
       await symlink(outside, join(published, "escape"));
       expect((await fetch(`${origin}/escape/secret.txt`)).status).toBe(403);
-      // Dot segments are normalized away before a request arrives; the rest is answered here.
-      expect(await rawStatus(opened.host, opened.port, "/../secret.txt")).toBe(404);
+      expect(await rawStatus(opened.host, opened.port, "/../secret.txt")).toBe(403);
       expect(await rawStatus(opened.host, opened.port, "/%zz")).toBe(400);
       expect(await rawStatus(opened.host, opened.port, "/nested%5Cpath")).toBe(403);
 
-      expect(serving.refresh({ server: opened.server })).toEqual({ readers: 0 });
       expect(serving._readers({ server: opened.server })).toEqual({ readers: 0 });
     } finally {
       await serving.close({ server: opened.server });
     }
 
     expect(serving._server({ server: opened.server })).toMatchObject([{ state: "closed" }]);
-    expect(() => serving.refresh({ server: opened.server })).toThrow(ServerNotOpen);
+    await expect(serving.publish({ server: opened.server, directory: published })).rejects.toBeInstanceOf(ServerNotOpen);
   });
 
   test("a reader is told to reload and is counted while it listens", async () => {
@@ -93,14 +95,14 @@ describe("Serving", () => {
 
     try {
       await writeFile(join(published, "index.html"), "<html><body>Home</body></html>\n");
-      serving.serve({ server: opened.server, directory: published });
+      await serving.publish({ server: opened.server, directory: published });
 
       const listening = await fetch(`${origin}/__syncpress/live-reload`);
       const reader = listening.body!.getReader();
       expect((await reader.read()).value).toEqual(new TextEncoder().encode("retry: 1000\n\n"));
       expect(serving._readers({ server: opened.server })).toEqual({ readers: 1 });
 
-      expect(serving.refresh({ server: opened.server })).toEqual({ readers: 1 });
+      expect(await serving.publish({ server: opened.server, directory: published })).toMatchObject({ readers: 1 });
       expect(new TextDecoder().decode((await reader.read()).value)).toBe("data: reload\n\n");
       await reader.cancel();
     } finally {
@@ -113,13 +115,16 @@ describe("Serving", () => {
     await expect(serving.open({ host: "", port: 0 })).rejects.toBeInstanceOf(InvalidServer);
     await expect(serving.open({ host: "127.0.0.1", port: 70_000 })).rejects.toBeInstanceOf(InvalidServer);
     await expect(serving.close({ server: "server:absent" })).rejects.toBeInstanceOf(ServerNotFound);
-    expect(() => serving.serve({ server: "server:absent", directory: published })).toThrow(ServerNotOpen);
+    await expect(serving.publish({ server: "server:absent", directory: published })).rejects.toBeInstanceOf(ServerNotOpen);
     expect(serving._server({ server: "server:absent" })).toEqual([]);
     expect(serving._readers({ server: "server:absent" })).toEqual({ readers: 0 });
 
     const opened = await serving.open({ host: "127.0.0.1", port: 0 });
     try {
-      expect(() => serving.serve({ server: opened.server, directory: "" })).toThrow(InvalidServer);
+      await expect(serving.publish({ server: opened.server, directory: "" })).rejects.toBeInstanceOf(InvalidServer);
+      await expect(serving.publish({ server: opened.server, directory: join(published, "missing") })).rejects.toBeInstanceOf(
+        PublicationUnavailable,
+      );
     } finally {
       await serving.close({ server: opened.server });
     }

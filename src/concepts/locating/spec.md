@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Record which host locations a run wants, ground one base directory, and admit
-named locations under it with symbolic links resolved, so every location a build
-later reads or writes is already known to be inside or outside that base.
+Record which host locations a run wants and observe their resolution-time
+containment and overlap under one base, so composition can reject an unsafe
+location plan before asking another owner to use it.
 
 ## Principle
 
@@ -57,6 +57,11 @@ true and `resolved` false. The base is contained in and resolved within itself.
 A name is opaque text chosen by the caller. Locating does not interpret it; it
 only guarantees that at most one request and at most one place exist per name.
 
+Resolved paths and containment flags are observations made by `ground` and
+`admit`. They are not capabilities or locks and may become stale immediately if
+the host changes. Locating therefore does not claim that a later read or write
+remains confined.
+
 ## Actions
 
 ```actions
@@ -68,27 +73,27 @@ request (name: Name, path: Text) : return (name: Name, path: Text)
     record path under name, replacing any earlier request with that name
     return name and path
 
-ground (path: Text) : return (path: Path, real: Path)
+ground (path: Text) : return (status: Status, path: OptionalPath, real: OptionalPath, code: OptionalCode, detail: OptionalText)
   where path is not well-formed, non-empty text
   then
     refuse INVALID_LOCATION "A location must be well-formed, non-empty text."
   where the location is missing
   then
-    refuse LOCATION_MISSING "This required directory is missing."
+    return status problem, code LOCATION_MISSING, and "This required directory is missing."
   where the location is a symbolic link or not a directory
   then
-    refuse LOCATION_NOT_DIRECTORY "This required location must be a directory that is not a symbolic link."
+    return status problem, code LOCATION_NOT_DIRECTORY, and "This required location must be a directory that is not a symbolic link."
   where the location cannot be inspected or resolved
   then
-    refuse LOCATION_UNRESOLVABLE "This location could not be resolved."
+    return status problem, code LOCATION_UNRESOLVABLE, and "This location could not be resolved."
   where the base is already this exact absolute path
   then
-    keep the base and every admitted place, and return its paths
+    keep the base and every admitted place, and return status grounded with its paths
   where the base is new or different
   then
-    replace the base, discard every admitted place, and return its paths
+    replace the base, discard every admitted place, and return status grounded with its paths
 
-admit (name: Name, path: Text) : return (place: Place, path: Path, real: Path, contained: Flag, resolved: Flag)
+admit (name: Name, path: Text) : return (status: Status, place: OptionalPlace, path: OptionalPath, real: OptionalPath, contained: OptionalFlag, resolved: OptionalFlag, code: OptionalCode, detail: OptionalText)
   where no base is grounded
   then
     refuse NOT_GROUNDED "No base directory has been grounded."
@@ -97,13 +102,13 @@ admit (name: Name, path: Text) : return (place: Place, path: Path, real: Path, c
     refuse INVALID_LOCATION "A location must be well-formed, non-empty text."
   where the location cannot be resolved
   then
-    refuse LOCATION_UNRESOLVABLE "This location could not be resolved."
+    return status problem, code LOCATION_UNRESOLVABLE, and "This location could not be resolved."
   where some place has this name and exactly this path
   then
-    return that place unchanged
+    return status admitted with that place unchanged
   otherwise
   then
-    replace any place with this name, resolve the location, and return it with both containment flags
+    replace any place with this name, resolve the location, and return status admitted with both containment flags
 ```
 
 `admit` never requires the location to exist, so an output directory can be
@@ -124,6 +129,7 @@ _overlapping (place: Place, other: Place) : one (overlapping: Flag)
 or below the other, so a directory and any file within it overlap. It answers
 false for an unknown place, because an unknown place occupies nothing.
 
-Locating owns host path recording, grounding, resolution, and containment. It
-does not read directory entries, decide which locations a build needs, know what
-a location is for, or decide whether being outside the base is an error.
+Locating owns requested path recording and resolution-time grounding,
+containment, and overlap observations. It does not read directory entries,
+authorize later host access, decide which locations a build needs, or decide
+whether an observed outside location is an error.

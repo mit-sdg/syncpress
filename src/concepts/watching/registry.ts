@@ -5,8 +5,8 @@ import {
   DirectoryUnsupported,
   InvalidWatch,
   WatchingConcept,
+  WatchFailed,
   WatchNotFound,
-  WatchNotOpen,
 } from "./watching.ts";
 import spec from "./spec.md" with { type: "text" };
 
@@ -18,7 +18,7 @@ export const watching = registerConcept({
     DIRECTORY_UNOBSERVABLE: DirectoryUnobservable,
     DIRECTORY_UNSUPPORTED: DirectoryUnsupported,
     INVALID_WATCH: InvalidWatch,
+    WATCH_FAILED: WatchFailed,
     WATCH_NOT_FOUND: WatchNotFound,
-    WATCH_NOT_OPEN: WatchNotOpen,
   },
 });

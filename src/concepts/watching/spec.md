@@ -8,8 +8,8 @@ told to disregard.
 
 ## Principle
 
-Ada observes `/srv/site`, letting a burst settle after 75 milliseconds, and
-tells the watch to disregard `/srv/site/dist`. She attends the watch and waits.
+Ada observes `/srv/site`, letting a burst settle after 75 milliseconds, with
+`/srv/site/dist` excluded before observation starts. She attends the watch and waits.
 Saving three files in quick succession reports one settled change, not three.
 Attending again waits, because that burst was already reported. Files written
 under `/srv/site/dist` report nothing at all. A burst that settles while nobody
@@ -23,18 +23,21 @@ a set of Watches with
   a directory Path
   a settling Duration
   a state State
-  a set of disregarded Prefixes
+  a set of excluded Trees
+  a set of excluded temporary-name Prefixes
   a settled Flag
 ```
 
-A directory is a native host path, observed with all of its descendants. A
-prefix is a native host path prefix: a change is disregarded when its path
-begins with that prefix, so a directory disregards everything inside it and a
-partial name disregards every sibling that starts with it.
+A directory is a native host path, observed with all of its descendants. A tree
+exclusion ignores exactly that path and its descendants using native
+path-component containment. A temporary-name prefix matches only the first path
+component below its own parent, so `.dist.emitting-*` does not suppress a
+sibling such as `dist-notes`.
 
-A watch is `open` until it is closed, and `closed` forever afterwards. A closed
-watch observes nothing, releases anyone attending it, and keeps its identity so
-late callers get an answer instead of a refusal.
+A watch is `open`, `failed`, or `closed`. An unexpected host-watcher end makes
+it failed and releases attendance; later attendance refuses rather than
+silently reporting an inert open watch. A closed watch observes nothing and
+keeps its identity so late callers get an answer.
 
 `settled` records one burst that has finished and has not been reported yet.
 Counted changes restart the settling duration; when that duration passes with no
@@ -45,8 +48,8 @@ since the last report, never how much.
 ## Actions
 
 ```actions
-observe (directory: Path, settling: Duration) : return (watch: Watch)
-  where directory is not well-formed, non-empty text or settling is not a positive safe integer
+observe (directory: Path, settling: Duration, excluded: Path, prefix: Path) : return (watch: Watch)
+  where directory, excluded, or prefix is malformed, or settling is not a positive safe integer
   then
     refuse INVALID_WATCH "A watch needs a directory and a positive settling duration."
   where directory is missing
@@ -59,17 +62,7 @@ observe (directory: Path, settling: Duration) : return (watch: Watch)
   then
     refuse DIRECTORY_UNOBSERVABLE "This directory could not be observed."
   then
-    add an open watch over directory with no disregarded prefixes and return it
-
-disregard (watch: Watch, prefix: Path) : return (watch: Watch, prefix: Path)
-  where watch is unknown or closed
-  then
-    refuse WATCH_NOT_OPEN "There is no such open watch."
-  where prefix is not well-formed, non-empty text
-  then
-    refuse INVALID_WATCH "A watch needs a directory and a positive settling duration."
-  then
-    add prefix to the watch's disregarded prefixes and return them
+    normalize every exclusion before host observation begins, add an open watch, and return it
 
 attend (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)
   where watch is unknown
@@ -78,6 +71,9 @@ attend (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)
   where within is not a positive safe integer
   then
     refuse INVALID_WATCH "A watch needs a directory and a positive settling duration."
+  where the host watcher failed
+  then
+    refuse WATCH_FAILED "The host watch stopped unexpectedly."
   where the watch is closed
   then
     return changed false and watching false
@@ -94,21 +90,21 @@ close (watch: Watch) : return (watch: Watch)
   then
     refuse WATCH_NOT_FOUND "There is no such watch."
   then
-    stop observing, release whoever is attending, and make the watch closed
+    stop observing, release whoever is attending, await host observation, and make the watch closed
 ```
 
 `attend` waits for at most `within`, because one concept answers one ask at a
-time: an unbounded wait would leave `close` and `disregard` with no turn. A
+time: an unbounded wait would leave `close` with no turn. A
 caller that wants prompt closing attends in short spans.
 
 ## Queries
 
 ```queries
 _watch (watch: Watch) : optional (directory: Path, settling: Duration, state: State)
-_disregarded (watch: Watch) : many (prefix: Path)
+_excluded (watch: Watch) : many (path: Path)
 _open () : many (watch: Watch)
 ```
 
-Watching owns host change observation, burst settling, and which paths do not
-count. It does not decide what a change means, what should happen after one, or
-which paths deserve disregarding.
+Watching owns host change observation, burst settling, initial exclusions, and
+the open, failed, and closed lifecycle. It does not decide what a change means,
+what should happen after one, or which paths deserve exclusion.

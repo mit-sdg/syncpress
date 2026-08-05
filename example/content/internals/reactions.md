@@ -71,9 +71,9 @@ That choice is the publication predicate: the finished-and-clean branch asks Emi
 
 ## Staging is a phase, not a caller
 
-[`src/compositions/staging.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/staging.ts) brings the host project into the model in two phases. The locate phase grounds the recorded site directory, admits `site.yaml` beside it, reads it through Scanning, files it, and assesses it. The stage phase admits every configured location, surveys the ones that stay inside the site, reads their entries, and files them under matching Filing roots.
+[`src/compositions/staging.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/staging.ts) brings the host project into the model in two phases. The locate phase grounds the recorded site directory, admits `site.yaml`, asks Filing to load it as one singleton tree, and assesses it. The stage phase admits every configured location and asks Filing once per source to read a complete candidate tree before replacing that logical root.
 
-Every host refusal along that path becomes a Diagnosing report rather than a failed request, so an unreadable directory, an escaping symbolic link, and an unparsable configuration all fail the same way: the build finishes, the publication predicate refuses it, and the caller receives every reason at once.
+Expected host problems along that path are returned outcomes rather than refusals and become Diagnosing reports. An unreadable directory, an escaping symbolic link, and an unparsable configuration therefore finish staging without a partial Filing replacement, block publication, and let the caller receive every accumulated reason.
 
 ## Reading the complete assembly
 

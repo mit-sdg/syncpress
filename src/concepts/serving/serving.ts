@@ -4,6 +4,8 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const INVALID_SERVER = "A server needs a host and a port between 0 and 65535.";
 const ADDRESS_UNAVAILABLE = "This address could not be listened on.";
+const PUBLICATION_UNAVAILABLE = "This published directory could not be served.";
+const SERVER_CLOSE_FAILED = "This server could not be closed.";
 const SERVER_NOT_OPEN = "There is no such open server.";
 const SERVER_NOT_FOUND = "There is no such server.";
 
@@ -54,11 +56,25 @@ export class ServerNotFound extends Error {
   }
 }
 
+export class PublicationUnavailable extends Error {
+  constructor(options?: ErrorOptions) {
+    super(PUBLICATION_UNAVAILABLE, options);
+    this.name = "PublicationUnavailable";
+  }
+}
+
+export class ServerCloseFailed extends Error {
+  constructor(options?: ErrorOptions) {
+    super(SERVER_CLOSE_FAILED, options);
+    this.name = "ServerCloseFailed";
+  }
+}
+
 type ServerRecord = {
   server: string;
   host: string;
   port: number;
-  open: boolean;
+  state: "open" | "closing" | "failed" | "closed";
   directory: string | undefined;
   readers: Set<ServerResponse>;
   listener: Server;
@@ -108,13 +124,17 @@ async function answerFile(response: ServerResponse, directory: string, pathname:
     return;
   }
 
-  let file = requested;
+  let file = directory;
   try {
-    const status = await lstat(file);
-    if (status.isSymbolicLink()) {
-      response.writeHead(403).end("Forbidden");
-      return;
+    for (const segment of decoded.split("/").filter((part) => part !== "")) {
+      file = join(file, segment);
+      const status = await lstat(file);
+      if (status.isSymbolicLink()) {
+        response.writeHead(403).end("Forbidden");
+        return;
+      }
     }
+    const status = await lstat(file);
     if (status.isDirectory()) file = join(file, "index.html");
   } catch {
     response.writeHead(404).end("Not found");
@@ -158,20 +178,20 @@ export class ServingConcept {
     const identity = `server:${this.#next}`;
     const listener = createServer((request, response) => {
       const record = this.#servers.get(identity);
-      if (record === undefined || !record.open) {
+      if (record === undefined || record.state !== "open") {
         response.writeHead(503).end("Site unavailable");
         return;
       }
 
-      let url: URL;
-      try {
-        url = new URL(request.url ?? "/", `http://${request.headers.host ?? `${host}:${port}`}`);
-      } catch {
+      const target = request.url ?? "/";
+      const suffix = target.search(/[?#]/);
+      const pathname = suffix === -1 ? target : target.slice(0, suffix);
+      if (!pathname.startsWith("/")) {
         response.writeHead(400).end("Bad request");
         return;
       }
 
-      if (url.pathname === RELOAD_PATH) {
+      if (pathname === RELOAD_PATH) {
         response.writeHead(200, {
           "cache-control": "no-cache",
           connection: "keep-alive",
@@ -187,7 +207,10 @@ export class ServingConcept {
         response.writeHead(503).end("Site unavailable");
         return;
       }
-      void answerFile(response, record.directory, url.pathname);
+      void answerFile(response, record.directory, pathname).catch(() => {
+        if (!response.headersSent) response.writeHead(500);
+        response.end("Internal server error");
+      });
     });
 
     try {
@@ -208,55 +231,80 @@ export class ServingConcept {
       server: identity,
       host,
       port: bound,
-      open: true,
+      state: "open",
       directory: undefined,
       readers: new Set(),
       listener,
     });
+    listener.on("error", () => {
+      const record = this.#servers.get(identity);
+      if (record === undefined || record.state !== "open") return;
+      record.state = "failed";
+      for (const reader of record.readers) reader.end();
+      record.readers.clear();
+    });
     return { server: identity, host, port: bound };
   }
 
-  serve({ server, directory }: { server: string; directory: string }) {
+  async publish({ server, directory }: { server: string; directory: string }) {
     const record = this.#open(server);
     if (!isServerText(directory)) throw new InvalidServer();
-    record.directory = resolve(directory);
-    return { server: record.server, directory: record.directory };
-  }
-
-  refresh({ server }: { server: string }) {
-    const record = this.#open(server);
-    let readers = 0;
-    for (const reader of record.readers) {
-      reader.write("data: reload\n\n");
-      readers += 1;
+    const requested = resolve(directory);
+    let published: string;
+    try {
+      const status = await lstat(requested);
+      if (status.isSymbolicLink() || !status.isDirectory()) throw new Error("The publication is not an ordinary directory.");
+      published = await realpath(requested);
+    } catch (error) {
+      throw new PublicationUnavailable({ cause: error });
     }
-    return { readers };
+
+    record.directory = published;
+    let readers = 0;
+    for (const reader of [...record.readers]) {
+      try {
+        reader.write("data: reload\n\n");
+        readers += 1;
+      } catch {
+        record.readers.delete(reader);
+        reader.end();
+      }
+    }
+    return { server: record.server, directory: published, readers };
   }
 
   async close({ server }: { server: string }) {
     const record = this.#servers.get(server);
     if (record === undefined) throw new ServerNotFound();
-    if (!record.open) return { server: record.server };
+    if (record.state === "closed") return { server: record.server };
 
-    record.open = false;
+    record.state = "closing";
     for (const reader of record.readers) reader.end();
     record.readers.clear();
-    await new Promise<void>((closed, failed) =>
-      record.listener.close((error) => (error === undefined ? closed() : failed(error)))
-    );
+    try {
+      if (record.listener.listening) {
+        await new Promise<void>((closed, failed) =>
+          record.listener.close((error) => (error === undefined ? closed() : failed(error)))
+        );
+      }
+    } catch (error) {
+      record.state = "failed";
+      throw new ServerCloseFailed({ cause: error });
+    }
+    record.state = "closed";
     return { server: record.server };
   }
 
   #open(server: string): ServerRecord {
     const record = this.#servers.get(server);
-    if (record === undefined || !record.open) throw new ServerNotOpen();
+    if (record === undefined || record.state !== "open") throw new ServerNotOpen();
     return record;
   }
 
   _server({ server }: { server: string }): {
     host: string;
     port: number;
-    state: "open" | "closed";
+    state: "open" | "closing" | "failed" | "closed";
     directory: string | null;
   }[] {
     const record = this.#servers.get(server);
@@ -265,7 +313,7 @@ export class ServingConcept {
       : [{
         host: record.host,
         port: record.port,
-        state: record.open ? "open" : "closed",
+        state: record.state,
         directory: record.directory ?? null,
       }];
   }

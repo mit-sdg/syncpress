@@ -6,7 +6,7 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { concepts as conceptRefs } from "@syncpress/concept-set";
 
-const { Attending, Commanding } = conceptRefs;
+const { Commanding } = conceptRefs;
 
 export const InterpretCommandLine = endpoint(
   "/cli/interpret",
@@ -57,6 +57,12 @@ export const WarnOperator = endpoint("/cli/warn", ({ text }) =>
 
 export const HoldUntilStopped = endpoint("/cli/hold", ({ reason }) =>
   receive({})
-    .then(Attending.hold({}).responds({ reason }))
+    .then(Commanding.hold({}).responds({ reason }))
     .then(respond({ reason })),
+);
+
+export const SetCommandLineExit = endpoint("/cli/exit", ({ code }) =>
+  receive({ code })
+    .then(Commanding.exit({ code }).responds({}))
+    .then(respond({})),
 );

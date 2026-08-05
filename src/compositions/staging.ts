@@ -1,16 +1,17 @@
 /**
  * Bringing a host project into the model. The locate phase grounds the site
  * directory and assesses its configuration; the stage phase admits every
- * configured location, surveys it, and files what it holds. Every host refusal
- * becomes a diagnostic, so an unusable project fails the build rather than the
- * request.
+ * configured location and atomically loads its complete logical tree. Expected
+ * host problems are returned as data and become diagnostics, so they never
+ * race the endpoint's one terminal answer.
  */
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts as conceptRefs } from "@syncpress/concept-set";
 import { CONFIGURATION_PATH, DIAGNOSTIC_SCOPES, PHASE_SEQUENCE, PLACES, ROOTS } from "./shared.ts";
+import { PublicationTransactionPrefix } from "./calculations.ts";
 import { PublicationPlace } from "./views.ts";
 
-const { Diagnosing, Emitting, Filing, Governing, Locating, Phasing, Scanning } = conceptRefs;
+const { Diagnosing, Emitting, Filing, Governing, Locating, Phasing } = conceptRefs;
 
 const staged = {
   scope: DIAGNOSTIC_SCOPES.staging,
@@ -20,8 +21,14 @@ const staged = {
 
 /* Locate: ground the recorded site directory and read its configuration. */
 
-export const LocateRetractsStagingDiagnostics = reaction(() =>
+export const LocateResumesDiagnosticDelivery = reaction(() =>
   when(Phasing.start({}).responds({ name: PHASE_SEQUENCE, phase: "locate" }))
+    .then(Diagnosing.resume({})),
+);
+
+export const LocateRetractsStagingDiagnostics = reaction(() =>
+  when(Diagnosing.resume({}).responds({}))
+    .where(earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "locate" }))
     .then(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.staging, source: CONFIGURATION_PATH })),
 );
 
@@ -34,39 +41,28 @@ export const LocateGroundsSiteDirectory = reaction(({ path }) =>
     .then(Locating.ground({ path })),
 );
 
-export const UngroundableSiteDirectoryDiagnoses = reaction(({ path, error, detail }) =>
-  when(Locating.ground({ path }).refuses({ error, detail }))
-    .then(Diagnosing.report({ ...staged, code: error, message: detail })),
+export const UngroundableSiteDirectoryDiagnoses = reaction(({ path, code, detail }) =>
+  when(Locating.ground({ path }).responds({ status: "problem", code, detail }))
+    .then(Diagnosing.report({ ...staged, code, message: detail })),
 );
 
 export const GroundedSiteAdmitsConfiguration = reaction(() =>
-  when(Locating.ground({}).responds({}))
+  when(Locating.ground({}).responds({ status: "grounded" }))
     .then(Locating.admit({ name: PLACES.settings, path: CONFIGURATION_PATH })),
 );
 
-export const AdmittedConfigurationIsRead = reaction(({ path }) =>
-  when(Locating.admit({ name: PLACES.settings }).responds({ path }))
-    .then(Scanning.absorb({ path })),
+export const AdmittedConfigurationIsLoaded = reaction(({ path }) =>
+  when(Locating.admit({ name: PLACES.settings }).responds({ status: "admitted", path }))
+    .then(Filing.loadFile({ name: ROOTS.project, source: path, path: CONFIGURATION_PATH })),
 );
 
-export const UnreadableConfigurationDiagnoses = reaction(({ path, error, detail }) =>
-  when(Scanning.absorb({ path }).refuses({ error, detail }))
-    .then(Diagnosing.report({ ...staged, code: error, message: detail })),
+export const UnreadableConfigurationDiagnoses = reaction(({ code, detail }) =>
+  when(Filing.loadFile({ name: ROOTS.project, path: CONFIGURATION_PATH }).responds({ status: "problem", code, detail }))
+    .then(Diagnosing.report({ ...staged, code, message: detail })),
 );
 
-export const ReadConfigurationOpensProject = reaction(() =>
-  when(Scanning.absorb({}).responds({}))
-    .then(Filing.open({ name: ROOTS.project })),
-);
-
-export const OpenedProjectFilesConfiguration = reaction(({ root, content }) =>
-  when(Filing.open({ name: ROOTS.project }).responds({ root }))
-    .where(earlier(Scanning.absorb, {}, { content }))
-    .then(Filing.place({ root, path: CONFIGURATION_PATH, content })),
-);
-
-export const FiledConfigurationIsAssessed = reaction(({ root, file, text }) =>
-  when(Filing.place({ root, path: CONFIGURATION_PATH }).responds({ file }))
+export const LoadedConfigurationIsAssessed = reaction(({ root, file, text }) =>
+  when(Filing.loadFile({ name: ROOTS.project, path: CONFIGURATION_PATH }).responds({ status: "loaded", root, file }))
     .where(
       Filing._named({ name: ROOTS.project }).is({ root }),
       Filing._text({ file }).is({ text }),
@@ -76,7 +72,7 @@ export const FiledConfigurationIsAssessed = reaction(({ root, file, text }) =>
 
 /** A configuration that is not UTF-8 text is answered here rather than by an unread policy. */
 export const UndecodableConfigurationDiagnoses = reaction(({ root, file }) =>
-  when(Filing.place({ root, path: CONFIGURATION_PATH }).responds({ file }))
+  when(Filing.loadFile({ name: ROOTS.project, path: CONFIGURATION_PATH }).responds({ status: "loaded", root, file }))
     .where(
       Filing._named({ name: ROOTS.project }).is({ root }),
       no(Filing._text({ file })),
@@ -90,7 +86,7 @@ export const UndecodableConfigurationDiagnoses = reaction(({ root, file }) =>
     ),
 );
 
-/* Stage: admit every configured location, then survey and file what it holds. */
+/* Stage: admit every configured location, then replace each complete input tree. */
 
 export const StageAdmitsSourceRoots = reaction(({ root, directory }) =>
   when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "stage", transitioned: true }))
@@ -114,60 +110,34 @@ export const StageAdmitsConfiguredOutput = reaction(({ directory }) =>
     .then(Locating.admit({ name: PLACES.output, path: directory })),
 );
 
-export const UnresolvableLocationDiagnoses = reaction(({ name, path, error, detail }) =>
-  when(Locating.admit({ name, path }).refuses({ error, detail }))
-    .then(Diagnosing.report({ ...staged, code: error, message: detail })),
+export const UnresolvableLocationDiagnoses = reaction(({ name, path, code, detail }) =>
+  when(Locating.admit({ name, path }).responds({ status: "problem", code, detail }))
+    .then(Diagnosing.report({ ...staged, code, message: detail })),
 );
 
-export const AdmittedSourceRootsAreSurveyed = reaction(({ root, directory, real }) =>
-  when(Locating.admit({ name: root, path: directory }).responds({ real, contained: true, resolved: true }))
+export const AdmittedSourceRootsAreLoaded = reaction(({ root, directory, real }) =>
+  when(Locating.admit({ name: root, path: directory }).responds({ status: "admitted", real, contained: true, resolved: true }))
     .where(Governing._sources({}).is({ name: root, path: directory }))
-    .then(Scanning.survey({ label: root, directory: real })),
+    .then(Filing.loadTree({ name: root, directory: real })),
 );
 
-export const UnsurveyableSourceRootDiagnoses = reaction(({ root, directory, error, detail }) =>
-  when(Scanning.survey({ label: root, directory }).refuses({ error, detail }))
-    .then(Diagnosing.report({ ...staged, code: error, message: detail, source: root })),
-);
-
-export const SurveyedSourceRootOpensFiling = reaction(({ root }) =>
-  when(Scanning.survey({ label: root }).responds({}))
-    .then(Filing.open({ name: root })),
-);
-
-export const OpenedSourceRootReadsEntries = reaction(({ root, survey, path }) =>
-  when(Filing.open({ name: root }).responds({}))
-    .where(
-      Scanning._labelled({ label: root }).is({ survey }),
-      Scanning._entry({ survey }).is({ path }),
-    )
-    .then(Scanning.read({ survey, path })),
-);
-
-export const ReadEntriesAreFiled = reaction(({ survey, path, content, label, root }) =>
-  when(Scanning.read({ survey, path }).responds({ content }))
-    .where(
-      Scanning._survey({ survey }).is({ label }),
-      Filing._named({ name: label }).is({ root }),
-    )
-    .then(Filing.place({ root, path, content })),
-);
-
-export const UnreadableEntryDiagnoses = reaction(({ survey, path, error, detail }) =>
-  when(Scanning.read({ survey, path }).refuses({ error, detail }))
-    .then(Diagnosing.report({ ...staged, code: error, message: detail, source: path })),
+export const UnloadableSourceRootDiagnoses = reaction(({ root, code, detail }) =>
+  when(Filing.loadTree({ name: root }).responds({ status: "problem", code, detail }))
+    .then(Diagnosing.report({ ...staged, code, message: detail, source: root })),
 );
 
 /* Publication: direct output at whichever location this run publishes to. */
 
-export const ConfiguredOutputDirectsPublication = reaction(({ directory, real }) =>
-  when(Locating.admit({ name: PLACES.output, path: directory }).responds({ real, contained: true, resolved: true }))
-    .then(Emitting.direct({ destination: real })),
+export const ConfiguredOutputDirectsPublication = reaction(({ directory, real, prefix }) =>
+  when(Locating.admit({ name: PLACES.output, path: directory }).responds({ status: "admitted", real, contained: true, resolved: true }))
+    .where(PublicationTransactionPrefix({ destination: real }).is({ prefix }))
+    .then(Emitting.direct({ destination: real, prefix })),
 );
 
-export const DestinationDirectsPublication = reaction(({ directory, real }) =>
-  when(Locating.admit({ name: PLACES.destination, path: directory }).responds({ real }))
-    .then(Emitting.direct({ destination: real })),
+export const DestinationDirectsPublication = reaction(({ directory, real, prefix }) =>
+  when(Locating.admit({ name: PLACES.destination, path: directory }).responds({ status: "admitted", real }))
+    .where(PublicationTransactionPrefix({ destination: real }).is({ prefix }))
+    .then(Emitting.direct({ destination: real, prefix })),
 );
 
 export const UndirectablePublicationDiagnoses = reaction(({ destination, error, detail }) =>
@@ -184,7 +154,7 @@ export const UndirectablePublicationDiagnoses = reaction(({ destination, error, 
  */
 const escapesSite = (place: string, key: string, code: string) =>
   reaction(({ directory, admitted }) =>
-    when(Locating.admit({ name: place, path: directory }).responds({ place: admitted }))
+    when(Locating.admit({ name: place, path: directory }).responds({ status: "admitted", place: admitted }))
       .where(no(Locating._place({ place: admitted }).is({ contained: true, resolved: true })))
       .then(
         Diagnosing.report({

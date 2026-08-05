@@ -57,3 +57,11 @@ export const DirectoryPath = view(
     computations.isTextValue({ value: prefix }),
   ),
 ).optional();
+
+export const PublicationTransactionPrefix = view(
+  "the publication transaction prefix of destination (destination)",
+  ({ destination }, { prefix }) => where(
+    compute(computations.publicationTransactionPrefix, { destination }, prefix),
+    computations.isTextValue({ value: prefix }),
+  ),
+).optional();

@@ -1,12 +1,12 @@
 import { lstat, watch } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 const INVALID_WATCH = "A watch needs a directory and a positive settling duration.";
 const DIRECTORY_MISSING = "This required directory is missing.";
 const DIRECTORY_UNSUPPORTED = "This required location must be a directory that is not a symbolic link.";
 const DIRECTORY_UNOBSERVABLE = "This directory could not be observed.";
 const WATCH_NOT_FOUND = "There is no such watch.";
-const WATCH_NOT_OPEN = "There is no such open watch.";
+const WATCH_FAILED = "The host watch stopped unexpectedly.";
 
 export class InvalidWatch extends Error {
   constructor() {
@@ -43,10 +43,10 @@ export class WatchNotFound extends Error {
   }
 }
 
-export class WatchNotOpen extends Error {
+export class WatchFailed extends Error {
   constructor() {
-    super(WATCH_NOT_OPEN);
-    this.name = "WatchNotOpen";
+    super(WATCH_FAILED);
+    this.name = "WatchFailed";
   }
 }
 
@@ -54,12 +54,14 @@ type WatchRecord = {
   watch: string;
   directory: string;
   settling: number;
-  open: boolean;
+  state: "open" | "failed" | "closed";
+  excluded: string[];
   prefixes: string[];
   settled: boolean;
   observation: AbortController;
   timer: ReturnType<typeof setTimeout> | undefined;
   waiting: (() => void) | undefined;
+  task: Promise<void> | undefined;
 };
 
 function isWatchText(value: unknown): value is string {
@@ -68,6 +70,18 @@ function isWatchText(value: unknown): value is string {
 
 function isDuration(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function contains(parent: string, child: string): boolean {
+  const path = relative(parent, child);
+  return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+}
+
+function hasSiblingPrefix(prefix: string, candidate: string): boolean {
+  const parent = dirname(prefix);
+  if (!contains(parent, candidate)) return false;
+  const [first] = relative(parent, candidate).split(sep);
+  return first?.startsWith(basename(prefix)) ?? false;
 }
 
 function errorCode(error: unknown): string | undefined {
@@ -81,8 +95,17 @@ export class WatchingConcept {
   readonly #watches = new Map<string, WatchRecord>();
   #next = 0;
 
-  async observe({ directory, settling }: { directory: string; settling: number }) {
-    if (!isWatchText(directory) || !isDuration(settling)) throw new InvalidWatch();
+  async observe(
+    { directory, settling, excluded, prefix }: {
+      directory: string;
+      settling: number;
+      excluded: string;
+      prefix: string;
+    },
+  ) {
+    if (!isWatchText(directory) || !isDuration(settling) || !isWatchText(excluded) || !isWatchText(prefix)) {
+      throw new InvalidWatch();
+    }
     const absolute = resolve(directory);
 
     let status: Awaited<ReturnType<typeof lstat>>;
@@ -100,12 +123,14 @@ export class WatchingConcept {
       watch: `watch:${this.#next}`,
       directory: absolute,
       settling,
-      open: true,
-      prefixes: [],
+      state: "open",
+      excluded: [resolve(excluded)],
+      prefixes: [resolve(prefix)],
       settled: false,
       observation: new AbortController(),
       timer: undefined,
       waiting: undefined,
+      task: undefined,
     };
 
     let events: AsyncIterable<{ filename: string | Buffer | null }>;
@@ -116,7 +141,7 @@ export class WatchingConcept {
     }
 
     this.#watches.set(record.watch, record);
-    void this.#consume(record, events);
+    record.task = this.#consume(record, events);
     return { watch: record.watch };
   }
 
@@ -124,10 +149,15 @@ export class WatchingConcept {
   async #consume(record: WatchRecord, events: AsyncIterable<{ filename: string | Buffer | null }>): Promise<void> {
     try {
       for await (const event of events) {
-        if (!record.open) break;
+        if (record.state !== "open") break;
         if (event.filename === null) continue;
         const changed = resolve(record.directory, event.filename.toString());
-        if (record.prefixes.some((prefix) => changed.startsWith(prefix))) continue;
+        if (!contains(record.directory, changed)) {
+          this.#fail(record);
+          return;
+        }
+        if (record.excluded.some((path) => contains(path, changed))) continue;
+        if (record.prefixes.some((prefix) => hasSiblingPrefix(prefix, changed))) continue;
         if (record.timer !== undefined) clearTimeout(record.timer);
         record.timer = setTimeout(() => {
           record.timer = undefined;
@@ -135,9 +165,17 @@ export class WatchingConcept {
           this.#release(record);
         }, record.settling);
       }
+      if (record.state === "open") this.#fail(record);
     } catch {
-      // An aborted observation and a host watcher failure both end this watch's reporting.
+      if (record.state === "open") this.#fail(record);
     }
+  }
+
+  #fail(record: WatchRecord): void {
+    record.state = "failed";
+    if (record.timer !== undefined) clearTimeout(record.timer);
+    record.timer = undefined;
+    this.#release(record);
   }
 
   #release(record: WatchRecord): void {
@@ -146,19 +184,13 @@ export class WatchingConcept {
     waiting?.();
   }
 
-  disregard({ watch: identity, prefix }: { watch: string; prefix: string }) {
-    const record = this.#watches.get(identity);
-    if (record === undefined || !record.open) throw new WatchNotOpen();
-    if (!isWatchText(prefix)) throw new InvalidWatch();
-    if (!record.prefixes.includes(prefix)) record.prefixes.push(prefix);
-    return { watch: record.watch, prefix };
-  }
-
   async attend({ watch: identity, within }: { watch: string; within: number }) {
     const record = this.#watches.get(identity);
     if (record === undefined) throw new WatchNotFound();
     if (!isDuration(within)) throw new InvalidWatch();
-    if (!record.open) return { changed: false, watching: false };
+    const state = record.state as WatchRecord["state"];
+    if (state === "failed") throw new WatchFailed();
+    if (state === "closed") return { changed: false, watching: false };
     if (record.settled) {
       record.settled = false;
       return { changed: true, watching: true };
@@ -175,37 +207,38 @@ export class WatchingConcept {
       };
     });
 
-    if (!record.open) return { changed: false, watching: false };
+    const current = record.state as WatchRecord["state"];
+    if (current === "failed") throw new WatchFailed();
+    if (current === "closed") return { changed: false, watching: false };
     if (!record.settled) return { changed: false, watching: true };
     record.settled = false;
     return { changed: true, watching: true };
   }
 
-  close({ watch: identity }: { watch: string }) {
+  async close({ watch: identity }: { watch: string }) {
     const record = this.#watches.get(identity);
     if (record === undefined) throw new WatchNotFound();
-    if (record.open) {
-      record.open = false;
+    if (record.state !== "closed") {
+      record.state = "closed";
       if (record.timer !== undefined) clearTimeout(record.timer);
       record.timer = undefined;
       record.observation.abort();
       this.#release(record);
+      await record.task;
     }
     return { watch: record.watch };
   }
 
-  _watch({ watch: identity }: { watch: string }): { directory: string; settling: number; state: "open" | "closed" }[] {
+  _watch({ watch: identity }: { watch: string }): { directory: string; settling: number; state: "open" | "failed" | "closed" }[] {
     const record = this.#watches.get(identity);
-    return record === undefined
-      ? []
-      : [{ directory: record.directory, settling: record.settling, state: record.open ? "open" : "closed" }];
+    return record === undefined ? [] : [{ directory: record.directory, settling: record.settling, state: record.state }];
   }
 
-  _disregarded({ watch: identity }: { watch: string }): { prefix: string }[] {
-    return (this.#watches.get(identity)?.prefixes ?? []).map((prefix) => ({ prefix }));
+  _excluded({ watch: identity }: { watch: string }): { path: string }[] {
+    return (this.#watches.get(identity)?.excluded ?? []).map((path) => ({ path }));
   }
 
   _open(): { watch: string }[] {
-    return [...this.#watches.values()].filter(({ open }) => open).map(({ watch: identity }) => ({ watch: identity }));
+    return [...this.#watches.values()].filter(({ state }) => state === "open").map(({ watch: identity }) => ({ watch: identity }));
   }
 }

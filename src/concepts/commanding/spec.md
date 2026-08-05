@@ -2,10 +2,9 @@
 
 ## Purpose
 
-Interpret one operator's command line into a checked request, and answer that
-operator on their own streams, so every misuse is refused the same way and every
-report — including the one line a finished run is worth — reaches the same
-place.
+Own one Syncpress operator interaction from process arguments through reports
+and a stop request, so grammar, streams, signals, and exit status cannot drift
+across unrelated boundary adapters.
 
 ## Principle
 
@@ -16,22 +15,17 @@ request on port 8080 with the default directory. She runs `inspect /posts/first/
 and gets an inspect request for that target. She runs `build a b c` and is
 refused, with the usage text attached. Reporting a line puts it on the operator's
 ordinary output; summarizing a run puts one counted sentence there; announcing a
-served directory puts its address there; warning them puts it on their error
-output, and all of them are remembered in the order they were said.
+served directory puts its address there; and warning them puts it on their error
+output. A hold ends
+when she interrupts the process, and a failed command records a nonzero process
+exit status.
 
 ## State
 
 ```state
-a set of Requests with
-  a name Name
-  a directory Text
-  an optional destination Text
-  an optional target Text
-  an optional port Number
-
-an ordered sequence of Reports with
-  a stream Stream
-  a text Text
+a set of Holds with
+  a state State
+  an optional reason Reason
 ```
 
 A name is one of `help`, `build`, `watch`, `develop`, or `inspect`. A directory
@@ -39,8 +33,12 @@ is always present, defaulting to `.`. A destination is present only when the
 operator named one. A target is present only for `inspect`, where it is
 required. A port is present only for `develop`, defaulting to 3000.
 
-A stream is `output` or `error`. Reports are remembered in the order they were
-said, so a caller can check what an operator was told.
+A stream is `output` or `error`. Stream writes are host effects and are not
+copied into concept state.
+
+A hold is `holding` until an interrupt or terminate request releases it. Process
+listeners exist only while the hold is active. Exit status is a host effect, not
+durable concept state.
 
 ## Grammar
 
@@ -60,45 +58,60 @@ returns is text the operator wrote, not a location that exists.
 ## Actions
 
 ```actions
-interpret (arguments: Arguments) : return (request: Request, name: Name, directory: Text, destination: OptionalText, target: OptionalText, port: OptionalNumber)
-  where arguments is not an ordinary dense list of text values
+interpret (arguments: OptionalArguments) : return (name: Name, directory: Text, destination: OptionalText, target: OptionalText, port: OptionalNumber)
+  where arguments is absent
+  then
+    read the process arguments after the executable name
+  where present arguments is not an ordinary dense list of text values
   then
     refuse INVALID_ARGUMENTS "Arguments must be an ordinary dense list of text values."
   where arguments do not match the grammar
   then
     refuse INVALID_USAGE "Invalid usage."
   then
-    add the interpreted request and return it
+    return the interpreted request
 
-say (text: Text) : return (report: Report)
+say (text: Text) : return ()
   where text is not well-formed text
   then
     refuse INVALID_REPORT "A report must be well-formed text."
   then
-    put text on the operator's ordinary output, remember it, and return the report
+    put text on the operator's ordinary output
 
-summarize (pages: Number, files: Number, written: Number, replaced: Number, kept: Number, removed: Number) : return (report: Report, text: Text)
+summarize (pages: Number, files: Number, written: Number, replaced: Number, kept: Number, removed: Number) : return (text: Text)
   where any count is not a non-negative safe integer
   then
     refuse INVALID_REPORT "A report must be well-formed text."
   then
     put one sentence counting those pages, input files, and reconciled artifacts on the
-    operator's ordinary output, remember it, and return the report and its text
+    operator's ordinary output and return its text
 
-announce (directory: Text, host: Text, port: Number) : return (report: Report)
+announce (directory: Text, host: Text, port: Number) : return ()
   where directory or host is not well-formed text, or port is not a safe integer between 1 and 65535
   then
     refuse INVALID_REPORT "A report must be well-formed text."
   then
     put one line naming where that directory is being served on the operator's ordinary
-    output, remember it, and return the report
+    output
 
-warn (text: Text) : return (report: Report)
+warn (text: Text) : return ()
   where text is not well-formed text
   then
     refuse INVALID_REPORT "A report must be well-formed text."
   then
-    put text on the operator's error output, remember it, and return the report
+    put text on the operator's error output
+
+hold () : return (hold: Hold, reason: Reason)
+  then
+    wait until the operator interrupts or terminates the process
+    release the hold, remove its listeners, and return the request that ended it
+
+exit (code: Number) : return (code: Number)
+  where code is not a safe integer from 0 through 255
+  then
+    refuse INVALID_REPORT "A report must be well-formed text."
+  then
+    set the process exit status and return it
 ```
 
 `INVALID_USAGE` carries the usage text, so a caller can refuse an operator
@@ -107,8 +120,8 @@ without holding its own copy of the grammar.
 ## Queries
 
 ```queries
-_request (request: Request) : optional (name: Name, directory: Text, destination: OptionalText, target: OptionalText, port: OptionalNumber)
-_reports () : many (report: Report, stream: Stream, text: Text)
+_hold (hold: Hold) : optional (state: State, reason: OptionalReason)
+_holding () : one (holding: Number)
 _usage () : one (usage: Text)
 _misuse () : one (misuse: Text)
 ```
@@ -117,6 +130,6 @@ _misuse () : one (misuse: Text)
 operator who typed something unreadable should read: the same usage text behind
 one line naming the problem.
 
-Commanding owns the command-line grammar, the usage text, and the operator's
-streams. It does not do what a request asks for, know whether a directory
-exists, or decide what is worth reporting.
+Commanding owns the command-line grammar, usage text, operator streams, process
+stop request, and exit status. It does not do what a request asks for, know
+whether a directory exists, or decide what application work is worth reporting.

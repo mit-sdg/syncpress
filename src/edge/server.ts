@@ -20,17 +20,27 @@ export async function serveSite(
 
   const publish = async (directory: string): Promise<void> => {
     const published = await gateway.invoke("/serve/publish", { server: opened.server, directory });
-    if (!published.ok) options.onError?.(new Error(`Could not serve the site: ${reason(published.error)}`));
+    if (!published.ok) throw new Error(`Could not serve the site: ${reason(published.error)}`);
   };
 
-  let watcher: SiteWatcher;
+  let watcher: SiteWatcher | undefined;
+  let firstPublication: Promise<void> | undefined;
   try {
     watcher = await watchSite(projectDirectory, destination, {
-      onBuild: (_result, outputDirectory) => void publish(outputDirectory),
+      onBuild: (_result, outputDirectory) => {
+        const publishing = publish(outputDirectory);
+        if (firstPublication === undefined) firstPublication = publishing;
+        else void publishing.catch((error) => options.onError?.(error));
+      },
       onError: options.onError,
     });
+    if (firstPublication === undefined) throw new Error("The initial site build was not published.");
+    await firstPublication;
   } catch (error) {
-    await gateway.invoke("/serve/close", { server: opened.server });
+    await Promise.allSettled([
+      watcher?.close(),
+      gateway.invoke("/serve/close", { server: opened.server }),
+    ]);
     throw error;
   }
 
@@ -38,8 +48,17 @@ export async function serveSite(
     host: opened.host,
     port: opened.port,
     async close(): Promise<void> {
-      await watcher.close();
-      await gateway.invoke("/serve/close", { server: opened.server });
+      const closed = await Promise.allSettled([
+        watcher.close(),
+        gateway.invoke("/serve/close", { server: opened.server }),
+      ]);
+      const failures = closed.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+      const serving = closed[1];
+      if (serving?.status === "fulfilled" && !serving.value.ok) {
+        failures.push(new Error(`Could not close the site server: ${reason(serving.value.error)}`));
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) throw new AggregateError(failures, "Could not close the development server.");
     },
   };
 }

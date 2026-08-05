@@ -14,26 +14,7 @@ export class InvalidLocation extends Error {
   }
 }
 
-export class LocationMissing extends Error {
-  constructor() {
-    super(LOCATION_MISSING);
-    this.name = "LocationMissing";
-  }
-}
-
-export class LocationNotDirectory extends Error {
-  constructor() {
-    super(LOCATION_NOT_DIRECTORY);
-    this.name = "LocationNotDirectory";
-  }
-}
-
-export class LocationUnresolvable extends Error {
-  constructor() {
-    super(LOCATION_UNRESOLVABLE);
-    this.name = "LocationUnresolvable";
-  }
-}
+class UnresolvableHostPath extends Error {}
 
 export class NotGrounded extends Error {
   constructor() {
@@ -69,7 +50,7 @@ async function realPath(path: string): Promise<string> {
     return await realpath(path);
   } catch (error) {
     const code = errorCode(error);
-    if (code !== "ENOENT" && code !== "ENOTDIR") throw new LocationUnresolvable();
+    if (code !== "ENOENT" && code !== "ENOTDIR") throw new UnresolvableHostPath();
   }
 
   const parent = dirname(path);
@@ -106,17 +87,26 @@ export class LocatingConcept {
       status = await lstat(absolute);
     } catch (error) {
       const code = errorCode(error);
-      if (code === "ENOENT" || code === "ENOTDIR") throw new LocationMissing();
-      throw new LocationUnresolvable();
+      if (code === "ENOENT" || code === "ENOTDIR") {
+        return { status: "problem" as const, code: "LOCATION_MISSING", detail: LOCATION_MISSING };
+      }
+      return { status: "problem" as const, code: "LOCATION_UNRESOLVABLE", detail: LOCATION_UNRESOLVABLE };
     }
-    if (status.isSymbolicLink() || !status.isDirectory()) throw new LocationNotDirectory();
+    if (status.isSymbolicLink() || !status.isDirectory()) {
+      return { status: "problem" as const, code: "LOCATION_NOT_DIRECTORY", detail: LOCATION_NOT_DIRECTORY };
+    }
 
-    const real = await realPath(absolute);
-    if (this.#base?.path === absolute) return { path: absolute, real: this.#base.real };
+    let real: string;
+    try {
+      real = await realPath(absolute);
+    } catch {
+      return { status: "problem" as const, code: "LOCATION_UNRESOLVABLE", detail: LOCATION_UNRESOLVABLE };
+    }
+    if (this.#base?.path === absolute) return { status: "grounded" as const, path: absolute, real: this.#base.real };
 
     this.#base = { path: absolute, real };
     this.#places.clear();
-    return { path: absolute, real };
+    return { status: "grounded" as const, path: absolute, real };
   }
 
   async admit({ name, path }: { name: string; path: string }) {
@@ -128,7 +118,12 @@ export class LocatingConcept {
     if (existing !== undefined && existing.request === path) return this.#answer(existing);
 
     const absolute = resolve(base.path, path);
-    const real = await realPath(absolute);
+    let real: string;
+    try {
+      real = await realPath(absolute);
+    } catch {
+      return { status: "problem" as const, code: "LOCATION_UNRESOLVABLE", detail: LOCATION_UNRESOLVABLE };
+    }
     const record: PlaceRecord = {
       place: placeIdentity(name),
       name,
@@ -143,7 +138,7 @@ export class LocatingConcept {
   }
 
   #answer({ place, path, real, contained, resolved }: PlaceRecord) {
-    return { place, path, real, contained, resolved };
+    return { status: "admitted" as const, place, path, real, contained, resolved };
   }
 
   #record(place: string): PlaceRecord | undefined {

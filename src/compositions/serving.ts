@@ -17,8 +17,7 @@ export const OpenSiteServer = endpoint("/serve/open", ({ host, port, server, bou
 /** One published output becomes what the server answers from, and readers are told. */
 export const PublishSiteOutput = endpoint("/serve/publish", ({ server, directory, readers }) =>
   receive({ server, directory })
-    .then(Serving.serve({ server, directory }).responds({}))
-    .then(Serving.refresh({ server }).responds({ readers }))
+    .then(Serving.publish({ server, directory }).responds({ readers }))
     .then(respond({ readers })),
 );
 

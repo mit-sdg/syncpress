@@ -26,20 +26,20 @@ export async function watchSite(
 
   let closing = false;
   const attending = (async (): Promise<void> => {
-    while (!closing) {
-      const { changed, watching } = answer(
-        await gateway.invoke("/watch/attend", { watch, within: ATTEND_MS }),
-        "Could not watch the site directory",
-      );
-      if (!watching) return;
-      if (!changed) continue;
+    try {
+      while (!closing) {
+        const { changed, watching } = answer(
+          await gateway.invoke("/watch/attend", { watch, within: ATTEND_MS }),
+          "Could not watch the site directory",
+        );
+        if (!watching) return;
+        if (!changed) continue;
 
-      try {
         const built = await buildSite(projectDirectory, destination);
         options.onBuild?.(built, built.outputDirectory);
-      } catch (error) {
-        if (!closing) options.onError?.(error);
       }
+    } catch (error) {
+      if (!closing) options.onError?.(error);
     }
   })();
 
@@ -47,8 +47,11 @@ export async function watchSite(
     async close(): Promise<void> {
       if (closing) return;
       closing = true;
-      await gateway.invoke("/watch/close", { watch });
-      await attending;
+      try {
+        answer(await gateway.invoke("/watch/close", { watch }), "Could not close the site watch");
+      } finally {
+        await attending;
+      }
     },
   };
 }

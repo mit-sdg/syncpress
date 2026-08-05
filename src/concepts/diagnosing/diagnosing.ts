@@ -144,6 +144,19 @@ function compareRelation(left: RelationRecord, right: RelationRecord): number {
 export class DiagnosingConcept {
   readonly #diagnostics = new Map<string, DiagnosticRecord>();
   readonly #relations = new Map<string, RelationRecord>();
+  #interrupted = false;
+
+  resume() {
+    const changed = this.#interrupted;
+    this.#interrupted = false;
+    return { changed };
+  }
+
+  interrupt() {
+    const changed = !this.#interrupted;
+    this.#interrupted = true;
+    return { changed };
+  }
 
   report({
     scope,
@@ -235,6 +248,7 @@ export class DiagnosingConcept {
     const count = this.#diagnostics.size;
     this.#diagnostics.clear();
     this.#relations.clear();
+    this.#interrupted = false;
     return { count };
   }
 
@@ -319,6 +333,10 @@ export class DiagnosingConcept {
 
   _clean(): { clean: boolean } {
     return { clean: ![...this.#diagnostics.values()].some(({ severity }) => severity === "error") };
+  }
+
+  _delivery(): { interrupted: boolean } {
+    return { interrupted: this.#interrupted };
   }
 
   #orderedDiagnostics(): DiagnosticRecord[] {

@@ -41,6 +41,11 @@ and the clock are reached only from the concept that owns that interaction, and
 application and invokes its endpoints; anything else it would have done belongs
 to a concept.
 
+Host APIs alone do not determine concept boundaries. Keep effects together when
+one purpose, principle, invariant, or lifecycle requires them; use registered
+pure computations for application naming policy; and do not split one operation
+into concepts that only forward paths or bytes through reactions.
+
 The repository-only `bun run site ...` command runs `src/cli.ts` directly. For
 example, `bun run site build ./example` builds the documentation fixture.
 

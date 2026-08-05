@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { chmod, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const INVALID_DESTINATION = "A destination must name a directory other than the filesystem root.";
 const DESTINATION_UNAVAILABLE = "The destination could not be inspected.";
@@ -17,10 +17,24 @@ const STALE_ATTEMPT = "This producer attempt is no longer active.";
 const DESTINATION_NOT_DIRECTED = "No destination has been directed.";
 const RECONCILIATION_FAILED = "The intended destination tree could not be installed.";
 
-/** Where reconciliation stages one destination's work, as a path prefix its siblings share. */
-function stagingPrefix(destination: string): string {
-  const resolved = resolve(destination);
-  return join(dirname(resolved), `.${basename(resolved)}.emitting-`);
+/** Serialize reconciliation across fresh concept instances in this process. */
+const destinationTails = new Map<string, Promise<void>>();
+
+async function acquireDestination(destination: string): Promise<() => void> {
+  const previous = destinationTails.get(destination) ?? Promise.resolve();
+  let unlock!: () => void;
+  const held = new Promise<void>((resolveHeld) => {
+    unlock = resolveHeld;
+  });
+  const tail = previous.then(() => held);
+  destinationTails.set(destination, tail);
+  await previous;
+  return () => {
+    unlock();
+    void tail.finally(() => {
+      if (destinationTails.get(destination) === tail) destinationTails.delete(destination);
+    });
+  };
 }
 
 export class InvalidDestination extends Error {
@@ -319,16 +333,20 @@ function sameSnapshot(left: Snapshot, right: Snapshot): boolean {
 /** Reconcile independent producers' exact byte artifacts with one local destination. */
 export class EmittingConcept {
   #destination: string | undefined;
+  #transactionPrefix: string | undefined;
   readonly #producers = new Map<string, ProducerRecord>();
   readonly #emitted = new Map<string, EmittedEntry>();
 
-  async direct({ destination }: { destination: string }) {
-    if (!isText(destination) || destination === "" || destination.includes("\u0000")) {
+  async direct({ destination, prefix }: { destination: string; prefix: string }) {
+    if (!isText(destination) || destination === "" || destination.includes("\u0000") || !isText(prefix) || prefix === "") {
       throw new InvalidDestination();
     }
 
     const requested = resolve(destination);
-    if (dirname(requested) === requested) throw new InvalidDestination();
+    const transactionPrefix = resolve(prefix);
+    if (dirname(requested) === requested || dirname(transactionPrefix) !== dirname(requested) || transactionPrefix === requested) {
+      throw new InvalidDestination();
+    }
 
     let directed = requested;
     let snapshot: Snapshot;
@@ -359,6 +377,7 @@ export class EmittingConcept {
     }
 
     this.#destination = directed;
+    this.#transactionPrefix = transactionPrefix;
     this.#recordSnapshot(snapshot);
     return { destination, existing: snapshot.entries.size };
   }
@@ -430,57 +449,65 @@ export class EmittingConcept {
 
   async reconcile() {
     const destination = this.#destination;
-    if (destination === undefined) throw new DestinationNotDirected();
+    const transactionPrefix = this.#transactionPrefix;
+    if (destination === undefined || transactionPrefix === undefined) throw new DestinationNotDirected();
+    const release = await acquireDestination(destination);
 
-    let snapshot: Snapshot;
     try {
-      const status = await statusAt(destination);
-      if (status === undefined) {
-        snapshot = { exists: false, mode: 0o755, entries: new Map(), directories: new Set() };
-      } else {
-        if (!status.isDirectory() || status.isSymbolicLink()) throw new Error("The directed destination is no longer a directory.");
-        snapshot = await this.#snapshot(destination, status.mode & 0o777);
-      }
-    } catch (error) {
-      throw new ReconciliationFailed({ cause: error });
-    }
-
-    const intended = this.#intended();
-    let written = 0;
-    let replaced = 0;
-    let kept = 0;
-    for (const [path, intent] of intended) {
-      const previous = snapshot.entries.get(path);
-      if (previous === undefined) written += 1;
-      else if (this.#entryMatches(previous, intent)) kept += 1;
-      else replaced += 1;
-    }
-    let removed = 0;
-    for (const path of snapshot.entries.keys()) {
-      if (!intended.has(path)) removed += 1;
-    }
-
-    const directories = expectedDirectories(intended.keys());
-    const exact =
-      snapshot.exists &&
-      snapshot.entries.size === intended.size &&
-      [...intended].every(([path, intent]) => {
-        const entry = snapshot.entries.get(path);
-        return entry !== undefined && this.#entryMatches(entry, intent);
-      }) &&
-      sameSet(snapshot.directories, directories);
-
-    if (!exact) {
+      let snapshot: Snapshot;
       try {
-        await this.#install(destination, snapshot, intended);
+        const status = await statusAt(destination);
+        if (status === undefined) {
+          snapshot = { exists: false, mode: 0o755, entries: new Map(), directories: new Set() };
+        } else {
+          if (!status.isDirectory() || status.isSymbolicLink()) {
+            throw new Error("The directed destination is no longer a directory.");
+          }
+          snapshot = await this.#snapshot(destination, status.mode & 0o777);
+        }
       } catch (error) {
         throw new ReconciliationFailed({ cause: error });
       }
-      this.#recordIntended(intended);
-    } else {
-      this.#recordSnapshot(snapshot);
+
+      const intended = this.#intended();
+      let written = 0;
+      let replaced = 0;
+      let kept = 0;
+      for (const [path, intent] of intended) {
+        const previous = snapshot.entries.get(path);
+        if (previous === undefined) written += 1;
+        else if (this.#entryMatches(previous, intent)) kept += 1;
+        else replaced += 1;
+      }
+      let removed = 0;
+      for (const path of snapshot.entries.keys()) {
+        if (!intended.has(path)) removed += 1;
+      }
+
+      const directories = expectedDirectories(intended.keys());
+      const exact =
+        snapshot.exists &&
+        snapshot.entries.size === intended.size &&
+        [...intended].every(([path, intent]) => {
+          const entry = snapshot.entries.get(path);
+          return entry !== undefined && this.#entryMatches(entry, intent);
+        }) &&
+        sameSet(snapshot.directories, directories);
+
+      if (!exact) {
+        try {
+          await this.#install(destination, transactionPrefix, snapshot, intended);
+        } catch (error) {
+          throw new ReconciliationFailed({ cause: error });
+        }
+        this.#recordIntended(intended);
+      } else {
+        this.#recordSnapshot(snapshot);
+      }
+      return { written, replaced, kept, removed };
+    } finally {
+      release();
     }
-    return { written, replaced, kept, removed };
   }
 
   _intent({ path }: { path: string }): { digest: string; medium: string }[] {
@@ -532,10 +559,6 @@ export class EmittingConcept {
       })
       .sort(([left], [right]) => compareText(left, right))
       .map(([path, intent]) => ({ path, digest: intent.digest }));
-  }
-
-  _staging({ destination }: { destination: string }): { prefix: string } {
-    return { prefix: isText(destination) && destination !== "" ? stagingPrefix(destination) : "" };
   }
 
   _orphans(): { path: string }[] {
@@ -633,10 +656,10 @@ export class EmittingConcept {
     return { exists: true, mode, entries, directories };
   }
 
-  async #install(destination: string, snapshot: Snapshot, intended: Map<string, Intent>): Promise<void> {
+  async #install(destination: string, transactionPrefix: string, snapshot: Snapshot, intended: Map<string, Intent>): Promise<void> {
     const parent = dirname(destination);
     await mkdir(parent, { recursive: true });
-    const transaction = await mkdtemp(stagingPrefix(destination));
+    const transaction = await mkdtemp(transactionPrefix);
     const staged = join(transaction, "next");
     const previous = join(transaction, "previous");
     let preserveTransaction = false;

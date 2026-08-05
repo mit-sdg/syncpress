@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Keep the problems found during a task together, so people can see everything
-that needs attention and know when no errors remain.
+Keep the problems found during a task together and record whether aggregate
+delivery was interrupted, so people can see everything available without a
+second terminal report racing an earlier failure.
 
 ## Principle
 
@@ -79,6 +80,8 @@ a set of Relations with
   an optional line Number
   an optional column Number
   a note Text
+
+an interrupted Flag
 ```
 
 At most one diagnostic exists per scope, severity, code, source, line, and column. At
@@ -88,6 +91,14 @@ relation exists without its diagnostic.
 ## Actions
 
 ```actions
+resume () : return (changed: Flag)
+  then
+    begin aggregate delivery for a new task and return whether interruption was cleared
+
+interrupt () : return (changed: Flag)
+  then
+    record that another failure path already interrupted aggregate delivery and return whether state changed
+
 report (scope: OptionalScope, severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber) : return (diagnostic: Diagnostic)
   where severity is neither error nor warning
   then
@@ -133,7 +144,7 @@ retract (scope: OptionalScope, source: OptionalSource) : return (scope: Optional
 
 clear () : return (count: Number)
   then
-    remove every diagnostic and relation
+    remove every diagnostic and relation and clear interrupted delivery
     return how many diagnostics were removed
 ```
 
@@ -146,6 +157,7 @@ _for (source: OptionalSource) : many (diagnostic: Diagnostic, scope: OptionalSco
 _related (diagnostic: Diagnostic) : many (source: Source, line: OptionalNumber, column: OptionalNumber, note: Text)
 _rendered () : one (text: Text)
 _clean () : one (clean: Flag)
+_delivery () : one (interrupted: Flag)
 ```
 
 ## Ordering And Cleanliness

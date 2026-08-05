@@ -5,12 +5,23 @@
  * terminal state. Every step in between belongs to a reaction.
  */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
+import { faulted } from "@mit-sdg/sync-engine/advanced";
+import { no, reaction, refused, view, when, where } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
 import { PHASES, PHASE_SEQUENCE, PLACES } from "./shared.ts";
 import { InspectionOwner, SiteBuildSummary, SiteInspection } from "./views.ts";
 
 const { Depending, Deploying, Diagnosing, Emitting, Locating, Phasing, Routing } = conceptRefs;
+
+/** A direct refusal already owns boundary delivery; remember not to answer it again at settlement. */
+export const RefusalInterruptsAggregateDelivery = reaction(() =>
+  when(refused({})).then(Diagnosing.interrupt({})),
+);
+
+/** Runtime faults use the same one-answer boundary rule as refusals. */
+export const FaultInterruptsAggregateDelivery = reaction(() =>
+  when(faulted({})).then(Diagnosing.interrupt({})),
+);
 
 /** Enumerate routed owners without a current dependency result. */
 export const UnsettledRouteOwners = view(
@@ -35,6 +46,7 @@ export const PublishableSiteBuild = view(
   ({ sequence }, { job }) =>
     where(
       Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "finished" }),
+      Diagnosing._delivery({}).is({ interrupted: false }),
       Diagnosing._clean({}).is({ clean: true }),
       Deploying._outcome({}).is({ state: "completed" }),
       no(UnsettledRouteOwners({})),
@@ -60,18 +72,23 @@ export const BuildSiteAtDestination = endpoint(
           .named("published"),
         where(
           SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._delivery({}).is({ interrupted: false }),
           Diagnosing._clean({}).is({ clean: false }),
         )
           .then(respond({ error: "BUILD_HAS_ERRORS" }))
           .named("errors"),
         where(
           SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._delivery({}).is({ interrupted: false }),
           Diagnosing._clean({}).is({ clean: true }),
           no(PublishableSiteBuild({ sequence })),
         )
           .then(respond({ error: "BUILD_INCOMPLETE" }))
           .named("incomplete"),
-        where(SettledSiteBuild({ sequence }).is({ job, state: "failed" }))
+        where(
+          SettledSiteBuild({ sequence }).is({ job, state: "failed" }),
+          Diagnosing._delivery({}).is({ interrupted: false }),
+        )
           .then(respond({ error: "BUILD_FAILED" }))
           .named("failed"),
       ),
@@ -94,18 +111,23 @@ export const BuildSiteAtConfiguredOutput = endpoint(
           .named("published"),
         where(
           SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._delivery({}).is({ interrupted: false }),
           Diagnosing._clean({}).is({ clean: false }),
         )
           .then(respond({ error: "BUILD_HAS_ERRORS" }))
           .named("errors"),
         where(
           SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+          Diagnosing._delivery({}).is({ interrupted: false }),
           Diagnosing._clean({}).is({ clean: true }),
           no(PublishableSiteBuild({ sequence })),
         )
           .then(respond({ error: "BUILD_INCOMPLETE" }))
           .named("incomplete"),
-        where(SettledSiteBuild({ sequence }).is({ job, state: "failed" }))
+        where(
+          SettledSiteBuild({ sequence }).is({ job, state: "failed" }),
+          Diagnosing._delivery({}).is({ interrupted: false }),
+        )
           .then(respond({ error: "BUILD_FAILED" }))
           .named("failed"),
       ),
@@ -122,17 +144,22 @@ export const InspectSite = endpoint("/site/inspect", ({ directory, target, seque
     .then(
       where(
         SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+        Diagnosing._delivery({}).is({ interrupted: false }),
         InspectionOwner({ target }).is({ owner }),
       )
         .then(respond({ owner, inspection: SiteInspection({ owner }) }))
         .named("found"),
       where(
         SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
+        Diagnosing._delivery({}).is({ interrupted: false }),
         no(InspectionOwner({ target })),
       )
         .then(respond({ error: "INSPECTION_TARGET_NOT_FOUND" }))
         .named("missing"),
-      where(SettledSiteBuild({ sequence }).is({ job, state: "failed" }))
+      where(
+        SettledSiteBuild({ sequence }).is({ job, state: "failed" }),
+        Diagnosing._delivery({}).is({ interrupted: false }),
+      )
         .then(respond({ error: "BUILD_FAILED" }))
         .named("failed"),
     ),

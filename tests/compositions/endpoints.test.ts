@@ -79,7 +79,7 @@ test("a missing site directory is diagnosed rather than left to time out", async
 
   expect(await build({ directory })).toMatchObject({
     ok: false,
-    error: { kind: "domain", value: "LOCATION_MISSING" },
+    error: { kind: "domain", value: "BUILD_HAS_ERRORS" },
   });
   expect((await summary()).diagnostics).toContainEqual(
     expect.objectContaining({ code: "LOCATION_MISSING", source: "site.yaml" }),
@@ -92,7 +92,7 @@ test("a missing configuration file is diagnosed against the project", async () =
     const { build, summary } = runtime();
     expect(await build({ directory })).toMatchObject({
       ok: false,
-      error: { kind: "domain", value: "FILE_MISSING" },
+      error: { kind: "domain", value: "BUILD_HAS_ERRORS" },
     });
     expect((await summary()).diagnostics).toContainEqual(
       expect.objectContaining({ code: "FILE_MISSING", source: "site.yaml" }),

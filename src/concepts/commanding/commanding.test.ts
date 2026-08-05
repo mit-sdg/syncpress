@@ -41,15 +41,6 @@ describe("Commanding", () => {
     });
   });
 
-  test("a request is answerable again from its identity", () => {
-    const { commanding } = recorded();
-    const request = commanding.interpret({ arguments: ["build", "./site"] });
-    expect(commanding._request({ request: request.request })).toEqual([
-      { name: "build", directory: "./site", destination: null, target: null, port: null },
-    ]);
-    expect(commanding._request({ request: "request:absent" })).toEqual([]);
-  });
-
   test("anything outside the grammar is refused with the usage text", () => {
     const { commanding } = recorded();
     for (
@@ -89,18 +80,50 @@ describe("Commanding", () => {
       ["output", summarized.text],
       ["output", "Built 2 pages from 3 input files (3 written, 0 replaced, 0 kept, 1 removed)."],
     ]);
-    expect(commanding._reports().map(({ stream }) => stream)).toEqual(["output", "error", "output", "output"]);
-
     commanding.announce({ directory: "./site", host: "127.0.0.1", port: 3000 });
-    expect(commanding._reports().at(-1)).toMatchObject({
-      stream: "output",
-      text: "Serving ./site at http://127.0.0.1:3000/",
-    });
+    expect(written.at(-1)).toEqual(["output", "Serving ./site at http://127.0.0.1:3000/"]);
     expect(() => commanding.announce({ directory: "./site", host: "127.0.0.1", port: 0 })).toThrow(InvalidReport);
 
     expect(() => commanding.say({ text: 1 as unknown as string })).toThrow(InvalidReport);
     expect(() => commanding.summarize({ pages: -1, files: 0, written: 0, replaced: 0, kept: 0, removed: 0 }))
       .toThrow(InvalidReport);
+  });
+
+  test("a process hold releases its listeners on the operator's stop request", async () => {
+    let stop: ((reason: "interrupt" | "terminate") => void) | undefined;
+    let listening = 0;
+    const commanding = new CommandingConcept(
+      () => {},
+      (ended) => {
+        stop = ended;
+        listening += 1;
+        return () => {
+          listening -= 1;
+        };
+      },
+    );
+
+    const holding = commanding.hold();
+    await Promise.resolve();
+    expect(commanding._holding()).toEqual({ holding: 1 });
+    expect(listening).toBe(1);
+    stop!("interrupt");
+    const held = await holding;
+    expect(commanding._hold({ hold: held.hold })).toEqual([{ state: "released", reason: "interrupt" }]);
+    expect(commanding._holding()).toEqual({ holding: 0 });
+    expect(listening).toBe(0);
+  });
+
+  test("sets a validated process exit status", () => {
+    const { commanding } = recorded();
+    const previous = process.exitCode;
+    try {
+      expect(commanding.exit({ code: 1 })).toEqual({ code: 1 });
+      expect(process.exitCode).toBe(1);
+      expect(() => commanding.exit({ code: 256 })).toThrow(InvalidReport);
+    } finally {
+      process.exitCode = previous;
+    }
   });
 
   test("registry exposes every refusal and query promise", () => {
@@ -110,8 +133,8 @@ describe("Commanding", () => {
       "INVALID_USAGE",
     ]);
     expect(registration.specification.queries.map(({ name, promise }) => [name, promise])).toEqual([
-      ["_request", "optional"],
-      ["_reports", "many"],
+      ["_hold", "optional"],
+      ["_holding", "one"],
       ["_usage", "one"],
       ["_misuse", "one"],
     ]);

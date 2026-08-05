@@ -2,18 +2,20 @@
 
 ## Purpose
 
-Keep files in named trees and say whether saving a file changed its contents.
+Keep authoritative named byte trees and replace a host-backed tree only after
+its complete readable contents are known, so readers never observe a partial
+import.
 
 ## Principle
 
-Ada opens a tree called notes and saves a page and a picture in it. Reading the
-page gives back the exact bytes she saved, the same text when those bytes are
-UTF-8, and a stable fingerprint. Saving the same bytes reports no change;
-saving different bytes keeps the same file identity and reports a change.
-Listings have one predictable path order. The page can find the picture from a
-link such as `./picture.png`, but a link cannot climb outside the tree. Removing
-the page makes later lookups miss it, and removing it again is refused. A second
-named tree remains separate.
+Ada loads a host directory called notes. Reading its page gives back the exact
+bytes loaded, the same text when those bytes are UTF-8, and a stable
+fingerprint. She changes one file, removes another, and loads notes again; the
+surviving file keeps its identity, the omitted file disappears, and readers see
+the new tree only after the whole load succeeds. A later load encounters a
+symbolic link and reports a problem without changing the preceding tree. The
+page can find a picture from `./picture.png`, but a link cannot climb outside
+the logical tree.
 
 ## State
 
@@ -62,6 +64,13 @@ Optional and many queries answer no rows for unknown identities, unknown roots,
 or non-canonical lookup paths. Pure application computations own path joining,
 directory selection, names, and relative-path projection under the same grammar.
 
+Host paths are action inputs, never owned state. `loadFile` and `loadTree` read
+all candidate bytes before replacing a root. A reported host problem leaves the
+preceding root unchanged, and a failed first load leaves it absent. The committed
+bytes are exactly those read during one traversal; concurrent host mutation may
+produce a reported problem or a mixed-time capture, so Filing does not claim a
+filesystem-wide snapshot or durable containment capability.
+
 Resolution interprets an address as a URI reference relative to the source
 file's directory and never crosses roots. Percent-encoded path segments are
 decoded as UTF-8; encoded separators and malformed encodings are invalid. `.`
@@ -76,6 +85,32 @@ ends at `.` or `..` does not name a file and is invalid. `_resolution` reports
 ## Actions
 
 ```actions
+loadFile (name: Name, source: HostPath, path: Path) : return (status: Status, root: OptionalRoot, file: OptionalFile, digest: OptionalDigest, count: OptionalNumber, changed: OptionalFlag, code: OptionalCode, detail: OptionalText)
+  where name or source is not well-formed, non-empty text
+  then
+    refuse INVALID_SOURCE "A host load needs well-formed, non-empty name and source text."
+  where path climbs outside root
+  then
+    refuse PATH_LEAVES_ROOT "A file path must stay inside its root."
+  where path is not canonical
+  then
+    refuse INVALID_PATH "A file path must use the canonical portable form."
+  where the host file is missing, unreadable, symbolic, or not ordinary
+  then
+    return status problem with a stable code and detail, leaving the named tree unchanged
+  then
+    replace the named tree with that one file and return status loaded, its identities, digest, count, and change flag
+
+loadTree (name: Name, directory: HostPath) : return (status: Status, root: OptionalRoot, count: OptionalNumber, changed: OptionalFlag, code: OptionalCode, detail: OptionalText)
+  where name or directory is not well-formed, non-empty text
+  then
+    refuse INVALID_SOURCE "A host load needs well-formed, non-empty name and source text."
+  where the directory is missing, unreadable, symbolic, or not a directory, or any descendant is unreadable, unnameable, symbolic, or not ordinary
+  then
+    return status problem with a stable code and detail, leaving the named tree unchanged
+  then
+    replace the named tree with every read file and return status loaded, its root, count, and change flag
+
 open (name: Name) : return (root: Root)
   where some root has name
   then
@@ -147,7 +182,8 @@ _resolve (file: File, address: Address) : optional (target: File, path: Path)
 _resolution (file: File, address: Address) : one (status: ResolutionStatus)
 ```
 
-Filing owns named byte trees, their strict UTF-8 view, their logical path
-syntax, and relative lookup within a tree. It does not choose which files are
-text, infer media types, interpret a file's meaning, decide whether to publish
-it, or decide how a resolution status should be reported to a person.
+Filing owns named byte trees, atomic host-load replacement, their strict UTF-8
+view, their logical path syntax, and relative lookup within a tree. It does not
+choose which host locations matter, claim that a mutable host traversal is one
+instantaneous snapshot, interpret a file's meaning, decide whether to publish
+it, or decide how a load problem should be reported to a person.

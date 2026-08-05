@@ -41,17 +41,20 @@ export class InvalidReport extends Error {
 
 type Name = "help" | "build" | "watch" | "develop" | "inspect";
 type Stream = "output" | "error";
-type RequestRecord = {
-  request: string;
+type Reason = "interrupt" | "terminate";
+type Interpreted = {
   name: Name;
   directory: string;
   destination: string | null;
   target: string | null;
   port: number | null;
 };
-type ReportRecord = { report: string; stream: Stream; text: string };
+type HoldRecord = { hold: string; released: boolean; reason: Reason | null };
 
-type Interpreted = Omit<RequestRecord, "request">;
+const STOP_REQUESTS: readonly (readonly [NodeJS.Signals, Reason])[] = [
+  ["SIGINT", "interrupt"],
+  ["SIGTERM", "terminate"],
+];
 
 function plural(count: number, noun: string): string {
   return count === 1 ? noun : `${noun}s`;
@@ -112,24 +115,32 @@ function interpretArguments(args: readonly string[]): Interpreted | undefined {
 
 /** Read one operator's command line, and answer that operator on their own streams. */
 export class CommandingConcept {
-  readonly #requests = new Map<string, RequestRecord>();
-  readonly #reports: ReportRecord[] = [];
+  readonly #holds = new Map<string, HoldRecord>();
 
   constructor(
     private readonly write: (stream: Stream, text: string) => void = (stream, text) => {
       if (stream === "output") console.log(text);
       else console.error(text);
     },
+    private readonly listen: (ended: (reason: Reason) => void) => () => void = (ended) => {
+      const handlers = STOP_REQUESTS.map(([signal, reason]) => {
+        const handler = (): void => ended(reason);
+        process.once(signal, handler);
+        return () => process.off(signal, handler);
+      });
+      return () => {
+        for (const stop of handlers) stop();
+      };
+    },
   ) {}
 
-  interpret({ arguments: args }: { arguments: readonly string[] }) {
+  interpret({ arguments: supplied }: { arguments: readonly string[] | null }) {
+    const args = supplied ?? process.argv.slice(2);
     if (!isArguments(args)) throw new InvalidArguments();
     const interpreted = interpretArguments(args);
     if (interpreted === undefined) throw new InvalidUsage();
 
-    const record = { request: `request:${this.#requests.size + 1}`, ...interpreted };
-    this.#requests.set(record.request, record);
-    return { ...record };
+    return { ...interpreted };
   }
 
   summarize(
@@ -163,23 +174,44 @@ export class CommandingConcept {
     return this.#report("error", text);
   }
 
+  async hold(): Promise<{ hold: string; reason: Reason }> {
+    const record: HoldRecord = { hold: `hold:${this.#holds.size + 1}`, released: false, reason: null };
+    this.#holds.set(record.hold, record);
+    let stop: (() => void) | undefined;
+    try {
+      const reason = await new Promise<Reason>((ended) => {
+        stop = this.listen(ended);
+      });
+      record.released = true;
+      record.reason = reason;
+      return { hold: record.hold, reason };
+    } catch (error) {
+      this.#holds.delete(record.hold);
+      throw error;
+    } finally {
+      stop?.();
+    }
+  }
+
+  exit({ code }: { code: number }) {
+    if (!Number.isSafeInteger(code) || code < 0 || code > 255) throw new InvalidReport();
+    process.exitCode = code;
+    return { code };
+  }
+
   #report(stream: Stream, text: string) {
     if (!isText(text)) throw new InvalidReport();
-    const record = { report: `report:${this.#reports.length + 1}`, stream, text };
-    this.#reports.push(record);
     this.write(stream, text);
-    return { report: record.report };
+    return {};
   }
 
-  _request({ request: identity }: { request: string }): Interpreted[] {
-    const record = this.#requests.get(identity);
-    if (record === undefined) return [];
-    const { request: _identity, ...fields } = record;
-    return [fields];
+  _hold({ hold }: { hold: string }): { state: "holding" | "released"; reason: Reason | null }[] {
+    const record = this.#holds.get(hold);
+    return record === undefined ? [] : [{ state: record.released ? "released" : "holding", reason: record.reason }];
   }
 
-  _reports(): ReportRecord[] {
-    return this.#reports.map((record) => ({ ...record }));
+  _holding(): { holding: number } {
+    return { holding: [...this.#holds.values()].filter(({ released }) => !released).length };
   }
 
   _usage(): { usage: string } {
