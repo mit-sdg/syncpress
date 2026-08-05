@@ -2,6 +2,7 @@ const UNKNOWN_SEVERITY_MESSAGE = "A diagnostic is an error or a warning.";
 const INVALID_TEXT_MESSAGE = "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text.";
 const INVALID_LOCATION_MESSAGE = "A location needs a source; line and column must be positive safe integers, and a column needs a line.";
 const DIAGNOSTIC_NOT_FOUND_MESSAGE = "There is no such diagnostic.";
+const NO_DIAGNOSTICS = "No diagnostics were reported.";
 
 export class UnknownSeverity extends Error {
   constructor() {
@@ -299,6 +300,21 @@ export class DiagnosingConcept {
       .filter((relation) => relation.diagnostic === diagnostic)
       .sort(compareRelation)
       .map(({ source, line, column, note }) => ({ source, line, column, note }));
+  }
+
+  _rendered(): { text: string } {
+    const diagnostics = this._all();
+    if (diagnostics.length === 0) return { text: NO_DIAGNOSTICS };
+    return {
+      text: diagnostics
+        .map(({ severity, code, message, source, line, column }) => {
+          const at = source === undefined
+            ? ""
+            : ` ${source}${line === undefined ? "" : `:${line}${column === undefined ? "" : `:${column}`}`}`;
+          return `${severity.toUpperCase()} ${code}${at}: ${message}`;
+        })
+        .join("\n"),
+    };
   }
 
   _clean(): { clean: boolean } {

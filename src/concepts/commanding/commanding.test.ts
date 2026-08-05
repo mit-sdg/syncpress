@@ -91,6 +91,13 @@ describe("Commanding", () => {
     ]);
     expect(commanding._reports().map(({ stream }) => stream)).toEqual(["output", "error", "output", "output"]);
 
+    commanding.announce({ directory: "./site", host: "127.0.0.1", port: 3000 });
+    expect(commanding._reports().at(-1)).toMatchObject({
+      stream: "output",
+      text: "Serving ./site at http://127.0.0.1:3000/",
+    });
+    expect(() => commanding.announce({ directory: "./site", host: "127.0.0.1", port: 0 })).toThrow(InvalidReport);
+
     expect(() => commanding.say({ text: 1 as unknown as string })).toThrow(InvalidReport);
     expect(() => commanding.summarize({ pages: -1, files: 0, written: 0, replaced: 0, kept: 0, removed: 0 }))
       .toThrow(InvalidReport);

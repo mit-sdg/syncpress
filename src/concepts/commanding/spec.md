@@ -15,9 +15,9 @@ the usage text. She runs `build ./site out` and gets a build request rooted at
 request on port 8080 with the default directory. She runs `inspect /posts/first/`
 and gets an inspect request for that target. She runs `build a b c` and is
 refused, with the usage text attached. Reporting a line puts it on the operator's
-ordinary output; summarizing a run puts one counted sentence there; warning them
-puts it on their error output, and all three are remembered in the order they
-were said.
+ordinary output; summarizing a run puts one counted sentence there; announcing a
+served directory puts its address there; warning them puts it on their error
+output, and all of them are remembered in the order they were said.
 
 ## State
 
@@ -84,6 +84,14 @@ summarize (pages: Number, files: Number, written: Number, replaced: Number, kept
   then
     put one sentence counting those pages, input files, and reconciled artifacts on the
     operator's ordinary output, remember it, and return the report and its text
+
+announce (directory: Text, host: Text, port: Number) : return (report: Report)
+  where directory or host is not well-formed text, or port is not a safe integer between 1 and 65535
+  then
+    refuse INVALID_REPORT "A report must be well-formed text."
+  then
+    put one line naming where that directory is being served on the operator's ordinary
+    output, remember it, and return the report
 
 warn (text: Text) : return (report: Report)
   where text is not well-formed text

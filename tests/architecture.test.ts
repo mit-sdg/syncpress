@@ -40,3 +40,30 @@ test("host adapters never read concept state or import implementations", async (
     expect(source, file).not.toContain("@syncpress/concepts/");
   }
 });
+
+/**
+ * Every interaction with the host — its filesystem, network, process, and
+ * clock — belongs to the concept that owns it. A host adapter only assembles an
+ * application and invokes its endpoints.
+ */
+test("host adapters reach the host only through concepts", async () => {
+  for (const file of await typescriptFiles(join(root, "src", "edge"))) {
+    const source = await readFile(file, "utf8");
+    expect(source, file).not.toMatch(/from\s+["']node:/);
+    expect(source, file).not.toMatch(/\bprocess\.(?!argv\b)/);
+    expect(source, file).not.toMatch(/\bsetTimeout\b|\bsetInterval\b/);
+  }
+});
+
+test("composition asks concepts for host work instead of doing it", async () => {
+  for (const file of await typescriptFiles(join(root, "src", "compositions"))) {
+    const source = await readFile(file, "utf8");
+    expect(source, file).not.toMatch(/from\s+["']node:/);
+  }
+});
+
+/** Pure calculations stay pure, so composition can reach them through `compute`. */
+test("computations import nothing from the host", async () => {
+  const source = await readFile(join(root, "src", "computations.ts"), "utf8");
+  expect(source).not.toMatch(/from\s+["']node:/);
+});

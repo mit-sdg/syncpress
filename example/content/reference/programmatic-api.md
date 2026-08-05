@@ -6,8 +6,8 @@ order: 8
 topics: [reference, commands, site-building]
 ---
 
-The public package root exposes the same filesystem edge used by the
-`syncpress` executable. Import these functions from `@mit-sdg/syncpress`.
+The public package root exposes the same operations the `syncpress` executable
+uses. Import these functions from `@mit-sdg/syncpress`.
 
 The package is ESM-only. Import it from an ES module; CommonJS `require()` is
 not supported.

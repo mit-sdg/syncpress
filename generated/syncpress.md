@@ -69,12 +69,13 @@ the usage text. She runs `build ./site out` and gets a build request rooted at
 request on port 8080 with the default directory. She runs `inspect /posts/first/`
 and gets an inspect request for that target. She runs `build a b c` and is
 refused, with the usage text attached. Reporting a line puts it on the operator's
-ordinary output; summarizing a run puts one counted sentence there; warning them
-puts it on their error output, and all three are remembered in the order they
-were said.
+ordinary output; summarizing a run puts one counted sentence there; announcing a
+served directory puts its address there; warning them puts it on their error
+output, and all of them are remembered in the order they were said.
 
 Actions:
 
+- `announce (directory, host, port)` — may refuse `INVALID_REPORT`
 - `interpret (arguments)` — may refuse `INVALID_ARGUMENTS`, `INVALID_USAGE`
 - `say (text)` — may refuse `INVALID_REPORT`
 - `summarize (files, kept, pages, removed, replaced, written)` — may refuse `INVALID_REPORT`
@@ -218,6 +219,7 @@ Queries (standing questions the state answers):
 - `_errors (…)` — promises any number of rows
 - `_for (source)` — promises any number of rows
 - `_related (diagnostic)` — promises any number of rows
+- `_rendered (…)` — promises exactly one row
 
 ### Documenting
 
@@ -973,6 +975,13 @@ Former "the deployment entries of catalog (catalog)" — inputs (catalog); bindi
 ```
 
 ```former
+Former "the diagnosed text" — inputs (); bindings (text); promises exactly one record — forms:
+  a record of
+    where Diagnosing._rendered () has (text)
+    text
+```
+
+```former
 Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, rendering, renderingPath, renderingProfile, renderingTemplate, renderingStage, bodySource, layoutSource, historicalRendering, historicalPath, historicalProfile, historicalTemplate, historicalStage, state, reason, input, outputPath, digest, medium, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
   a record of
     claims: each Routing._claims () has (address, owner)
@@ -1106,6 +1115,7 @@ Former "the site build summary" — inputs (); bindings (owner, file, policy, de
     where whether Governing._policy () has (policy)
     where whether view "the publication place" has (destination)
     destination
+    diagnosis: former "the diagnosed text"
     diagnostics: each Diagnosing._all () has (code, column, line, message, severity, source)
       form a record of
         code
@@ -1306,6 +1316,24 @@ where
   Commanding._misuse () has (misuse)
 then
   RequestBoundary.respond (misuse, requestId)
+```
+
+### fullSite.AnnounceServer
+
+```reaction
+when RequestBoundary.request (directory, host, path: "/cli/serving", port, requestId)
+then
+  Commanding.announce (directory, host, port)
+```
+
+### fullSite.AnnounceServer#2
+
+```reaction
+when Commanding.announce (directory, host, port), asked by fullSite.AnnounceServer
+where
+  earlier, RequestBoundary.request (directory, host, path: "/cli/serving", port, requestId)
+then
+  RequestBoundary.respond (requestId)
 ```
 
 ### fullSite.AnnounceUsage
@@ -3886,6 +3914,7 @@ not listed here have no explicit input contract.
 - `/cli/announce` — requires `files`, `kept`, `pages`, `removed`, `replaced`, `written`
 - `/cli/interpret` — requires `arguments`
 - `/cli/say` — requires `text`
+- `/cli/serving` — requires `directory`, `host`, `port`
 - `/cli/warn` — requires `text`
 - `/serve/close` — requires `server`
 - `/serve/open` — requires `host`, `port`

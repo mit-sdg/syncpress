@@ -43,6 +43,12 @@ export const SayToOperator = endpoint("/cli/say", ({ text }) =>
     .then(respond({})),
 );
 
+export const AnnounceServer = endpoint("/cli/serving", ({ directory, host, port }) =>
+  receive({ directory, host, port })
+    .then(Commanding.announce({ directory, host, port }).responds({}))
+    .then(respond({})),
+);
+
 export const WarnOperator = endpoint("/cli/warn", ({ text }) =>
   receive({ text })
     .then(Commanding.warn({ text }).responds({}))

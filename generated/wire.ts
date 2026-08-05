@@ -61,6 +61,15 @@ export type SyncpressWire = {
     output: Record<string, never>;
     error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
   };
+  "/cli/serving": {
+    input: {
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["announce"]>[0], ["directory"]>>;
+      "host": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["announce"]>[0], ["host"]>>;
+      "port": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["announce"]>[0], ["port"]>>;
+    };
+    output: Record<string, never>;
+    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
+  };
   "/cli/usage": {
     input: Record<string, never>;
     output: Record<string, never>;
@@ -113,6 +122,9 @@ export type SyncpressWire = {
       "replaced": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["replaced"]>>;
       "summary": {
         "destination": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Locating"]["_place"]>>>, ["real"]>> | null;
+        "diagnosis": {
+          "text": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_rendered"]>>>, ["text"]>>;
+        };
         "diagnostics": {
           "code": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["code"]>>;
           "column": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["column"]>>;
@@ -132,6 +144,9 @@ export type SyncpressWire = {
       "replaced": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["replaced"]>>;
       "summary": {
         "destination": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Locating"]["_place"]>>>, ["real"]>> | null;
+        "diagnosis": {
+          "text": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_rendered"]>>>, ["text"]>>;
+        };
         "diagnostics": {
           "code": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["code"]>>;
           "column": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["column"]>>;
@@ -245,6 +260,9 @@ export type SyncpressWire = {
     output: {
       "summary": {
         "destination": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Locating"]["_place"]>>>, ["real"]>> | null;
+        "diagnosis": {
+          "text": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_rendered"]>>>, ["text"]>>;
+        };
         "diagnostics": {
           "code": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["code"]>>;
           "column": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["column"]>>;

@@ -11,7 +11,7 @@ build:
 
 <h2 id="build-lifecycle">Design overview</h2>
 
-Syncpress models a site build as a finite synchronization job. The filesystem edge imports declared facts, the concept set establishes domain invariants, and composition derives publication work across specialized concepts.
+Syncpress models a site build as a finite synchronization job. Concepts own every fact and every effect, including the host ones; composition derives publication work across them; and the package root is a thin adapter that assembles an application and asks it for one build, inspection, watch, or server.
 
 This page describes the current design for readers familiar with concept design and sync-engine composition. The user guide defines the package interface.
 
@@ -87,15 +87,15 @@ Per-page commits establish intentions inside Emitting. The destination changes d
 - deployment work completed; and
 - every routed owner has a current Depending result.
 
-This gate is defined in [`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts). [`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) invokes that endpoint after the final quiescence barrier. Separate page attempts let independent failures accumulate diagnostics while whole-tree reconciliation preserves one coherent destination.
+This gate is defined in [`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts), as the branch `/site/build` takes at the settlement frontier where its phase job reaches a terminal state. Separate page attempts let independent failures accumulate diagnostics while whole-tree reconciliation preserves one coherent destination.
 
 [Operations and diagnostics](./reference/operations.md#build) describes the filesystem failure limits of the final rename sequence.
 
-## The host remains narrow
+## Host work belongs to concepts
 
-[`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) owns operating-system work: validating project boundaries, reading directory entries, encoding bytes for the application boundary, waiting for quiescence, and coordinating destination access. The `/site/stage` endpoint declaratively opens Filing roots and places decoded bytes; computations and domain concepts retain path projection, template interpretation, and publication eligibility.
+Every interaction with the operating system is owned by the concept whose purpose it is. [Locating](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/locating/spec.md) records, grounds, and resolves host locations and reports containment. [Scanning](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/scanning/spec.md) reads ordinary files from host directories. [Emitting](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/emitting/spec.md) writes the destination tree. [Watching](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/watching/spec.md) reports settled bursts of change, [Serving](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/serving/spec.md) answers requests from a published directory, [Commanding](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/commanding/spec.md) reads the command line and answers the operator, and [Attending](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/attending/spec.md) holds a process open until that operator stops it.
 
-[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The host starts the Phasing concept through that assembly, while staging, configuration, reconciliation, summaries, and inspection cross the protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts). Deferred phase reactions keep the complete build in one causal flow whose root action settles only after the final frontier.
+`src/edge/` therefore contains no filesystem, network, or process work of its own: each function there assembles an application through [`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) and invokes endpoints typed by generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts). A repository test enforces that boundary. Deferred phase reactions keep a complete build in one causal flow, so `/site/build` answers only once its job reaches a terminal state.
 
 ## Selected composition paths
 

@@ -144,6 +144,7 @@ _all () : many (diagnostic: Diagnostic, scope: OptionalScope, severity: Severity
 _errors () : many (diagnostic: Diagnostic, scope: OptionalScope, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
 _for (source: OptionalSource) : many (diagnostic: Diagnostic, scope: OptionalScope, severity: Severity, code: Code, message: Text, line: OptionalNumber, column: OptionalNumber)
 _related (diagnostic: Diagnostic) : many (source: Source, line: OptionalNumber, column: OptionalNumber, note: Text)
+_rendered () : one (text: Text)
 _clean () : one (clean: Flag)
 ```
 
@@ -162,6 +163,11 @@ order independent of reporting order.
 `_errors` and `_for` preserve the corresponding order from `_all`. `_related`
 orders by source in ascending UTF-8 byte order, then line, column, and note, with
 missing positions first. Its uniqueness key makes that order total too.
+
+`_rendered` writes every standing diagnostic as one line each, in `_all` order:
+the upper-case severity, the code, the source and position when there is one,
+and the message. It answers one fixed sentence when nothing stands, so a caller
+always has something to show a person.
 
 `_clean` always returns exactly one row. It is true when no error stands, even if
 warnings stand, and false otherwise. A caller may use that level as a gate, but

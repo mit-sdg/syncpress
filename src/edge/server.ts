@@ -1,15 +1,10 @@
-import { createSyncpressRuntime, type Gateway } from "./application.ts";
+import { answer, createSyncpressRuntime, type Gateway } from "./application.ts";
 import { watchSite, type SiteWatcher } from "./watch.ts";
 
 export type DevelopmentServer = { host: string; port: number; close(): Promise<void> };
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 3000;
-
-function answer<T>(result: { ok: true; value: T } | { ok: false; error: unknown }, context: string): T {
-  if (!result.ok) throw new Error(`${context}: ${JSON.stringify(result.error)}`);
-  return result.value;
-}
 
 /** Serve only reconciled output, and tell connected browsers after each successful rebuild. */
 export async function serveSite(

@@ -63,11 +63,17 @@ The queue gives generated route claims deterministic priority and lets later art
 
 Serial deployment reduces parallel generation and makes route and output collision results independent of reaction scheduling.
 
-## Reconciliation is an endpoint alternative
+## One request is one build
 
-[`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts) centralizes the publication predicate by selecting among finished-and-clean, incomplete, failed, unsettled, deployment-incomplete, and diagnosed-error alternatives.
+[`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts) receives `/site/build`, records what the caller wants through Locating, declares and starts the phase sequence, and then holds its answer for a settlement frontier. Its conditions are re-read at every frontier of that flow, so the answer is chosen at the first frontier where the job has reached a terminal state.
 
-The finished-and-clean branch asks Emitting to reconcile and returns file counts. Every other branch returns a build error and leaves the destination unchanged. The host relies on this endpoint for the publication predicate.
+That choice is the publication predicate: the finished-and-clean branch asks Emitting to reconcile and returns file counts, while the errored, incomplete, and failed branches return a build error and leave the destination unchanged. Nothing outside the application decides when a build may publish.
+
+## Staging is a phase, not a caller
+
+[`src/compositions/staging.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/staging.ts) brings the host project into the model in two phases. The locate phase grounds the recorded site directory, admits `site.yaml` beside it, reads it through Scanning, files it, and assesses it. The stage phase admits every configured location, surveys the ones that stay inside the site, reads their entries, and files them under matching Filing roots.
+
+Every host refusal along that path becomes a Diagnosing report rather than a failed request, so an unreadable directory, an escaping symbolic link, and an unparsable configuration all fail the same way: the build finishes, the publication predicate refuses it, and the caller receives every reason at once.
 
 ## Reading the complete assembly
 

@@ -32,6 +32,10 @@ export const PublicationPlace = view("the publication place", (_inputs, { place,
   ),
 ]).optional();
 
+/** Every standing diagnostic, written the way Diagnosing writes them. */
+const DiagnosedText = former("the diagnosed text", (_inputs, { text }) =>
+  where(Diagnosing._rendered({}).is({ text })).form({ text }));
+
 export const InspectionOwner = view(
   "the inspection owner of target (target)",
   ({ target }, { owner }, { root }) => [
@@ -50,6 +54,7 @@ export const SiteBuildSummary = former(
       whether(Governing._policy({}).is({ policy })),
       whether(PublicationPlace({}).is({ destination })),
     ).form({
+      diagnosis: DiagnosedText({}),
       pages: each(Routing._claims({}).is({ owner })).count(),
       files: each(Filing._files({}).is({ file })).count(),
       policy,

@@ -1,5 +1,4 @@
-import { isAbsolute, relative, resolve, sep } from "node:path";
-import { createSyncpressRuntime, type Gateway } from "./application.ts";
+import { answer, BATCH_TIMEOUT_MS, createSyncpressRuntime, reason, type Gateway } from "./application.ts";
 
 type Diagnostic = {
   severity: "error" | "warning";
@@ -14,30 +13,12 @@ type FormedDiagnostic = Omit<Diagnostic, "source" | "line" | "column"> & {
   line: number | null;
   column: number | null;
 };
-type Summary = { pages: number; files: number; diagnostics: FormedDiagnostic[] };
-
-/**
- * A build or inspection is a batch operation whose answer waits for the work
- * rather than for a clock, so it uses the largest wait the boundary accepts.
- */
-const BATCH_TIMEOUT_MS = 2_147_483_647;
-
-/** Whether one host path is at or below another. */
-export function containsPath(parent: string, child: string): boolean {
-  const path = relative(parent, child);
-  return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
-}
-
-function formatDiagnostics(diagnostics: readonly Diagnostic[]): string {
-  if (diagnostics.length === 0) return "No diagnostics were reported.";
-  return diagnostics
-    .map(({ severity, code, message, source, line, column }) => {
-      const location =
-        source === undefined ? "" : ` ${source}${line === undefined ? "" : `:${line}${column === undefined ? "" : `:${column}`}`}`;
-      return `${severity.toUpperCase()} ${code}${location}: ${message}`;
-    })
-    .join("\n");
-}
+type Summary = {
+  pages: number;
+  files: number;
+  diagnosis: { text: string };
+  diagnostics: FormedDiagnostic[];
+};
 
 function normalizeDiagnostics(diagnostics: readonly FormedDiagnostic[]): Diagnostic[] {
   return diagnostics.map(({ source, line, column, ...diagnostic }) => ({
@@ -48,31 +29,24 @@ function normalizeDiagnostics(diagnostics: readonly FormedDiagnostic[]): Diagnos
   }));
 }
 
-function reason(error: { kind: "domain"; value: unknown } | { kind: "framework"; code: string; detail?: string }): string {
-  if (error.kind !== "domain") return error.detail ?? error.code;
-  return typeof error.value === "string" ? error.value : JSON.stringify(error.value);
-}
-
 async function readSummary(gateway: Gateway): Promise<Summary> {
-  const summary = await gateway.invoke("/site/summary", {});
-  if (!summary.ok) throw new Error(`Could not read the site build summary: ${reason(summary.error)}`);
-  return summary.value.summary as unknown as Summary;
+  const read = answer(await gateway.invoke("/site/summary", {}), "Could not read the site build summary");
+  return read.summary as unknown as Summary;
 }
 
 /** The failure to raise: the answer the application gave, and every diagnostic that explains it. */
 async function refusal(gateway: Gateway, context: string, detail: string): Promise<Error> {
   await gateway.whenIdle();
-  const { diagnostics } = await readSummary(gateway);
-  return new Error(`${context}: ${detail}\n\nDiagnostics:\n${formatDiagnostics(normalizeDiagnostics(diagnostics))}`);
+  const { diagnosis } = await readSummary(gateway);
+  return new Error(`${context}: ${detail}\n\nDiagnostics:\n${diagnosis.text}`);
 }
 
 /** Build the project rooted at one host directory into one reconciled output tree. */
 export async function buildSite(projectDirectory = ".", destination?: string) {
   const { gateway } = createSyncpressRuntime();
-  const directory = resolve(projectDirectory);
   const built = await gateway.invoke(
     "/site/build",
-    destination === undefined ? { directory } : { directory, destination },
+    destination === undefined ? { directory: projectDirectory } : { directory: projectDirectory, destination },
     { timeoutMs: BATCH_TIMEOUT_MS },
   );
   if (!built.ok) throw await refusal(gateway, "Could not build the site", reason(built.error));
@@ -96,7 +70,7 @@ export async function inspectSite(projectDirectory: string, target: string) {
   const { gateway } = createSyncpressRuntime();
   const inspected = await gateway.invoke(
     "/site/inspect",
-    { directory: resolve(projectDirectory), target },
+    { directory: projectDirectory, target },
     { timeoutMs: BATCH_TIMEOUT_MS },
   );
   if (!inspected.ok) {

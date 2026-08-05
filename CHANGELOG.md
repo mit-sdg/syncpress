@@ -9,6 +9,18 @@ refactoring appear when documented behavior changes.
 
 - Upgraded to sync engine beta 5 and moved phase progression from the host loop
   into deferred reactions at causal-flow settlement frontiers.
+- Moved every remaining host interaction into the concept that owns it. Reading a
+  project, resolving and containing host locations, observing change, serving
+  published output, reading the command line, and holding a process open until
+  it is stopped are now the Scanning, Locating, Watching, Serving, Commanding,
+  and Attending concepts. A build or inspection is one request that stages,
+  runs, and publishes inside the application, so `buildSite` and `inspectSite`
+  no longer sequence that work from outside.
+- Report project problems as build diagnostics. A missing site directory, an
+  unreadable configuration, a source directory that escapes the site through a
+  symbolic link, and an output directory that overlaps a source are now reported
+  with every other diagnostic instead of ending the run early, and they still
+  leave the previous output destination unchanged.
 
 ### Documentation
 

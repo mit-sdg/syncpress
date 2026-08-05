@@ -57,6 +57,10 @@ function plural(count: number, noun: string): string {
   return count === 1 ? noun : `${noun}s`;
 }
 
+function isPort(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= MAXIMUM_PORT;
+}
+
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();
 }
@@ -144,6 +148,11 @@ export class CommandingConcept {
     const text = `Built ${pages} ${plural(pages, "page")} from ${files} ${plural(files, "input file")} ` +
       `(${written} written, ${replaced} replaced, ${kept} kept, ${removed} removed).`;
     return { ...this.#report("output", text), text };
+  }
+
+  announce({ directory, host, port }: { directory: string; host: string; port: number }) {
+    if (!isText(directory) || !isText(host) || !isPort(port)) throw new InvalidReport();
+    return this.#report("output", `Serving ${directory} at http://${host}:${port}/`);
   }
 
   say({ text }: { text: string }) {

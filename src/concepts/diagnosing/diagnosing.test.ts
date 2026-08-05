@@ -286,6 +286,30 @@ test("clean is an exact one-row error gate and warnings do not close it", () => 
   expect(diagnosing._clean()).toEqual({ clean: true });
 });
 
+test("renders every standing diagnostic as one operator-readable line", () => {
+  const diagnosing = new DiagnosingConcept();
+  expect(diagnosing._rendered()).toEqual({ text: "No diagnostics were reported." });
+
+  diagnosing.report({ severity: "warning", code: "SLOW", message: "This build was slow." });
+  diagnosing.report({ severity: "error", code: "BROKEN", message: "This link is broken.", source: "index.md" });
+  diagnosing.report({
+    severity: "error",
+    code: "UNDEFINED_VARIABLE",
+    message: "This variable is not defined.",
+    source: "about.md",
+    line: 4,
+    column: 2,
+  });
+
+  expect(diagnosing._rendered().text).toBe(
+    [
+      "ERROR UNDEFINED_VARIABLE about.md:4:2: This variable is not defined.",
+      "ERROR BROKEN index.md: This link is broken.",
+      "WARNING SLOW: This build was slow.",
+    ].join("\n"),
+  );
+});
+
 test("registry exposes every declared refusal and exact query cardinality", async () => {
   expect(registeredDiagnosing.refusals).toEqual({
     UNKNOWN_SEVERITY: UnknownSeverity,
@@ -307,6 +331,7 @@ test("registry exposes every declared refusal and exact query cardinality", asyn
     ["_errors", "many"],
     ["_for", "many"],
     ["_related", "many"],
+    ["_rendered", "one"],
     ["_clean", "one"],
   ]);
 
