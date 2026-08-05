@@ -16,6 +16,8 @@ refactoring appear when documented behavior changes.
   and Attending concepts. A build or inspection is one request that stages,
   runs, and publishes inside the application, so `buildSite` and `inspectSite`
   no longer sequence that work from outside.
+- `syncpress dev` now names the site directory as it was written on the command
+  line rather than as an absolute path.
 - Report project problems as build diagnostics. A missing site directory, an
   unreadable configuration, a source directory that escapes the site through a
   symbolic link, and an output directory that overlaps a source are now reported
