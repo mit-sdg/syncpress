@@ -87,15 +87,15 @@ Per-page commits establish intentions inside Emitting. The destination changes d
 - deployment work completed; and
 - every routed owner has a current Depending result.
 
-This gate is defined in [`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts). [`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) then asks Emitting to install the prepared output tree. Separate page attempts let independent failures accumulate diagnostics while whole-tree reconciliation preserves one coherent destination.
+This gate is defined in [`src/compositions/endpoints.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/endpoints.ts). [`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) invokes that endpoint after the final quiescence barrier. Separate page attempts let independent failures accumulate diagnostics while whole-tree reconciliation preserves one coherent destination.
 
 [Operations and diagnostics](./reference/operations.md#build) describes the filesystem failure limits of the final rename sequence.
 
 ## The host remains narrow
 
-[`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) owns operating-system work: validating project boundaries, reading directory entries, staging bytes, waiting for quiescence, writing the prepared tree, and watching for changes. Domain concepts retain route derivation, template interpretation, and publication eligibility.
+[`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) owns operating-system work: validating project boundaries, reading directory entries, encoding bytes for the application boundary, waiting for quiescence, and coordinating destination access. The `/site/stage` endpoint declaratively opens Filing roots and places decoded bytes; computations and domain concepts retain path projection, template interpretation, and publication eligibility.
 
-[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The configure and reconcile protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts) bracket initialization and publication; the host also stages files, advances phases, and reads inspection state through runtime concept instances.
+[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The staging, configure, reconcile, summary, and inspection protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts) are the host's only application interface. The generic phase loop remains host-driven because each advance must wait for all reaction fan-out from the preceding barrier to become idle.
 
 ## Selected composition paths
 

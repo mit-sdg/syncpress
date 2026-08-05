@@ -63,25 +63,19 @@ Empty segments, dots, names such as `__proto__`, and `*` have no special
 meaning in an exact path. Read paths use strings for literal numeric indexes
 too.
 
-Alongside exact paths, `trusted` accepts one tagged structural declaration:
-`{ wildcard: ["collections", "*", "*", "excerpt"] }`. The exported
-`TRUSTED_COLLECTION_EXCERPTS` value is that declaration. It is the only
-wildcard form, and it means `collections/*/*/excerpt`: each collection's dense
-array of cards, then each card's own `excerpt`. An ordinary string array is
-always exact, so `["collections", "*", "*", "excerpt"]` still trusts only
-literal `*` members rather than acting as a wildcard.
+Alongside exact paths, `trusted` accepts a tagged wildcard declaration such as
+`{ wildcard: ["collections", "*", "*", "excerpt"] }`. An ordinary string
+array is always exact, so `["collections", "*", "*", "excerpt"]` still trusts
+only literal `*` members rather than acting as a wildcard.
 
 A structural declaration is an ordinary plain or null-prototype record with
 exactly its enumerable data `wildcard` member and no other members. Its path
-must be exactly the declaration above; prefixes, suffixes, other roots, and
-other wildcard layouts are invalid paths. For that declaration, the context
-and its `collections` value must be plain or null-prototype records,
-collections must have only enumerable own data members, each collection must
-be a standard dense array without extra members, and each card must be a plain
-or null-prototype record. A card without an own `excerpt` is skipped. A present
-excerpt must be an enumerable own string value. This fixed shape excludes
-inherited values, accessors, proxies, sparse or decorated arrays, and broad
-wildcard expansion.
+must be a nonempty dense string path containing at least one `*`. Each `*`
+ranges over enumerable own data members of a plain record or items of a dense
+standard array. Other segments read exact own properties. A missing or null
+final value is skipped; every selected present value must be a string. This
+excludes inherited values, accessors, proxies, sparse arrays, and decorated
+containers while keeping application trust policy outside Templating.
 
 All values written by Liquid output are HTML-escaped, replacing `&`, `<`, `>`,
 `"`, and `'`. Authored literal template text is not escaped. The only exemption
@@ -185,11 +179,15 @@ a set of Failures with
 
 At most one template has a name, one filling has a subject, and one rendering
 has a template and subject. At most one Failure has a subject.
+An optionally registered origin is the sole source allowed to replace its name.
 
 ## Actions
 
 ```actions
 define (name: Name, source: Text) : return (template: Template, changed: Flag)
+  where another origin owns name and source differs
+  then
+    refuse TEMPLATE_NAME_TAKEN "Another source already owns this template name."
   where source is not valid Liquid in the supported engine
   then
     refuse TEMPLATE_SYNTAX "This Liquid template cannot be parsed."
@@ -204,6 +202,22 @@ define (name: Name, source: Text) : return (template: Template, changed: Flag)
     replace any template with name and its direct metadata
     return template and changed true
 
+register (name: Name, source: Text, origin: Origin) : return (template: Template, changed: Flag)
+  where origin is not Text
+  then
+    refuse INVALID_TEMPLATE_ORIGIN "A template origin must be well-formed text."
+  where another origin owns name
+  then
+    refuse TEMPLATE_NAME_TAKEN "Another source already owns this template name."
+  where source is not valid Liquid in the supported engine
+  then
+    refuse TEMPLATE_SYNTAX "This Liquid template cannot be parsed."
+  where source uses a Liquid feature excluded above
+  then
+    refuse UNSUPPORTED_TEMPLATE "This Liquid feature is unsupported because its dependencies or escaping cannot be determined."
+  then
+    atomically claim name for origin, define or replace its source, and return template and changed
+
 forget (name: Name) : return (template: Template)
   where no template has name
   then
@@ -211,6 +225,7 @@ forget (name: Name) : return (template: Template)
   where some template has name
   then
     delete that template and renderings directly of it
+    release its registered origin if present
     return template
 
 fill (subject: Subject, source: Text, context: Values, trusted: Paths, sourceName: OptionalName, sourceLine: OptionalNumber) : return (filling: Filling, output: Text)
@@ -220,10 +235,10 @@ fill (subject: Subject, source: Text, context: Values, trusted: Paths, sourceNam
   where source uses a Liquid feature excluded above
   then
     refuse UNSUPPORTED_TEMPLATE "This Liquid feature is unsupported because its dependencies or escaping cannot be determined."
-  where a trusted entry is not an exact path or structural declaration as defined above
+  where a trusted entry is not an exact path or wildcard declaration as defined above
   then
     refuse INVALID_TRUSTED_PATH "A trusted path must contain one or more literal string segments."
-  where an exact trusted path or selected structural excerpt does not name an own string value
+  where an exact trusted path or selected wildcard value does not name an own string value
   then
     refuse INVALID_TRUSTED_VALUE "A trusted path must name a string in the supplied context."
   where some literal name in the source's tree is not defined
@@ -247,10 +262,10 @@ render (template: Template, subject: Subject, context: Values, trusted: Paths) :
   where template is not in Templates
   then
     refuse TEMPLATE_NOT_FOUND "There is no such template."
-  where a trusted entry is not an exact path or structural declaration as defined above
+  where a trusted entry is not an exact path or wildcard declaration as defined above
   then
     refuse INVALID_TRUSTED_PATH "A trusted path must contain one or more literal string segments."
-  where an exact trusted path or selected structural excerpt does not name an own string value
+  where an exact trusted path or selected wildcard value does not name an own string value
   then
     refuse INVALID_TRUSTED_VALUE "A trusted path must name a string in the supplied context."
   where some literal name in the template's tree is not defined

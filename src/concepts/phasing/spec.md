@@ -2,26 +2,29 @@
 
 ## Purpose
 
-Move a job through a named list of steps in order, so each step starts only
-after the earlier steps are done.
+Move a job through a named list of barriers in order, advancing only from the
+exact announced phase attempt so settlement retries cannot skip work.
 
 ## Principle
 
 Ada declares a sequence containing draft, review, and publish. Declaring the
-same sequence again reports no change. Two jobs start at draft and can move
-independently. One advances to review and then publish; advancing once more
-finishes it without announcing publish again, and another advance is refused.
-Ada abandons the other job with a reason, leaving it failed and unable to move.
+same sequence again reports no change. She starts one job at draft; a second job
+for that sequence is refused while it runs. Settling draft with its exact
+attempt announces review. Retrying that attempt returns review without
+announcing another transition, while another attempt is refused as stale. Ada
+settles review and publish, then may start a replacement job. A job in another
+sequence moves independently. She abandons that job with its current attempt
+and a reason, leaving it failed and unable to move.
 
 ## Values
 
 Text is a well-formed Unicode string. A phase plan is an ordinary dense list of
 Text values with no extra properties. A sequence has at least one phase, and a
-phase occurs at most once in its sequence. A Mode is `once` or `live`; Phasing
-carries the mode but does not give it behavior.
+phase occurs at most once in its sequence.
 
-The result of `advance` contains either the next Phase or null. Null means that
-the job has finished and, because it is not a Phase, cannot trigger phase work.
+A PhaseAttempt is the opaque identity of one announced phase of one job. The
+result of `advance` contains either the next Phase and its PhaseAttempt or null
+for both. Null means that the job has finished and cannot trigger phase work.
 
 ## State
 
@@ -34,15 +37,20 @@ a set of Jobs with
   a sequence Sequence
   a snapshot of its sequence's Phases
   a current phase Phase
+  a current phase attempt PhaseAttempt
   a start order Number
-  a mode Mode          -- once or live
   a state State        -- running, finished, or failed
   an optional reason Text
+  settled phase attempts and their returned next phase and attempt
+
+at most one running Job for each Sequence
+at most one latest Job for each Sequence
 ```
 
 A sequence identity is a deterministic encoding of its name. Redeclaration
 keeps that identity. A job snapshots the phases when it starts, so changing the
-named sequence affects later jobs but cannot redirect one already running.
+named sequence affects later jobs but cannot redirect one already running. A
+phase-attempt identity is a deterministic encoding of its job and phase index.
 
 ## Actions
 
@@ -68,61 +76,67 @@ declare (name: Name, phases: Phases) : return (sequence: Sequence, changed: Flag
     add or replace it, preserving its identity
     return sequence and changed true
 
-start (sequence: Sequence, mode: Mode) : return (job: Job, phase: Phase, mode: Mode)
+start (sequence: Sequence) : return (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt)
   where sequence is not a current sequence
   then
     refuse SEQUENCE_NOT_FOUND "There is no such sequence."
-  where mode is neither once nor live
+  where sequence already has a running job
   then
-    refuse UNKNOWN_MODE "A job mode must be once or live."
-  where sequence and mode are valid
+    refuse SEQUENCE_ACTIVE "This sequence already has a running job."
   then
     add a running job with a snapshot of the phases and their first phase current
-    return the new job, first phase, and mode
+    make it the latest job for the sequence
+    return the new job, sequence name, first phase, and its exact phase attempt
 
-advance (job: Job) : return (job: Job, phase: PhaseOrNull, mode: Mode)
+advance (job: Job, attempt: PhaseAttempt) : return (job: Job, name: Name, phase: PhaseOrNull, attempt: PhaseAttemptOrNull, transitioned: Flag)
+  where job is unknown, finished, or failed and attempt is not an already settled attempt
+  then
+    refuse JOB_NOT_RUNNING "This job is not running."
+  where attempt is not the running job's current attempt
+  then
+    refuse STALE_ATTEMPT "This phase attempt is not current."
+  where attempt was already settled
+  then
+    return its recorded next phase and attempt with transitioned false
+  where attempt is current and a later phase exists
+  then
+    make the next phase and its attempt current
+    record this settlement
+    return job, next phase and attempt, and transitioned true
+  where attempt is current at the last phase
+  then
+    make the job finished and record this settlement
+    return job, null phase and attempt, and transitioned true
+
+abandon (job: Job, attempt: PhaseAttempt, reason: Text) : return (job: Job, reason: Text)
   where job is not running
   then
     refuse JOB_NOT_RUNNING "This job is not running."
-  where job is running and has a later phase
+  where attempt is not the running job's current attempt
   then
-    make the next phase current
-    return job, that phase, and mode
-  where job is running at its last phase
-  then
-    make it finished
-    return job, null, and mode
-
-abandon (job: Job, reason: Text) : return (job: Job, reason: Text)
-  where job is not running
-  then
-    refuse JOB_NOT_RUNNING "This job is not running."
-  where job is running and reason is not Text
+    refuse STALE_ATTEMPT "This phase attempt is not current."
+  where reason is not Text
   then
     refuse INVALID_TEXT "Sequence names and failure reasons must be well-formed text."
-  where job is running and reason is Text
   then
-    make it failed with reason
-    return job and reason
+    make the job failed with reason and return job and reason
 ```
 
 ## Queries
 
 ```queries
-_job (job: Job) : optional (phase: Phase, state: State, mode: Mode)
-_running () : many (job: Job, phase: Phase, mode: Mode)
+_job (job: Job) : optional (sequence: Sequence, name: Name, phase: Phase, attempt: PhaseAttempt, state: State)
+_running (sequence: Sequence) : many (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt)
+_latest (sequence: Sequence) : optional (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt, state: State)
 _outcome (job: Job) : optional (state: State, reason: Text)
 ```
 
-`_job` is absent for an unknown job. `_running` lists running jobs in start
-order. `_outcome` is absent for an unknown or running job; a finished row omits
-`reason`, while a failed row includes it.
+`_job` is absent for an unknown job. `_running` lists the sequence's running job.
+`_latest` remains present after that job finishes or fails. `_outcome` is absent
+for an unknown or running job; a finished row omits `reason`, while a failed row
+includes it.
 
-Each successful `advance` is a transition, not an idempotent retry: it moves one
-phase or completes the last one. `declare` is idempotent for an equal plan.
-Starting always creates a new independent job.
-
-Phasing announces steps and records outcomes. It does not run step work, decide
-that work has settled, limit how many jobs may run, or cancel outside work. The
-caller advances only after the announced step has settled and owns any retry or
-single-job policy.
+Only a successful `advance` with `transitioned true` announces another phase.
+Retrying a settled attempt is observationally idempotent. Phasing records exact
+barrier settlement but does not run phase work or decide that outside work has
+settled; the caller reports settlement only after that work becomes quiescent.

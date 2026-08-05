@@ -14,8 +14,30 @@ export type FeedPolicy = {
   description?: string;
 };
 
+export type SiteValue = null | boolean | number | string | SiteValue[] | { [key: string]: SiteValue };
+
 export type SitePolicy = {
-  outputPath: string;
+  paths: {
+    content: string;
+    templates: string;
+    public: string;
+    assets: string;
+    output: string;
+  };
+  site: { [key: string]: SiteValue };
+  defaults: Array<{ index: number; match: string; values: { [key: string]: SiteValue } }>;
+  collections: Array<{
+    name: string;
+    match: string;
+    direction: "asc" | "desc";
+    sort: string | null;
+    condition:
+      | { test: "equals" | "contains"; field: string; value: SiteValue }
+      | { test: "exists"; field: string }
+      | null;
+  }>;
+  markdown: { extensions: string[]; raw: boolean; excerptSeparator: string };
+  images: { widths: number[]; formats: string[] };
   deploy: {
     nojekyll: boolean;
     requireNotFound: boolean;
@@ -82,7 +104,7 @@ export function watchSite(
   projectDirectory?: string,
   destination?: string,
   options?: {
-    onBuild?: (result: BuildResult) => void;
+    onBuild?: (result: BuildResult, outputDirectory: string) => void;
     onError?: (error: unknown) => void;
   },
 ): Promise<SiteWatcher>;

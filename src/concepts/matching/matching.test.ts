@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { syncpressComputations } from "../../computations.ts";
 import { MalformedPattern, MatchingConcept } from "./matching.ts";
 
-function matched(matching: MatchingConcept, pattern: string, path: string): boolean {
-  return matching._matches({ pattern, path }).matched;
+function matched(_matching: MatchingConcept, pattern: string, path: string): boolean {
+  return syncpressComputations.patternHasResult({ pattern, path, matched: true });
 }
 
 describe("Matching", () => {
-  test("its principle: an admitted selector selects only paths that fit it", () => {
+  test("its principle: a selector is admitted once under its exact text", () => {
     const matching = new MatchingConcept();
 
     expect(matching._compiled({ text: "posts/**/*.md" })).toEqual([]);
@@ -15,7 +16,6 @@ describe("Matching", () => {
     expect(matched(matching, "posts/**/*.md", "posts/compiler-design/index.md")).toBe(true);
     expect(matched(matching, "posts/**/*.md", "about/index.md")).toBe(false);
     expect(matched(matching, "posts/**/*.md", "posts/notes.txt")).toBe(false);
-    expect(matched(matching, "missing", "posts/index.md")).toBe(false);
   });
 
   test("compilation is idempotent and exact text is the pattern identity", () => {
@@ -25,8 +25,6 @@ describe("Matching", () => {
     expect(matching.compile({ text: "posts/**" })).toEqual({ pattern: "posts/**" });
     expect(matching._compiled({ text: "posts/**" })).toEqual([{ pattern: "posts/**" }]);
     expect(matching._compiled({ text: "./posts/**" })).toEqual([]);
-    expect(matched(matching, "./posts/**", "posts/entry.md")).toBe(false);
-
     expect(matching.compile({ text: "./posts/**" })).toEqual({ pattern: "./posts/**" });
     expect(matching._compiled({ text: "./posts/**" })).toEqual([{ pattern: "./posts/**" }]);
     expect(matched(matching, "posts/**", "posts/entry.md")).toBe(true);
@@ -49,7 +47,6 @@ describe("Matching", () => {
     ]) {
       expect(() => matching.compile({ text })).toThrow(MalformedPattern);
       expect(matching._compiled({ text })).toEqual([]);
-      expect(matched(matching, text, "posts/index.md")).toBe(false);
     }
 
     expect(matching._compiled({ text: "**/*.md" })).toEqual([{ pattern: "**/*.md" }]);

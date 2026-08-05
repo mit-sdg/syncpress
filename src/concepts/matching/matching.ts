@@ -2,7 +2,7 @@ import picomatch from "picomatch";
 
 export class MalformedPattern extends Error {}
 
-const matchOptions = {
+const globOptions = {
   basename: false,
   contains: false,
   debug: true,
@@ -21,28 +21,26 @@ const matchOptions = {
   windows: false,
 } as const;
 
-/** Admit reusable path selectors and answer matches under one stable glob contract. */
+function compileGlob(pattern: string): void {
+  const matcher = picomatch(pattern, globOptions, true);
+  if (matcher.state.quotes !== 0) throw new SyntaxError("Unterminated quoted run");
+}
+
+/** Admit reusable path selectors under one stable glob contract. */
 export class MatchingConcept {
-  readonly #patterns = new Map<string, (path: string) => boolean>();
+  readonly #patterns = new Set<string>();
 
   compile({ text }: { text: string }) {
     if (this.#patterns.has(text)) return { pattern: text };
 
-    let matcher: (path: string) => boolean;
     try {
-      const compiled = picomatch(text, matchOptions, true);
-      if (compiled.state.quotes !== 0) throw new SyntaxError("Unterminated quoted run");
-      matcher = compiled;
+      compileGlob(text);
     } catch {
       throw new MalformedPattern();
     }
 
-    this.#patterns.set(text, matcher);
+    this.#patterns.add(text);
     return { pattern: text };
-  }
-
-  _matches({ pattern, path }: { pattern: string; path: string }) {
-    return { matched: this.#patterns.get(pattern)?.(path) ?? false };
   }
 
   _compiled({ text }: { text: string }): { pattern: string }[] {

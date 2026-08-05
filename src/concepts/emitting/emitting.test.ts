@@ -7,7 +7,7 @@ import {
   AttemptExhausted,
   DestinationNotDirected,
   DestinationUnavailable,
-  EmittingConcept,
+  EmittingConcept as StrictEmittingConcept,
   InvalidClaim,
   InvalidContent,
   InvalidDestination,
@@ -18,11 +18,39 @@ import {
   PathContested,
   PathLeavesDestination,
   ReconciliationFailed,
+  StaleAttempt,
 } from "./emitting.ts";
 import { emitting as emittingRegistration } from "./registry.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (content: Uint8Array) => new TextDecoder().decode(content);
+
+class EmittingConcept extends StrictEmittingConcept {
+  readonly #open = new Map<string, number>();
+
+  begin(input: { producer: string }) {
+    const result = super.begin(input);
+    this.#open.set(input.producer, result.attempt);
+    return result;
+  }
+
+  intend(input: Parameters<StrictEmittingConcept["intend"]>[0]) {
+    const attempt = input.attempt ?? this.#open.get(input.producer);
+    return super.intend({ ...input, ...(attempt === undefined ? {} : { attempt }) });
+  }
+
+  commit(input: { producer: string; attempt?: unknown }) {
+    const result = super.commit({ ...input, attempt: input.attempt ?? this.#open.get(input.producer) });
+    this.#open.delete(input.producer);
+    return result;
+  }
+
+  abort(input: { producer: string; attempt?: unknown }) {
+    const result = super.abort({ ...input, attempt: input.attempt ?? this.#open.get(input.producer) });
+    this.#open.delete(input.producer);
+    return result;
+  }
+}
 
 test("its principle: complete attempts preserve the last valid artifact set", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "syncpress-emitting-"));
@@ -184,6 +212,7 @@ test("aborting releases staged reservations without changing active or emitted a
     const currentBefore = await stat(join(destination, "current.bin"));
     const entriesBefore = await readdir(destination);
     expect(emitting.begin({ producer: "owner" })).toEqual({ producer: "owner", attempt: 1 });
+    expect(emitting._open({ producer: "owner" })).toEqual([{ attempt: 1 }]);
     emitting.intend({ producer: "owner", path: "current.bin", content: bytes("replacement"), medium: "x/test" });
     emitting.intend({ producer: "owner", path: "reserved.bin", content: bytes("first"), medium: "x/test" });
     emitting.intend({ producer: "owner", path: "reserved.bin", content: bytes("second"), medium: "x/test" });
@@ -195,6 +224,7 @@ test("aborting releases staged reservations without changing active or emitted a
     expect(emitting.abort({ producer: "owner" })).toEqual({ producer: "owner", discarded: 2 });
 
     expect(emitting._attempt({ producer: "owner" })).toEqual([{ attempt: 1 }]);
+    expect(emitting._open({ producer: "owner" })).toEqual([]);
     expect(emitting._byProducer({ producer: "owner" })).toEqual(active);
     expect(emitting._producers({ path: "reserved.bin" })).toEqual([]);
     expect(emitting._pending()).toEqual([]);
@@ -218,6 +248,7 @@ test("aborting releases staged reservations without changing active or emitted a
     expect(emitting.begin({ producer: "owner" })).toEqual({ producer: "owner", attempt: 3 });
     expect(emitting.abort({ producer: "owner" })).toEqual({ producer: "owner", discarded: 0 });
     expect(emitting._attempt({ producer: "owner" })).toEqual([{ attempt: 3 }]);
+    expect(emitting._open({ producer: "owner" })).toEqual([]);
   } finally {
     await rm(temporary, { force: true, recursive: true });
   }
@@ -409,6 +440,19 @@ test("directing is non-destructive and failed tree preparation leaves the destin
   }
 });
 
+test("stale attempts cannot stage, commit, or abort a replacement", () => {
+  const emitting = new StrictEmittingConcept();
+  const first = emitting.begin({ producer: "page" });
+  const second = emitting.begin({ producer: "page" });
+
+  expect(() => emitting.intend({ producer: "page", attempt: first.attempt, path: "old", content: "old", medium: "text/plain" })).toThrow(StaleAttempt);
+  emitting.intend({ producer: "page", attempt: second.attempt, path: "new", content: "new", medium: "text/plain" });
+  expect(() => emitting.commit({ producer: "page", attempt: first.attempt })).toThrow(StaleAttempt);
+  expect(() => emitting.abort({ producer: "page", attempt: first.attempt })).toThrow(StaleAttempt);
+  emitting.commit({ producer: "page", attempt: second.attempt });
+  expect(emitting._byProducer({ producer: "page" })).toHaveLength(1);
+});
+
 test("registry exposes every refusal, query promise, and normative message", async () => {
   expect(emittingRegistration.refusals).toEqual({
     INVALID_CLAIM: InvalidClaim,
@@ -422,6 +466,7 @@ test("registry exposes every refusal, query promise, and normative message", asy
     INVALID_MEDIUM: InvalidMedium,
     PATH_CONTESTED: PathContested,
     NOT_BEGUN: NotBegun,
+    STALE_ATTEMPT: StaleAttempt,
     DESTINATION_NOT_DIRECTED: DestinationNotDirected,
     RECONCILIATION_FAILED: ReconciliationFailed,
   });
@@ -430,6 +475,7 @@ test("registry exposes every refusal, query promise, and normative message", asy
     ["_producers", "many"],
     ["_byProducer", "many"],
     ["_attempt", "optional"],
+    ["_open", "optional"],
     ["_pending", "many"],
     ["_orphans", "many"],
   ]);
@@ -488,15 +534,15 @@ test("registry exposes every refusal, query promise, and normative message", asy
     error: "PATH_CONTESTED",
     detail: "This artifact path conflicts with another intended artifact.",
   });
-  expect(await Emitting.commit({ producer: "one" })).toEqual({
+  expect(await Emitting.commit({ producer: "one", attempt: 1 })).toEqual({
     error: "NOT_BEGUN",
     detail: "This producer has no open attempt.",
   });
-  expect(await Emitting.abort({ producer: "\ud800" })).toEqual({
+  expect(await Emitting.abort({ producer: "\ud800", attempt: 1 })).toEqual({
     error: "INVALID_PRODUCER",
     detail: "A producer identity must be well-formed text.",
   });
-  expect(await Emitting.abort({ producer: "one" })).toEqual({
+  expect(await Emitting.abort({ producer: "one", attempt: 1 })).toEqual({
     error: "NOT_BEGUN",
     detail: "This producer has no open attempt.",
   });

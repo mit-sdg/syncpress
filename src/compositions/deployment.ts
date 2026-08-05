@@ -1,8 +1,7 @@
 import { earlier, each, former, no, reaction, view, when, where, whether } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { TRUSTED_COLLECTION_EXCERPTS } from "@syncpress/concepts/templating/templating";
-import { CONFIGURATION_PATH, PAGE_CONTENT_PATH } from "./shared.ts";
-import { ActiveSiteSettings } from "./views.ts";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { AddressOutputPath } from "./calculations.ts";
+import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PHASE_SEQUENCE, TRUSTED_COLLECTION_EXCERPTS } from "./shared.ts";
 
 const {
   Cataloging,
@@ -44,11 +43,19 @@ const RoutedDeploymentWork = view(
   ],
 ).optional();
 
+const CommittableDeploymentWork = view(
+  "committable deployment work of producer (producer)",
+  ({ producer }, { work }, _bindings) => [
+    where(Deploying._forProducer({ producer }).is({ work, kind: "nojekyll", status: "active" })),
+    where(Deploying._forProducer({ producer }).is({ work, status: "prepared" })),
+  ],
+).optional();
+
 const HeldDeploymentLayoutReference = view(
   "held deployment layout reference of source (source)",
   ({ source }, { reference, raw }, _bindings) => [
-    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "external" })),
-    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "fragment" })),
+    where(Referencing._references({ source }).is({ reference, raw }), computations.targetHasKind({ target: raw, kind: "external" })),
+    where(Referencing._references({ source }).is({ reference, raw }), computations.targetHasKind({ target: raw, kind: "fragment" })),
   ],
 ).many();
 
@@ -61,7 +68,7 @@ const SitemapUrls = former(
 
 /** Start a finite deployment queue as part of the emit phase itself. */
 export const EmitPhaseStartsDeployment = reaction(({ policy }) =>
-  when(Phasing.advance({}).responds({ phase: "emit" }))
+  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "emit", transitioned: true }))
     .where(Governing._publishing({}).is({ policy }))
     .then(Deploying.start({ policy })),
 );
@@ -96,7 +103,7 @@ export const DividedPaginationsDispatch = reaction(({ deployment, work }) =>
 
 /** A required not-found page must be authored before generated routes are claimed. */
 export const MissingRequiredNotFoundPagesDiagnose = reaction(() =>
-  when(Phasing.advance({}).responds({ phase: "emit" }))
+  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "emit", transitioned: true }))
     .where(
       Governing._deployment({}).is({ requireNotFound: true }),
       no(Routing._owner({ address: "/404.html" })),
@@ -115,12 +122,12 @@ export const NojekyllWorkBegins = reaction(({ deployment, work, producer }) =>
     .then(Emitting.begin({ producer })),
 );
 
-export const BegunNojekyllWorkIntends = reaction(({ producer, path }) =>
-  when(Emitting.begin({ producer }).responds({}))
+export const BegunNojekyllWorkIntends = reaction(({ producer, attempt, path }) =>
+  when(Emitting.begin({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ kind: "nojekyll", path }),
     )
-    .then(Emitting.intend({ producer, path, content: "", medium: "text/plain" })),
+    .then(Emitting.intend({ producer, attempt, path, content: "", medium: "text/plain" })),
 );
 
 /** Redirect and pagination routes are claimed in queue order. */
@@ -137,16 +144,16 @@ export const GeneratedClaimsBeginDependencies = reaction(({ owner }) =>
     .then(Depending.begin({ subject: owner })),
 );
 
-export const GeneratedDependenciesTrackConfiguration = reaction(({ owner }) =>
-  when(Depending.begin({ subject: owner }).responds({}))
+export const GeneratedDependenciesTrackConfiguration = reaction(({ owner, attempt }) =>
+  when(Depending.begin({ subject: owner }).responds({ attempt }))
     .where(Deploying._forOwner({ owner }))
-    .then(Depending.use({ subject: owner, input: CONFIGURATION_PATH })),
+    .then(Depending.use({ subject: owner, attempt, input: CONFIGURATION_PATH })),
 );
 
-export const GeneratedDependenciesSettle = reaction(({ owner }) =>
-  when(Depending.use({ subject: owner, input: CONFIGURATION_PATH }).responds({}))
+export const GeneratedDependenciesSettle = reaction(({ owner, attempt }) =>
+  when(Depending.use({ subject: owner, attempt, input: CONFIGURATION_PATH }).responds({}))
     .where(Deploying._forOwner({ owner }))
-    .then(Depending.settle({ subject: owner })),
+    .then(Depending.settle({ subject: owner, attempt })),
 );
 
 /** Local redirect targets use routing projection and canonical origin when available. */
@@ -174,7 +181,7 @@ export const ClaimedExternalRedirectsRender = reaction(({ owner, work, target })
   when(Routing.claim({ owner }).responds({}))
     .where(
       Deploying._forOwner({ owner }).is({ work, kind: "redirect", to: target }),
-      Routing._classify({ target }).is({ kind: "external" }),
+      computations.targetHasKind({ target, kind: "external" }),
     )
     .then(Deploying.redirect({ work, target, canonical: target })),
 );
@@ -185,14 +192,14 @@ export const RenderedRedirectsBegin = reaction(({ work, producer }) =>
     .then(Emitting.begin({ producer })),
 );
 
-export const BegunRedirectsIntend = reaction(({ producer, work, address, path, content }) =>
-  when(Emitting.begin({ producer }).responds({}))
+export const BegunRedirectsIntend = reaction(({ producer, attempt, work, address, path, content }) =>
+  when(Emitting.begin({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "redirect", from: address }),
-      Routing._file({ address }).is({ path }),
+      AddressOutputPath({ address }).is({ path }),
       earlier(Deploying.redirect, { work }, { content }),
     )
-    .then(Emitting.intend({ producer, path, content, medium: "text/plain" })),
+    .then(Emitting.intend({ producer, attempt, path, content, medium: "text/html" })),
 );
 
 /** Resolve a pagination plan before replacing it with page work. */
@@ -242,7 +249,7 @@ export const ClaimedPaginationPagesFormContext = reaction(
     when(Routing.claim({ owner }).responds({}))
       .where(
         Deploying._forOwner({ owner }).is({ work, kind: "pagination-page", address }),
-        ActiveSiteSettings({}).is({ site }),
+        Governing._site({}).is({ site }),
         Cataloging._record({}).is({ catalogs: collections }),
         whether(Routing._absolute({ address }).is({ url: canonicalUrl })),
       )
@@ -270,7 +277,7 @@ export const AbsoluteDeploymentLayoutReferencesRebase = reaction(({ source, refe
   when(Referencing.scan({ part: DEPLOYMENT_LAYOUT }).responds({ source }))
     .where(
       Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "absolute" }),
+      computations.targetHasKind({ target: raw, kind: "absolute" }),
       Routing._url({ target: raw }).is({ url }),
     )
     .then(Referencing.answer({ reference, form: "address", value: url })),
@@ -291,7 +298,7 @@ export const UnprojectableDeploymentLayoutReferencesDiagnose = reaction(({ sourc
       Referencing._source({ source }).is({ subject: owner }),
       Deploying._forOwner({ owner }),
       Referencing._references({ source }).is({ raw }),
-      Routing._classify({ target: raw }).is({ kind: "absolute" }),
+      computations.targetHasKind({ target: raw, kind: "absolute" }),
       no(Routing._url({ target: raw })),
     )
     .then(
@@ -311,7 +318,7 @@ export const InvalidDeploymentLayoutReferencesDiagnose = reaction(({ source, own
       Referencing._source({ source }).is({ subject: owner }),
       Deploying._forOwner({ owner }),
       Referencing._references({ source }).is({ raw }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
+      computations.targetHasKind({ target: raw, kind: "relative" }),
     )
     .then(
       Diagnosing.report({
@@ -336,14 +343,14 @@ export const FinishedPaginationLayoutAnswersBegin = reaction(({ owner, producer 
     .then(Emitting.begin({ producer })),
 );
 
-export const BegunPaginationPagesIntend = reaction(({ producer, address, path, text }) =>
-  when(Emitting.begin({ producer }).responds({}))
+export const BegunPaginationPagesIntend = reaction(({ producer, attempt, address, path, text }) =>
+  when(Emitting.begin({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ kind: "pagination-page", address }),
-      Routing._file({ address }).is({ path }),
+      AddressOutputPath({ address }).is({ path }),
       Referencing._finished({ subject: producer, part: DEPLOYMENT_LAYOUT }).is({ text }),
     )
-    .then(Emitting.intend({ producer, path, content: text, medium: "text/plain" })),
+    .then(Emitting.intend({ producer, attempt, path, content: text, medium: "text/html" })),
 );
 
 export const PaginationTemplateFailuresDiagnose = reaction(({ owner, error, detail }) =>
@@ -388,13 +395,13 @@ export const PreparedSitemapsBegin = reaction(({ work, producer }) =>
     .then(Emitting.begin({ producer })),
 );
 
-export const BegunSitemapsIntend = reaction(({ producer, work, path, content }) =>
-  when(Emitting.begin({ producer }).responds({}))
+export const BegunSitemapsIntend = reaction(({ producer, attempt, work, path, content }) =>
+  when(Emitting.begin({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "sitemap" }),
       earlier(Deploying.sitemap, { work }, { path, content }),
     )
-    .then(Emitting.intend({ producer, path, content, medium: "text/plain" })),
+    .then(Emitting.intend({ producer, attempt, path, content, medium: "application/xml" })),
 );
 
 export const FeedWorkPrepares = reaction(({ deployment, work, collectionName, catalog, site }) =>
@@ -402,7 +409,7 @@ export const FeedWorkPrepares = reaction(({ deployment, work, collectionName, ca
     .where(
       Deploying._work({ work }).is({ kind: "feed", collection: collectionName }),
       Cataloging._named({ name: collectionName }).is({ catalog }),
-      ActiveSiteSettings({}).is({ site }),
+      Governing._site({}).is({ site }),
     )
     .then(Deploying.feed({ work, site, entries: CatalogEntries({ catalog }) })),
 );
@@ -450,25 +457,31 @@ export const PreparedFeedsBegin = reaction(({ work, producer }) =>
     .then(Emitting.begin({ producer })),
 );
 
-export const BegunFeedsIntend = reaction(({ producer, work, path, content }) =>
-  when(Emitting.begin({ producer }).responds({}))
+export const BegunFeedsIntend = reaction(({ producer, attempt, work, path, content }) =>
+  when(Emitting.begin({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "feed" }),
       earlier(Deploying.feed, { work }, { path, content, origin: true }),
     )
-    .then(Emitting.intend({ producer, path, content, medium: "text/plain" })),
+    .then(Emitting.intend({ producer, attempt, path, content, medium: "application/atom+xml" })),
 );
 
 /** Every successfully staged deployment artifact commits and advances the queue. */
-export const IntendedDeploymentArtifactsCommit = reaction(({ producer }) =>
-  when(Emitting.intend({ producer }).responds({}))
-    .where(Deploying._forProducer({ producer }))
-    .then(Emitting.commit({ producer })),
+export const IntendedDeploymentArtifactsCommit = reaction(({ producer, attempt }) =>
+  when(Emitting.intend({ producer, attempt }).responds({}))
+    .where(
+      CommittableDeploymentWork({ producer }),
+      Emitting._open({ producer }).is({ attempt }),
+    )
+    .then(Emitting.commit({ producer, attempt })),
 );
 
-export const CommittedDeploymentArtifactsComplete = reaction(({ producer, work }) =>
-  when(Emitting.commit({ producer }).responds({}))
-    .where(Deploying._forProducer({ producer }).is({ work }))
+export const CommittedDeploymentArtifactsComplete = reaction(({ producer, attempt, work }) =>
+  when(Emitting.commit({ producer, attempt }).responds({}))
+    .where(
+      CommittableDeploymentWork({ producer }).is({ work }),
+      Emitting._attempt({ producer }).is({ attempt }),
+    )
     .then(Deploying.complete({ work })),
 );
 
@@ -486,26 +499,29 @@ export const InvalidGeneratedRoutesDiagnose = reaction(({ owner, detail }) =>
     .then(Deploying.rejectOwner({ owner })),
 );
 
-export const DeploymentBeginFailuresDiagnose = reaction(({ producer, error, detail }) =>
+export const DeploymentBeginFailuresDiagnose = reaction(({ producer, work, error, detail }) =>
   when(Emitting.begin({ producer }).refuses({ error, detail }))
-    .where(Deploying._forProducer({ producer }))
-    .then(Diagnosing.report({ severity: "error", code: "OUTPUT_COLLISION", message: detail, source: CONFIGURATION_PATH }).responds({}))
-    .then(Deploying.rejectProducer({ producer })),
+    .where(CommittableDeploymentWork({ producer }).is({ work }))
+    .then(Deploying.reject({ work }).responds({}))
+    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
 
-export const DeploymentIntentFailuresFailAndAbort = reaction(({ producer, path, error, detail }) =>
-  when(Emitting.intend({ producer, path }).refuses({ error, detail }))
-    .where(Deploying._forProducer({ producer }))
-    .then(Deploying.fail({ producer, path, detail }).responds({}))
-    .then(Emitting.abort({ producer })),
+export const DeploymentIntentFailuresFailAndAbort = reaction(({ producer, attempt, path, error, detail }) =>
+  when(Emitting.intend({ producer, attempt, path }).refuses({ error, detail }))
+    .where(
+      CommittableDeploymentWork({ producer }),
+      Emitting._open({ producer }).is({ attempt }),
+    )
+    .then(Deploying.fail({ producer, path, code: error, detail }).responds({}))
+    .then(Emitting.abort({ producer, attempt })),
 );
 
 /** Failure state is durable before diagnostics, so interrupted reporting cannot publish. */
-export const DescribedDeploymentOutputFailuresDiagnose = reaction(({ path, message }) =>
-  when(Deploying.fail({ path }).responds({ message })).then(
+export const DescribedDeploymentOutputFailuresDiagnose = reaction(({ path, code, message }) =>
+  when(Deploying.fail({ path }).responds({ code, message })).then(
     Diagnosing.report({
       severity: "error",
-      code: "OUTPUT_COLLISION",
+      code,
       message,
       source: CONFIGURATION_PATH,
     }),
@@ -513,7 +529,7 @@ export const DescribedDeploymentOutputFailuresDiagnose = reaction(({ path, messa
 );
 
 export const DeploymentOutputFailuresRelateProducers = reaction(({ diagnostic, path, producer }) =>
-  when(Diagnosing.report({ code: "OUTPUT_COLLISION" }).responds({ diagnostic }))
+  when(Diagnosing.report({ code: "PATH_CONTESTED" }).responds({ diagnostic }))
     .where(
       earlier(Deploying.fail, {}, { path }),
       Emitting._producers({ path }).is({ producer }),
@@ -525,9 +541,12 @@ export const DeploymentOutputFailuresRelateProducers = reaction(({ diagnostic, p
     })),
 );
 
-export const DeploymentCommitFailuresDiagnose = reaction(({ producer, error, detail }) =>
-  when(Emitting.commit({ producer }).refuses({ error, detail }))
-    .where(Deploying._forProducer({ producer }))
-    .then(Diagnosing.report({ severity: "error", code: "OUTPUT_COLLISION", message: detail, source: CONFIGURATION_PATH }).responds({}))
-    .then(Deploying.rejectProducer({ producer })),
+export const DeploymentCommitFailuresDiagnose = reaction(({ producer, attempt, work, error, detail }) =>
+  when(Emitting.commit({ producer, attempt }).refuses({ error, detail }))
+    .where(
+      CommittableDeploymentWork({ producer }).is({ work }),
+      Emitting._open({ producer }).is({ attempt }),
+    )
+    .then(Deploying.reject({ work }).responds({}))
+    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );

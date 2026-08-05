@@ -1,14 +1,8 @@
-import { readFile, watch } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { CONFIGURATION_PATH } from "@syncpress/compositions/shared";
-import { GoverningConcept } from "@syncpress/concepts/governing/governing";
-import { buildSite, canonicalPath, containsPath, type BuildResult } from "./site.ts";
+import { watch } from "node:fs/promises";
+import { basename, dirname, relative, resolve, sep } from "node:path";
+import { buildSiteForWatch, containsPath, type BuildResult } from "./site.ts";
 
 export type SiteWatcher = { close(): Promise<void> };
-
-async function canonicalOutputDirectory(directory: string): Promise<string> {
-  return canonicalPath(directory, "output directory");
-}
 
 function isOutputTransactionPath(output: string, candidate: string): boolean {
   const parent = dirname(output);
@@ -17,64 +11,58 @@ function isOutputTransactionPath(output: string, candidate: string): boolean {
   return first?.startsWith(`.${basename(output)}.emitting-`) ?? false;
 }
 
-async function configuredWatchOutputDirectory(siteDirectory: string, destination: string | undefined): Promise<string | undefined> {
-  if (destination !== undefined) return resolve(siteDirectory, destination);
-  try {
-    const source = await readFile(join(siteDirectory, CONFIGURATION_PATH), "utf8");
-    const assessed = new GoverningConcept().assess({ source });
-    return assessed.valid ? resolve(siteDirectory, assessed.policy.outputPath) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Rebuild a project after filesystem changes while retaining the last reconciled output on failures. */
 export async function watchSite(
   projectDirectory = ".",
   destination?: string,
-  options: { onBuild?: (result: BuildResult) => void; onError?: (error: unknown) => void } = {},
+  options: { onBuild?: (result: BuildResult, outputDirectory: string) => void; onError?: (error: unknown) => void } = {},
 ): Promise<SiteWatcher> {
   const siteDirectory = resolve(projectDirectory);
-  const initial = await buildSite(siteDirectory, destination);
-  options.onBuild?.(initial);
-  let output = await canonicalOutputDirectory(resolve(siteDirectory, destination ?? initial.policy.outputPath));
+  const initial = await buildSiteForWatch(siteDirectory, destination);
+  let output = initial.outputDirectory;
+  options.onBuild?.(initial.result, output);
   let rebuildingOutput: string | undefined;
   const controller = new AbortController();
   let closed = false;
-  let rebuilding = false;
+  let activeBuild: Promise<void> | undefined;
   let queued = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const rebuild = async (): Promise<void> => {
     if (closed) return;
-    if (rebuilding) {
-      queued = true;
-      return;
-    }
-    rebuilding = true;
     try {
-      const configuredOutput = await configuredWatchOutputDirectory(siteDirectory, destination);
-      if (configuredOutput !== undefined) output = await canonicalOutputDirectory(configuredOutput);
-      rebuildingOutput = output;
-      const result = await buildSite(siteDirectory, destination);
-      output = await canonicalOutputDirectory(resolve(siteDirectory, destination ?? result.policy.outputPath));
-      options.onBuild?.(result);
+      const built = await buildSiteForWatch(siteDirectory, destination, async (nextOutput) => {
+        rebuildingOutput = nextOutput;
+      });
+      output = built.outputDirectory;
+      options.onBuild?.(built.result, output);
     } catch (error) {
       options.onError?.(error);
     } finally {
       rebuildingOutput = undefined;
-      rebuilding = false;
-      if (queued) {
-        queued = false;
-        void rebuild();
-      }
     }
+  };
+  const startRebuild = (): void => {
+    if (closed) return;
+    if (activeBuild !== undefined) {
+      queued = true;
+      return;
+    }
+    const running = rebuild();
+    activeBuild = running;
+    void running.finally(() => {
+      if (activeBuild === running) activeBuild = undefined;
+      if (!closed && queued) {
+        queued = false;
+        startRebuild();
+      }
+    });
   };
   const schedule = (): void => {
     if (timer !== undefined) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = undefined;
-      void rebuild();
+      startRebuild();
     }, 75);
   };
   const watcher = watch(siteDirectory, { recursive: true, signal: controller.signal });
@@ -104,6 +92,7 @@ export async function watchSite(
       if (timer !== undefined) clearTimeout(timer);
       controller.abort();
       await task;
+      await activeBuild;
     },
   };
 }

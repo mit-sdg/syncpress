@@ -2,16 +2,14 @@
 
 ## Purpose
 
-Admit reusable path selectors under one stable glob contract and answer whether
-paths match them, so malformed syntax is refused before a selector is used.
+Admit reusable standalone path selectors under the shared portable glob value
+contract, so malformed syntax is refused before a computation uses a selector.
 
 ## Principle
 
-Ada admits `posts/**/*.md`, where `**` means any folders. The pattern selects
-`posts/compiler-design/index.md`, but not `about/index.md` or
-`posts/notes.txt`. Admitting the exact text again returns the same pattern without
-adding another one. Admitting the broken pattern `posts/**{` is refused and adds
-nothing. A pattern that was never saved selects no path.
+Ada admits `posts/**/*.md`, where `**` means any folders. Admitting the exact
+text again returns the same pattern without adding another one. Admitting the
+broken pattern `posts/**{` is refused and adds nothing.
 
 ## State
 
@@ -71,10 +69,11 @@ compile (text: Text) : return (pattern: Pattern)
 ## Queries
 
 ```queries
-_matches (pattern: Pattern, path: Path) : one (matched: Flag)
 _compiled (text: Text) : optional (pattern: Pattern)
 ```
 
-Matching owns pattern syntax, not the paths it receives or the policy that a
-match implies. Compilation is behavioral admission under this contract, not
-merely a performance cache.
+Matching owns its admitted pattern identities and validation, not the paths a
+computation receives or the policy that a match implies. The portable glob syntax
+is a domain-neutral value contract and may also be enforced atomically by a
+concept, such as a catalog, that owns a selector as part of a larger policy.
+Compilation here is behavioral admission, not merely a performance cache.

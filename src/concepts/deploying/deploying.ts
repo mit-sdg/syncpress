@@ -1,5 +1,3 @@
-import { isCanonicalAddress, isText, pathSegments } from "@syncpress/address";
-
 export type DeploymentPolicy = {
   nojekyll: boolean;
   requireNotFound: boolean;
@@ -19,7 +17,7 @@ export type DeploymentPolicy = {
 type CollectionEntry = { item: string; key?: unknown; card: unknown };
 type WorkStatus = "pending" | "active" | "prepared" | "failed" | "completed";
 type DeploymentOutcome = "absent" | "active" | "failed" | "completed";
-type BaseWork = { work: string; deployment: string; status: WorkStatus; preparation?: unknown };
+type BaseWork = { work: string; deployment: string; status: WorkStatus };
 type NojekyllWork = BaseWork & { kind: "nojekyll"; producer: string; path: string };
 type RedirectWork = BaseWork & {
   kind: "redirect";
@@ -76,7 +74,7 @@ export class WorkNotCurrent extends Error {
 
 export class DeploymentActive extends Error {
   constructor() {
-    super("A deployment is already active.");
+    super("A deployment was already started.");
     this.name = "DeploymentActive";
   }
 }
@@ -135,6 +133,52 @@ export class InvalidRedirect extends Error {
     super("Redirect preparation requires a valid projection of its configured target.");
     this.name = "InvalidRedirect";
   }
+}
+
+const addressEncoder = new TextEncoder();
+const literalAddressCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@-]$/;
+const forbiddenSegmentCharacter = /[\\/\u0000-\u001f\u007f]/u;
+
+function isText(value: unknown): value is string {
+  return typeof value === "string" && value.isWellFormed();
+}
+
+function isPathSegment(value: unknown): value is string {
+  return isText(value) && value !== "" && value !== "." && value !== ".." &&
+    value.normalize("NFC") === value && !forbiddenSegmentCharacter.test(value);
+}
+
+function encodeAddressSegment(segment: string): string {
+  let encoded = "";
+  for (const character of segment) {
+    if (literalAddressCharacter.test(character)) encoded += character;
+    else for (const byte of addressEncoder.encode(character)) encoded += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+  }
+  return encoded;
+}
+
+function isCanonicalAddress(value: unknown): value is string {
+  if (!isText(value) || !value.startsWith("/") || value.startsWith("//")) return false;
+  if (value === "/") return true;
+  const directory = value.endsWith("/");
+  const body = value.slice(1, directory ? -1 : value.length);
+  if (body === "") return false;
+  const segments: string[] = [];
+  for (const encoded of body.split("/")) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(encoded);
+    } catch {
+      return false;
+    }
+    if (!isPathSegment(decoded) || encodeAddressSegment(decoded) !== encoded) return false;
+    segments.push(decoded);
+  }
+  return directory || segments.at(-1) !== "index.html";
+}
+
+function isCanonicalPath(value: unknown): value is string {
+  return isText(value) && value !== "" && !value.startsWith("/") && value.split("/").every(isPathSegment);
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -239,7 +283,7 @@ function isDeploymentPolicy(value: unknown): value is DeploymentPolicy {
   return value.feed === undefined || (
     isRecord(value.feed) &&
     isText(value.feed.collection) && value.feed.collection !== "" &&
-    isText(value.feed.path) && pathSegments(value.feed.path) !== undefined &&
+    isCanonicalPath(value.feed.path) &&
     optionalText(value.feed.title) &&
     optionalText(value.feed.description)
   );
@@ -356,6 +400,18 @@ function paginationBody(entries: readonly CollectionEntry[]): string {
   return `<ul class="syncpress-pagination-items">${items}</ul>`;
 }
 
+function deploymentIdentity(order: number): string {
+  return `deployment:${order}`;
+}
+
+function workIdentity(deployment: string, kind: string, ...parts: Array<string | number>): string {
+  return `deployment-work:${JSON.stringify([deployment, kind, ...parts])}`;
+}
+
+function ownerIdentity(kind: string, ...parts: Array<string | number>): string {
+  return `deployment-owner:${JSON.stringify([kind, ...parts])}`;
+}
+
 export class DeployingConcept {
   #next = 0;
   #latest: string | undefined;
@@ -394,28 +450,23 @@ export class DeployingConcept {
 
   start({ policy }: { policy: DeploymentPolicy }): { deployment: string; work?: string; completed: boolean } {
     if (!isDeploymentPolicy(policy)) throw new InvalidPolicy();
-    if (this.#latest !== undefined) {
-      const latest = this.#deployments.get(this.#latest);
-      if (latest?.works[latest.position] !== undefined) throw new DeploymentActive();
-      this.#deployments.clear();
-      this.#works.clear();
-    }
-    const deployment = `deployment:${++this.#next}`;
+    if (this.#latest !== undefined) throw new DeploymentActive();
+    const deployment = deploymentIdentity(++this.#next);
     const works: Work[] = [];
     const add = (work: Work): void => {
       works.push(work);
       this.#works.set(work.work, work);
     };
     if (policy.nojekyll) {
-      add({ work: `${deployment}:nojekyll`, deployment, status: "pending", kind: "nojekyll", producer: "deployment:nojekyll", path: ".nojekyll" });
+      add({ work: workIdentity(deployment, "nojekyll"), deployment, status: "pending", kind: "nojekyll", producer: "deployment:nojekyll", path: ".nojekyll" });
     }
     for (const redirect of policy.redirects) {
-      const owner = `deployment:redirect:${redirect.from}`;
-      add({ work: `${deployment}:redirect:${redirect.from}`, deployment, status: "pending", kind: "redirect", owner, producer: owner, ...redirect });
+      const owner = ownerIdentity("redirect", redirect.from);
+      add({ work: workIdentity(deployment, "redirect", redirect.from), deployment, status: "pending", kind: "redirect", owner, producer: owner, ...redirect });
     }
     for (const pagination of policy.pagination) {
       add({
-        work: `${deployment}:pagination:${pagination.name}`,
+        work: workIdentity(deployment, "pagination-plan", pagination.name),
         deployment,
         status: "pending",
         kind: "pagination-plan",
@@ -428,10 +479,10 @@ export class DeployingConcept {
       });
     }
     if (policy.sitemap) {
-      add({ work: `${deployment}:sitemap`, deployment, status: "pending", kind: "sitemap", producer: "deployment:sitemap", path: "sitemap.xml" });
+      add({ work: workIdentity(deployment, "sitemap"), deployment, status: "pending", kind: "sitemap", producer: "deployment:sitemap", path: "sitemap.xml" });
     }
     if (policy.feed !== undefined) {
-      add({ work: `${deployment}:feed`, deployment, status: "pending", kind: "feed", producer: "deployment:feed", ...policy.feed });
+      add({ work: workIdentity(deployment, "feed"), deployment, status: "pending", kind: "feed", producer: "deployment:feed", ...policy.feed });
     }
     const state = { deployment, works, position: 0 };
     this.#deployments.set(deployment, state);
@@ -497,10 +548,10 @@ export class DeployingConcept {
     const pages = Math.max(1, Math.ceil(entries.length / plan.perPage));
     const pageWorks: PaginationPageWork[] = [];
     for (let number = 1; number <= pages; number += 1) {
-      const owner = `deployment:pagination:${plan.name}:${number}`;
+      const owner = ownerIdentity("pagination-page", plan.name, number);
       const slice = entries.slice((number - 1) * plan.perPage, number * plan.perPage);
       pageWorks.push({
-        work: `${deployment}:pagination:${plan.name}:${number}`,
+        work: workIdentity(deployment, "pagination-page", plan.name, number),
         deployment,
         status: "pending",
         kind: "pagination-page",
@@ -535,7 +586,6 @@ export class DeployingConcept {
       content: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=${safeTarget}"><link rel="canonical" href="${htmlEscape(canonical)}"></head><body><p>Moved to <a href="${safeTarget}">${safeTarget}</a>.</p></body></html>\n`,
     };
     current.status = "prepared";
-    current.preparation = structuredClone(result);
     return result;
   }
 
@@ -569,7 +619,6 @@ export class DeployingConcept {
     } catch {
       throw new InvalidContext();
     }
-    current.preparation = structuredClone(result);
     current.status = "prepared";
     return result;
   }
@@ -607,7 +656,6 @@ export class DeployingConcept {
       content: `<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom"><id>${xmlEscape(id)}</id><title>${xmlEscape(title)}</title>${subtitle === "" ? "" : `<subtitle>${xmlEscape(subtitle)}</subtitle>`}<updated>${updated}</updated><link href="${xmlEscape(id)}"/>${rendered.join("")}</feed>\n`,
     };
     current.status = "prepared";
-    current.preparation = structuredClone(result);
     return result;
   }
 
@@ -619,19 +667,17 @@ export class DeployingConcept {
       content: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map(({ url }) => `<url><loc>${xmlEscape(url)}</loc></url>`).join("")}</urlset>\n`,
     };
     current.status = "prepared";
-    current.preparation = structuredClone(result);
     return result;
   }
 
-  fail({ producer, path, detail }: { producer: string; path: string; detail: string }): { deployment: string; work?: string; completed: boolean; path: string; message: string } {
+  fail({ producer, path, code, detail }: { producer: string; path: string; code: string; detail: string }): { deployment: string; work?: string; completed: boolean; path: string; code: string; message: string } {
     const found = this.#latestWorks().find((work) => "producer" in work && work.producer === producer);
     if (found === undefined) throw new WorkNotCurrent();
     const current = this.#current(found.deployment, found.work);
     if (current.work.status !== "active" && current.work.status !== "prepared") throw new WorkNotActive();
     current.work.status = "failed";
-    current.work.preparation = { path, detail };
     current.deployment.position += 1;
-    return { ...this.#result(current.deployment), path, message: `${path}: ${detail}` };
+    return { ...this.#result(current.deployment), path, code, message: `${path}: ${detail}` };
   }
 
   _work({ work }: { work: string }): Work[] {

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Own the ordered lifecycle and preparation snapshots of one static deployment,
+Own the ordered lifecycle of one static deployment,
 so later work cannot begin before every earlier item reaches a terminal outcome.
 
 ## Principle
@@ -13,15 +13,14 @@ activates and prepares the redirect. Activating that redirect twice is refused.
 The pagination plan expands atomically into numbered pending pages, including a
 first page for an empty collection. Each page becomes current in number order.
 After every page completes, the sitemap and feed are prepared from the facts Ada
-supplies and the deployment finishes. Starting another deployment while one is
-active, completing pending work, and completing stale work are refused. A later
-deployment replaces the completed deployment's inspection state. The final
+supplies and the deployment finishes. Starting another deployment in the same
+concept instance, completing pending work, and completing stale work are refused. The final
 outcome distinguishes a wholly completed queue from one containing failed work.
 
 ## State
 
 ```state
-an optional latest Deployment with
+an optional sole Deployment with
   an ordered sequence of Work
   one current position
 
@@ -29,19 +28,19 @@ each Work has
   a kind
   a status of pending, active, prepared, failed, or completed
   the configuration snapshot that gives the work its historical meaning
-  an optional prepared artifact snapshot or failure
 ```
 
 The deployment policy and cards supplied to this concept are snapshots. Their
 copies are authoritative for that deployment attempt and are never refreshed
-from another concept. Starting after completion discards the prior deployment
-and makes the replacement the sole target of owner and producer lookup.
-Preparation actions return an independent copy equal to the stored snapshot.
-The stored copy supports inspection rather than in-place downstream retry.
+from another concept. One concept instance owns exactly one deployment attempt;
+a complete site-build retry uses a fresh application so routes, dependencies,
+and output producers cannot leak from prior work.
+Preparation actions return independent values without retaining duplicate
+rendering contexts or complete generated artifacts in queue state.
 Rejection and failure are terminal for one work item and do not retry it; the
 queue continues so callers can discover later failures. A failed deployment is
-never a completed outcome. Retrying requires starting a replacement after the
-queue is exhausted.
+never a completed outcome. Retrying requires a fresh concept application after
+the queue is exhausted.
 
 ## Actions
 
@@ -50,12 +49,12 @@ start (policy: Policy) : return (deployment: Deployment, work: OptionalWork, com
   where policy does not have the supported deployment shape, contains an invalid or cyclic redirect, pagination route, or feed path, or repeats a redirect source or pagination name
   then
     refuse INVALID_POLICY "A deployment policy must have the supported publishing shape."
-  where the latest deployment still has current work
+  where a deployment was already started
   then
-    refuse DEPLOYMENT_ACTIVE "A deployment is already active."
-  where no deployment is active
+    refuse DEPLOYMENT_ACTIVE "A deployment was already started."
+  where no deployment was started
   then
-    replace completed inspection state with work in declared precedence
+    add work in declared precedence
     return the first pending work, or completed true when policy produces none
 
 dispatch (deployment: Deployment, work: Work) : return (deployment: Deployment, work: Work)
@@ -142,7 +141,7 @@ redirect (work: Work, target: Url, canonical: Url) : return (content: Text)
     refuse INVALID_REDIRECT "Redirect preparation requires a valid projection of its configured target."
   where work is the active redirect
   then
-    store its escaped redirect document as the prepared snapshot and return it
+    make it prepared and return its escaped redirect document
 
 context (work: Work, site: Value, collections: Value, canonicalUrl: OptionalUrl) : return (owner: Owner, template: Template, context: Value)
   where work is not current
@@ -156,7 +155,7 @@ context (work: Work, site: Value, collections: Value, canonicalUrl: OptionalUrl)
     refuse INVALID_CONTEXT "Deployment context values must be structured-cloneable."
   where work is the active pagination page
   then
-    store its complete rendering context as the prepared snapshot and return it
+    make it prepared and return its complete rendering context
 
 feed (work: Work, site: Value, entries: Entries) : return (path: Path, content: Text, invalid: Number, valid: Flag, origin: Flag)
   where entries are not a dense list of structured-cloneable identified cards
@@ -170,7 +169,7 @@ feed (work: Work, site: Value, entries: Entries) : return (path: Path, content: 
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where work is the active feed
   then
-    store its deterministic Atom document as the prepared snapshot and return it
+    make it prepared and return its deterministic Atom document
 
 sitemap (work: Work, urls: Urls) : return (path: Path, content: Text)
   where urls are not a dense list of absolute HTTP URL records
@@ -184,9 +183,9 @@ sitemap (work: Work, urls: Urls) : return (path: Path, content: Text)
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where work is the active sitemap
   then
-    store its deterministic XML document as the prepared snapshot and return it
+    make it prepared and return its deterministic XML document
 
-fail (producer: Producer, path: Path, detail: Text) : return (deployment: Deployment, work: OptionalWork, completed: Flag, path: Path, message: Text)
+fail (producer: Producer, path: Path, code: Code, detail: Text) : return (deployment: Deployment, work: OptionalWork, completed: Flag, path: Path, code: Code, message: Text)
   where the latest deployment has no current work for producer
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -195,22 +194,22 @@ fail (producer: Producer, path: Path, detail: Text) : return (deployment: Deploy
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where the producer's work is active or prepared
   then
-    store its failure, advance, and return the next result and path-prefixed message
+    mark it failed, advance, and return the next result and path-prefixed message
 ```
 
 ## Queries
 
 ```queries
-_work (work: Work) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text, preparation?: Value)
-_forOwner (owner: Owner) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text, preparation?: Value)
-_forProducer (producer: Producer) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text, preparation?: Value)
-_current () : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text, preparation?: Value)
+_work (work: Work) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
+_forOwner (owner: Owner) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
+_forProducer (producer: Producer) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
+_current () : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
 _outcome () : one (state: State)
 ```
 
 Work order is marker, redirects by validated policy order, pagination by
 validated policy order and page number, sitemap, then feed. Owner and producer
-lookup concern only the latest deployment. `_outcome` is `absent` before a
+lookup concerns the sole deployment. `_outcome` is `absent` before a
 deployment starts, `active` while current work remains, `failed` when an
 exhausted queue contains failed work, and `completed` otherwise. The `completed`
 action-result flag means only that the queue is exhausted. Queries return copies.

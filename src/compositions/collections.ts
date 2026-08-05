@@ -1,31 +1,34 @@
-import { reaction, view, when, where } from "@mit-sdg/sync-engine/language";
+import { earlier, reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { ROOTS } from "./shared.ts";
-import { CollectionSetting, PublicationCard } from "./views.ts";
+import { DIAGNOSTIC_SCOPES, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
+import { PublicationCard } from "./views.ts";
 
-const { Cataloging, Filing, Matching, Phasing, Routing } = conceptRefs;
-
-/** Configured catalogs whose admitted path selector matches a routed content page. */
-export const MatchingCatalogOfPage = view(
-  "matching catalog of page (page)",
-  ({ page }, { catalog, path }, { root, name, text, pattern }) =>
-    where(
-      Routing._address({ owner: page }),
-      Filing._named({ name: ROOTS.content }).is({ root }),
-      Filing._file({ file: page }).is({ root, path }),
-      CollectionSetting({}).is({ name, text }),
-      Cataloging._named({ name }).is({ catalog }),
-      Matching._compiled({ text }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
-    ),
-).many();
+const { Cataloging, Diagnosing, Filing, Phasing, Routing } = conceptRefs;
 
 /** Every path-matching page enters each catalog under that catalog's own policy. */
-export const MatchingPagesEnterCatalogs = reaction(({ page, catalog, path }) =>
-  when(Phasing.advance({}).responds({ phase: "collect" }))
+export const MatchingPagesEnterCatalogs = reaction(({ page, catalog, path, content }) =>
+  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "collect", transitioned: true }))
     .where(
       Routing._claims({}).is({ owner: page }),
-      MatchingCatalogOfPage({ page }).is({ catalog, path }),
+      Filing._named({ name: ROOTS.content }).is({ root: content }),
+      Filing._file({ file: page }).is({ root: content, path }),
+      Cataloging._catalogs({}).is({ catalog }),
     )
-    .then(Cataloging.index({ catalog, item: page, tiebreak: path, card: PublicationCard({ page }) })),
+    .then(Cataloging.index({ catalog, item: page, path, tiebreak: path, card: PublicationCard({ page }) })),
+);
+
+/** A refused projection must remain visible and prevent publication. */
+export const CatalogIndexFailuresDiagnose = reaction(({ page, path, error, detail }) =>
+  when(Cataloging.index({ item: page, path }).refuses({ error, detail }))
+    .where(
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "collect", transitioned: true }),
+      Filing._file({ file: page }).is({ path }),
+    )
+    .then(Diagnosing.report({
+      scope: DIAGNOSTIC_SCOPES.cataloging,
+      severity: "error",
+      code: error,
+      message: detail,
+      source: path,
+    })),
 );

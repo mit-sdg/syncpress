@@ -1,8 +1,10 @@
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
 export class RootNotFound extends Error {}
 export class PathLeavesRoot extends Error {}
 export class InvalidPath extends Error {}
+export class InvalidEncoding extends Error {}
 export class FileNotFound extends Error {}
 
 export type ResolutionStatus = "found" | "missing" | "outside" | "nonlocal" | "invalid" | "unknown-file";
@@ -17,13 +19,13 @@ type FileRecord = {
   digest: string;
 };
 
-type PathStatus = "canonical" | "outside" | "invalid";
 type Resolution = { status: ResolutionStatus; path?: string; target?: string };
+type PathStatus = "canonical" | "outside" | "invalid";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const scheme = /^[a-z][a-z\d+.-]*:/i;
-const forbiddenSegmentCharacter = /[\\\u0000-\u001f\u007f]/u;
+const forbiddenSegmentCharacter = /[\\/\u0000-\u001f\u007f]/u;
 
 function digest(content: Uint8Array): string {
   return createHash("sha256").update(content).digest("hex");
@@ -42,34 +44,18 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   return true;
 }
 
-function isScalarText(text: string): boolean {
-  for (let index = 0; index < text.length; index += 1) {
-    const unit = text.charCodeAt(index);
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = text.charCodeAt(index + 1);
-      if (next < 0xdc00 || next > 0xdfff) return false;
-      index += 1;
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
-  }
-  return true;
+function isScalarText(value: unknown): value is string {
+  return typeof value === "string" && value.isWellFormed();
 }
 
-function isSegment(segment: string): boolean {
-  return (
-    segment !== "" &&
-    segment !== "." &&
-    segment !== ".." &&
-    isScalarText(segment) &&
-    segment.normalize("NFC") === segment &&
-    !segment.includes("/") &&
-    !forbiddenSegmentCharacter.test(segment)
-  );
+function isPathSegment(value: unknown): value is string {
+  return isScalarText(value) && value !== "" && value !== "." && value !== ".." &&
+    value.normalize("NFC") === value && !forbiddenSegmentCharacter.test(value);
 }
 
-function pathStatus(path: string): PathStatus {
+function pathStatus(path: unknown): PathStatus {
   if (typeof path !== "string" || path === "") return "invalid";
   if (path.startsWith("/")) return "outside";
-
   let depth = 0;
   let canonical = true;
   for (const segment of path.split("/")) {
@@ -80,14 +66,14 @@ function pathStatus(path: string): PathStatus {
     } else if (segment === ".") {
       canonical = false;
     } else {
-      if (!isSegment(segment)) return "invalid";
+      if (!isPathSegment(segment)) return "invalid";
       depth += 1;
     }
   }
   return canonical ? "canonical" : "invalid";
 }
 
-function isDirectory(prefix: string): boolean {
+function isDirectoryPath(prefix: unknown): prefix is string {
   return prefix === "" || pathStatus(prefix) === "canonical";
 }
 
@@ -131,6 +117,17 @@ export class FilingConcept {
   }
 
   place({ root, path, content }: { root: string; path: string; content: Uint8Array }) {
+    return this.#place(root, path, content);
+  }
+
+  placeBase64({ root, path, encoded }: { root: string; path: string; encoded: string }) {
+    if (typeof encoded !== "string") throw new InvalidEncoding();
+    const content = Buffer.from(encoded, "base64");
+    if (content.toString("base64") !== encoded) throw new InvalidEncoding();
+    return this.#place(root, path, content);
+  }
+
+  #place(root: string, path: string, content: Uint8Array) {
     if (!this.#rootsByID.has(root)) throw new RootNotFound();
     const status = pathStatus(path);
     if (status === "outside") throw new PathLeavesRoot();
@@ -199,7 +196,7 @@ export class FilingConcept {
   }
 
   _under({ root, prefix }: { root: string; prefix: string }): { file: string; path: string; digest: string }[] {
-    if (!isDirectory(prefix)) return [];
+    if (!isDirectoryPath(prefix)) return [];
     const filesAtRoot = this.#fileIDsByRoot.get(root);
     if (filesAtRoot === undefined) return [];
     const beginning = prefix === "" ? "" : `${prefix}/`;
@@ -217,22 +214,6 @@ export class FilingConcept {
 
   _resolution({ file, address }: { file: string; address: string }): { status: ResolutionStatus } {
     return { status: this.#resolution(file, address).status };
-  }
-
-  _join({ prefix, name }: { prefix: string; name: string }): { path: string }[] {
-    if (!isDirectory(prefix) || !isSegment(name)) return [];
-    return [{ path: prefix === "" ? name : `${prefix}/${name}` }];
-  }
-
-  _directory({ path }: { path: string }): { prefix: string }[] {
-    if (pathStatus(path) !== "canonical") return [];
-    const separator = path.lastIndexOf("/");
-    return [{ prefix: separator === -1 ? "" : path.slice(0, separator) }];
-  }
-
-  _name({ path }: { path: string }): { name: string }[] {
-    if (pathStatus(path) !== "canonical") return [];
-    return [{ name: path.slice(path.lastIndexOf("/") + 1) }];
   }
 
   #resolution(file: string, address: string): Resolution {
@@ -274,7 +255,7 @@ export class FilingConcept {
         endsAtDirectory = index === rawSegments.length - 1;
         continue;
       }
-      if (!isSegment(segment)) return { status: "invalid" };
+      if (!isPathSegment(segment)) return { status: "invalid" };
       targetSegments.push(segment);
       endsAtDirectory = false;
     }

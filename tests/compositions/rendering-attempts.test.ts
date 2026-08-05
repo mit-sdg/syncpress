@@ -12,10 +12,22 @@ test("superseded template work cannot enter the replacement dependency attempt",
   const app = assembleSyncpress();
   const page = "page:post";
   const partial = value(await app.concepts.Templating.define({ name: "old", source: "old" }));
-  const first = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {} }));
-  await app.concepts.Depending.begin({ subject: page });
-  const second = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {} }));
-  await app.concepts.Depending.begin({ subject: page });
+  const firstDependency = value(await app.concepts.Depending.begin({ subject: page }));
+  const first = value(await app.concepts.Rendering.begin({
+    subject: page,
+    path: "post.md",
+    data: {},
+    dependencyAttempt: firstDependency.attempt,
+    emissionAttempt: 1,
+  }));
+  const secondDependency = value(await app.concepts.Depending.begin({ subject: page }));
+  const second = value(await app.concepts.Rendering.begin({
+    subject: page,
+    path: "post.md",
+    data: {},
+    dependencyAttempt: secondDependency.attempt,
+    emissionAttempt: 2,
+  }));
 
   await app.concepts.Templating.fill({
     subject: first.rendering,
@@ -48,14 +60,14 @@ test("superseded failures cannot recreate diagnostics for the replacement attemp
     path: "post.md",
     content: new TextEncoder().encode("post"),
   }));
-  const first = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", data: {} }));
+  const first = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", data: {}, dependencyAttempt: 1, emissionAttempt: 1 }));
   const firstScan = value(await app.concepts.Referencing.scan({
     subject: first.rendering,
     part: "body",
     text: '<img src="https://example.com/old.png">',
   }));
   const firstReference = (await app.concepts.Referencing._references({ source: firstScan.source }))[0]!;
-  const second = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", data: {} }));
+  const second = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", data: {}, dependencyAttempt: 2, emissionAttempt: 2 }));
   await app.concepts.Embedding.declare({
     subject: firstReference.reference,
     alternative: "old",
@@ -94,14 +106,14 @@ test("superseded failures cannot recreate diagnostics for the replacement attemp
 test("late reference completion cannot settle a superseded or replacement attempt", async () => {
   const app = assembleSyncpress();
   const page = "page:post";
-  const first = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {} }));
+  const first = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {}, dependencyAttempt: 1, emissionAttempt: 1 }));
   const scanned = value(await app.concepts.Referencing.scan({
     subject: first.rendering,
     part: "body",
     text: '<a href="later">later</a>',
   }));
   const reference = (await app.concepts.Referencing._references({ source: scanned.source }))[0]!;
-  const second = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {} }));
+  const second = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {}, dependencyAttempt: 2, emissionAttempt: 2 }));
 
   await app.concepts.Referencing.answer({ reference: reference.reference, form: "address", value: "/later/" });
   await app.whenIdle();

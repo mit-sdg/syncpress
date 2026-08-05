@@ -1,6 +1,6 @@
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
+import { syncpressComputations } from "./computations.ts";
 import { cataloging } from "./concepts/cataloging/registry.ts";
-import { configuring } from "./concepts/configuring/registry.ts";
 import { converting } from "./concepts/converting/registry.ts";
 import { depending } from "./concepts/depending/registry.ts";
 import { diagnosing } from "./concepts/diagnosing/registry.ts";
@@ -20,28 +20,30 @@ import { templating } from "./concepts/templating/registry.ts";
 import { transcoding } from "./concepts/transcoding/registry.ts";
 
 /** Bind every concept contract to the implementation used by Syncpress. */
-export const syncpressConcepts = conceptSet({
-  Cataloging: cataloging,
-  Configuring: configuring,
-  Converting: converting,
-  Depending: depending,
-  Diagnosing: diagnosing,
-  Documenting: documenting,
-  Deploying: deploying,
-  Embedding: embedding,
-  Emitting: emitting,
-  Filing: filing,
-  Governing: governing,
-  Layering: layering,
-  Matching: matching,
-  Phasing: phasing,
-  Referencing: referencing,
-  Rendering: rendering,
-  Routing: routing,
-  Templating: templating,
-  Transcoding: transcoding,
-});
+export const syncpressConcepts = conceptSet(
+  {
+    Cataloging: cataloging,
+    Converting: converting,
+    Depending: depending,
+    Diagnosing: diagnosing,
+    Documenting: documenting,
+    Deploying: deploying,
+    Embedding: embedding,
+    Emitting: emitting,
+    Filing: filing,
+    Governing: governing,
+    Layering: layering,
+    Matching: matching,
+    Phasing: phasing,
+    Referencing: referencing,
+    Rendering: rendering,
+    Routing: routing,
+    Templating: templating,
+    Transcoding: transcoding,
+  },
+  syncpressComputations,
+);
 
 // `concepts` contains inert references for composition; assembled applications
 // expose the corresponding runtime instances through `application.concepts`.
-export const { concepts, vocabulary } = syncpressConcepts;
+export const { computations, concepts, vocabulary } = syncpressConcepts;

@@ -13,6 +13,7 @@ const INVALID_CONTENT = "Artifact content must be bytes or well-formed text.";
 const INVALID_MEDIUM = "An artifact medium must be well-formed text.";
 const PATH_CONTESTED = "This artifact path conflicts with another intended artifact.";
 const NOT_BEGUN = "This producer has no open attempt.";
+const STALE_ATTEMPT = "This producer attempt is no longer active.";
 const DESTINATION_NOT_DIRECTED = "No destination has been directed.";
 const RECONCILIATION_FAILED = "The intended destination tree could not be installed.";
 
@@ -90,6 +91,13 @@ export class NotBegun extends Error {
   constructor() {
     super(NOT_BEGUN);
     this.name = "NotBegun";
+  }
+}
+
+export class StaleAttempt extends Error {
+  constructor() {
+    super(STALE_ATTEMPT);
+    this.name = "StaleAttempt";
   }
 }
 
@@ -285,6 +293,23 @@ function sameSet(left: Set<string>, right: Set<string>): boolean {
   return left.size === right.size && [...left].every((value) => right.has(value));
 }
 
+function sameEntry(left: EmittedEntry, right: EmittedEntry): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.content === undefined || right.content === undefined) return left.content === right.content;
+  return sameBytes(left.content, right.content);
+}
+
+function sameSnapshot(left: Snapshot, right: Snapshot): boolean {
+  return left.exists === right.exists &&
+    left.mode === right.mode &&
+    left.entries.size === right.entries.size &&
+    [...left.entries].every(([path, entry]) => {
+      const other = right.entries.get(path);
+      return other !== undefined && sameEntry(entry, other);
+    }) &&
+    sameSet(left.directories, right.directories);
+}
+
 /** Reconcile independent producers' exact byte artifacts with one local destination. */
 export class EmittingConcept {
   #destination: string | undefined;
@@ -341,7 +366,7 @@ export class EmittingConcept {
     return { producer, attempt: record.attempt };
   }
 
-  intend({ producer, path, content, medium, claim }: { producer: string; path: string; content: ArtifactContent; medium: string; claim?: string }) {
+  intend({ producer, attempt, path, content, medium, claim }: { producer: string; attempt?: unknown; path: string; content: ArtifactContent; medium: string; claim?: string }) {
     requireProducer(producer);
     const normalizedClaim = claim ?? producer;
     requireClaim(normalizedClaim);
@@ -353,6 +378,7 @@ export class EmittingConcept {
 
     const current = this.#producers.get(producer);
     const staging = current?.staged !== undefined;
+    if ((staging && attempt !== current.attempt) || (!staging && attempt !== undefined)) throw new StaleAttempt();
     this.#assertAvailable(producer, normalizedClaim, path, bytes, staging);
 
     const record = current ?? this.#producer(producer);
@@ -362,10 +388,11 @@ export class EmittingConcept {
     return { intent, path, digest: next.digest };
   }
 
-  commit({ producer }: { producer: string }) {
+  commit({ producer, attempt }: { producer: string; attempt: unknown }) {
     requireProducer(producer);
     const record = this.#producers.get(producer);
     if (record?.staged === undefined) throw new NotBegun();
+    if (attempt !== record.attempt) throw new StaleAttempt();
 
     let dropped = 0;
     for (const path of record.active.keys()) {
@@ -376,10 +403,11 @@ export class EmittingConcept {
     return { producer, dropped };
   }
 
-  abort({ producer }: { producer: string }) {
+  abort({ producer, attempt }: { producer: string; attempt: unknown }) {
     requireProducer(producer);
     const record = this.#producers.get(producer);
     if (record?.staged === undefined) throw new NotBegun();
+    if (attempt !== record.attempt) throw new StaleAttempt();
 
     const discarded = record.staged.size;
     record.staged = undefined;
@@ -482,6 +510,12 @@ export class EmittingConcept {
     if (!isText(producer)) return [];
     const record = this.#producers.get(producer);
     return record === undefined ? [] : [{ attempt: record.attempt }];
+  }
+
+  _open({ producer }: { producer: string }): { attempt: number }[] {
+    if (!isText(producer)) return [];
+    const record = this.#producers.get(producer);
+    return record?.staged === undefined ? [] : [{ attempt: record.attempt }];
   }
 
   _pending(): { path: string; digest: string }[] {
@@ -618,6 +652,20 @@ export class EmittingConcept {
 
       if (snapshot.exists) {
         await rename(destination, previous);
+        const previousStatus = await statusAt(previous);
+        const moved = previousStatus === undefined || !previousStatus.isDirectory() || previousStatus.isSymbolicLink()
+          ? undefined
+          : await this.#snapshot(previous, previousStatus.mode & 0o777);
+        if (moved === undefined || !sameSnapshot(snapshot, moved)) {
+          const changed = new Error("The destination changed while reconciliation was being prepared.");
+          try {
+            await rename(previous, destination);
+          } catch (restoreError) {
+            preserveTransaction = true;
+            throw new AggregateError([changed, restoreError], "The concurrently changed destination could not be restored.");
+          }
+          throw changed;
+        }
       } else if ((await statusAt(destination)) !== undefined) {
         throw new Error("The destination appeared while reconciliation was being prepared.");
       }

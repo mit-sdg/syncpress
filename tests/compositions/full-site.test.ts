@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { buildSite, inspectSite, serveSite, watchSite } from "../../src/edge.ts";
@@ -328,6 +328,17 @@ test("reports multiple location-aware configuration errors before staging source
   }
 });
 
+test("rejects a non-UTF-8 configuration without waiting for endpoint timeout", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-binary-policy-"));
+  try {
+    await copyExample(project);
+    await writeFile(join(project, "site.yaml"), new Uint8Array([0xff]));
+    await expect(buildSite(project)).rejects.toThrow("INVALID_TEXT");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("reports a missing rendering profile after clearing prior diagnostics", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-missing-profile-"));
   const destination = join(project, "dist");
@@ -350,35 +361,43 @@ test("reports a missing rendering profile after clearing prior diagnostics", asy
 });
 
 test("inspect reports route ownership, template provenance, collection membership, and dependencies", async () => {
-  const report = await inspectSite(exampleDirectory, "/posts/first/");
+  const project = await mkdtemp(join(tmpdir(), "syncpress-inspect-site-"));
+  try {
+    await copyExample(project);
+    const report = await inspectSite(project, "/posts/first/");
 
-  expect(report).toMatchObject({
-    route: "/posts/first/",
-    source: { path: "posts/first.md" },
-    template: { name: "post.html" },
-    rendering: {
-      path: "posts/first.md",
-      profile: "markdown",
-      template: "post.html",
-      stage: "completed",
-      body: { source: expect.any(String) },
-      layout: { source: expect.any(String) },
-    },
-  });
-  expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 2 }));
-  expect(report.renderings).toEqual([
-    expect.objectContaining({ attempt: report.rendering?.attempt, stage: "completed" }),
-  ]);
-  expect(report.dependencies.inputs).toContainEqual(expect.objectContaining({ input: expect.stringContaining("posts/first.md") }));
-  expect(report.outputs).toContainEqual(expect.objectContaining({ path: "posts/first/index.html" }));
+    expect(report).toMatchObject({
+      route: "/posts/first/",
+      source: { path: "posts/first.md" },
+      template: { name: "post.html" },
+      rendering: {
+        path: "posts/first.md",
+        profile: "markdown",
+        template: "post.html",
+        stage: "completed",
+        body: { source: expect.any(String) },
+        layout: { source: expect.any(String) },
+      },
+    });
+    expect(report.memberships).toContainEqual(expect.objectContaining({ name: "posts", index: 2 }));
+    expect(report.renderings).toEqual([
+      expect.objectContaining({ attempt: report.rendering?.attempt, stage: "completed" }),
+    ]);
+    expect(report.dependencies.inputs).toContainEqual(expect.objectContaining({ input: expect.stringContaining("posts/first.md") }));
+    expect(report.outputs).toContainEqual(expect.objectContaining({ path: "posts/first/index.html" }));
 
-  const redirect = await inspectSite(exampleDirectory, "/start/");
-  expect(redirect.template).toBeUndefined();
-  expect(redirect.rendering).toBeUndefined();
+    const redirect = await inspectSite(project, "/start/");
+    expect(redirect.template).toBeUndefined();
+    expect(redirect.rendering).toBeUndefined();
+    await expect(lstat(join(project, "dist"))).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
 });
 
 test("the development server serves reconciled output with a live-reload client", async () => {
   const destination = await mkdtemp(join(tmpdir(), "syncpress-dev-server-"));
+  const outside = await mkdtemp(join(tmpdir(), "syncpress-dev-server-outside-"));
   const server = await serveSite(exampleDirectory, destination, { port: 0 });
 
   try {
@@ -388,9 +407,13 @@ test("the development server serves reconciled output with a live-reload client"
     expect(html).toContain("/__syncpress/live-reload");
     expect(html).toContain("https://mit-sdg.github.io/syncpress/");
     expect((await fetch(`http://${server.host}:${server.port}/missing`)).status).toBe(404);
+    await writeFile(join(outside, "secret.txt"), "not public\n");
+    await symlink(outside, join(destination, "escape"));
+    expect((await fetch(`http://${server.host}:${server.port}/escape/secret.txt`)).status).toBe(403);
   } finally {
     await server.close();
     await rm(destination, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });
 
@@ -401,13 +424,15 @@ test("watch ignores its own reconciliation transactions", async () => {
   const rebuilt = new Promise<void>((resolveRebuilt) => {
     nextBuild = resolveRebuilt;
   });
+  const outputs: string[] = [];
 
   try {
     await copyExample(project);
     await mkdir(join(project, "build-output"));
     await symlink("build-output", join(project, "dist"));
     const watcher = await watchSite(project, "dist", {
-      onBuild() {
+      onBuild(_result, outputDirectory) {
+        outputs.push(outputDirectory);
         builds += 1;
         if (builds === 2) nextBuild?.();
       },
@@ -421,6 +446,7 @@ test("watch ignores its own reconciliation transactions", async () => {
       ]);
       await Bun.sleep(250);
       expect(builds).toBe(2);
+      expect(outputs).toEqual([join(project, "build-output"), join(project, "build-output")]);
     } finally {
       await watcher.close();
     }
@@ -535,14 +561,14 @@ test("an invalid asset output prefix fails before source staging", async () => {
   }
 });
 
-test("duplicate include and layout names are rejected before template reactions run", async () => {
+test("duplicate include and layout names are rejected by template ownership", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-duplicate-template-site-"));
 
   try {
     await copyExample(project);
     await writeFile(join(project, "templates", "includes", "page.html"), "<p>duplicate</p>");
 
-    await expect(buildSite(project, "dist")).rejects.toThrow("Duplicate logical Liquid template name");
+    await expect(buildSite(project, "dist")).rejects.toThrow("TEMPLATE_NAME_TAKEN");
   } finally {
     await rm(project, { recursive: true, force: true });
   }

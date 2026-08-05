@@ -4,21 +4,23 @@ export class InvalidText extends Error {}
 export class InvalidPhases extends Error {}
 export class NoPhases extends Error {}
 export class PhaseRepeated extends Error {}
-export class UnknownMode extends Error {}
 export class SequenceNotFound extends Error {}
+export class SequenceActive extends Error {}
 export class JobNotRunning extends Error {}
+export class StaleAttempt extends Error {}
 
-type Mode = "once" | "live";
 type JobState = "running" | "finished" | "failed";
 type SequenceRecord = { sequence: string; name: string; phases: readonly string[] };
+type TransitionRecord = { job: string; name: string; phase: string | null; attempt: string | null };
 type JobRecord = {
   job: string;
   sequence: string;
+  name: string;
   phases: readonly string[];
   index: number;
   order: bigint;
-  mode: Mode;
   state: JobState;
+  transitions: Map<string, TransitionRecord>;
   reason?: string;
 };
 
@@ -51,10 +53,6 @@ function normalizePhases(value: unknown): readonly string[] {
   return Object.freeze(phases);
 }
 
-function requireMode(value: unknown): asserts value is Mode {
-  if (value !== "once" && value !== "live") throw new UnknownMode();
-}
-
 function samePhases(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((phase, index) => phase === right[index]);
 }
@@ -67,11 +65,16 @@ function currentPhase(job: JobRecord): string {
   return job.phases[job.index]!;
 }
 
+function attemptIdentity(job: string, index: number): string {
+  return `phase-attempt:${JSON.stringify([job, index])}`;
+}
+
 /** Advance independent jobs through an explicitly declared sequence of barriers. */
 export class PhasingConcept {
   readonly #sequencesByName = new Map<string, SequenceRecord>();
   readonly #sequencesByID = new Map<string, SequenceRecord>();
   readonly #jobs = new Map<string, JobRecord>();
+  readonly #latestBySequence = new Map<string, JobRecord>();
   #nextJob = 1n;
 
   declare({ name, phases }: { name: unknown; phases: unknown }) {
@@ -89,36 +92,48 @@ export class PhasingConcept {
     return { sequence, changed: true };
   }
 
-  start({ sequence, mode }: { sequence: unknown; mode: unknown }) {
+  start({ sequence }: { sequence: string }) {
     if (!isText(sequence)) throw new SequenceNotFound();
     const plan = this.#sequencesByID.get(sequence);
     if (plan === undefined) throw new SequenceNotFound();
-    requireMode(mode);
+    if ([...this.#jobs.values()].some((job) => job.sequence === sequence && job.state === "running")) {
+      throw new SequenceActive();
+    }
 
     const order = this.#nextJob;
     this.#nextJob += 1n;
     const job = `job:${order}`;
     const phases = Object.freeze([...plan.phases]);
-    this.#jobs.set(job, { job, sequence, phases, index: 0, order, mode, state: "running" });
-    return { job, phase: phases[0]!, mode };
+    const record: JobRecord = { job, sequence, name: plan.name, phases, index: 0, order, state: "running", transitions: new Map() };
+    this.#jobs.set(job, record);
+    this.#latestBySequence.set(sequence, record);
+    return { job, name: plan.name, phase: phases[0]!, attempt: attemptIdentity(job, 0) };
   }
 
-  advance({ job }: { job: unknown }) {
+  advance({ job, attempt }: { job: string; attempt: string }) {
     const record = isText(job) ? this.#jobs.get(job) : undefined;
-    if (record?.state !== "running") throw new JobNotRunning();
+    if (record === undefined) throw new JobNotRunning();
+    const completed = isText(attempt) ? record.transitions.get(attempt) : undefined;
+    if (completed !== undefined) return { ...completed, transitioned: false };
+    if (record.state !== "running") throw new JobNotRunning();
+    if (attempt !== attemptIdentity(job, record.index)) throw new StaleAttempt();
 
+    let next: TransitionRecord;
     if (record.index < record.phases.length - 1) {
       record.index += 1;
-      return { job, phase: currentPhase(record), mode: record.mode };
+      next = { job, name: record.name, phase: currentPhase(record), attempt: attemptIdentity(job, record.index) };
+    } else {
+      record.state = "finished";
+      next = { job, name: record.name, phase: null, attempt: null };
     }
-
-    record.state = "finished";
-    return { job, phase: null, mode: record.mode };
+    record.transitions.set(attempt, next);
+    return { ...next, transitioned: true };
   }
 
-  abandon({ job, reason }: { job: unknown; reason: unknown }) {
+  abandon({ job, attempt, reason }: { job: string; attempt: string; reason: unknown }) {
     const record = isText(job) ? this.#jobs.get(job) : undefined;
     if (record?.state !== "running") throw new JobNotRunning();
+    if (attempt !== attemptIdentity(record.job, record.index)) throw new StaleAttempt();
     requireText(reason);
 
     record.state = "failed";
@@ -126,17 +141,36 @@ export class PhasingConcept {
     return { job, reason };
   }
 
-  _job({ job }: { job: unknown }): { phase: string; state: JobState; mode: Mode }[] {
+  _job({ job }: { job: string }): { sequence: string; name: string; phase: string; attempt: string; state: JobState }[] {
     if (!isText(job)) return [];
     const record = this.#jobs.get(job);
-    return record === undefined ? [] : [{ phase: currentPhase(record), state: record.state, mode: record.mode }];
+    return record === undefined ? [] : [{
+      sequence: record.sequence,
+      name: record.name,
+      phase: currentPhase(record),
+      attempt: attemptIdentity(record.job, record.index),
+      state: record.state,
+    }];
   }
 
-  _running(): { job: string; phase: string; mode: Mode }[] {
+  _running({ sequence }: { sequence: string }): { job: string; name: string; phase: string; attempt: string }[] {
+    if (!isText(sequence)) return [];
     return [...this.#jobs.values()]
-      .filter(({ state }) => state === "running")
+      .filter((job) => job.sequence === sequence && job.state === "running")
       .sort((left, right) => (left.order < right.order ? -1 : left.order > right.order ? 1 : 0))
-      .map((record) => ({ job: record.job, phase: currentPhase(record), mode: record.mode }));
+      .map((record) => ({ job: record.job, name: record.name, phase: currentPhase(record), attempt: attemptIdentity(record.job, record.index) }));
+  }
+
+  _latest({ sequence }: { sequence: string }): { job: string; name: string; phase: string; attempt: string; state: JobState }[] {
+    if (!isText(sequence)) return [];
+    const record = this.#latestBySequence.get(sequence);
+    return record === undefined ? [] : [{
+      job: record.job,
+      name: record.name,
+      phase: currentPhase(record),
+      attempt: attemptIdentity(record.job, record.index),
+      state: record.state,
+    }];
   }
 
   _outcome({ job }: { job: string }): { state: Exclude<JobState, "running">; reason?: string }[] {

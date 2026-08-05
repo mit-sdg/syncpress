@@ -1,7 +1,7 @@
 import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { PAGE_PATTERNS, PARTS } from "./shared.ts";
-import { ImageAssetPathSetting, ImageRenditionSettings } from "./views.ts";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { JoinedPath, OutputPathAddress, RetargetedReference } from "./calculations.ts";
+import { DIAGNOSTIC_SCOPES, PAGE_PATTERNS, PARTS } from "./shared.ts";
 import {
   BesidePageOutput,
   ResolvedLocalBodyReference,
@@ -13,6 +13,7 @@ const {
   Embedding,
   Emitting,
   Filing,
+  Governing,
   Matching,
   Referencing,
   Rendering,
@@ -36,19 +37,19 @@ export const RasterBodyAssetReference = view(
         content,
       }),
       Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-      Matching._matches({ pattern, path: imagePath }).is({ matched: true }),
+      computations.patternHasResult({ pattern, path: imagePath, matched: true }),
     ),
 ).many();
 
 export const ResponsiveBodyImageEmbedding = view(
   "responsive body image embedding (embedding)",
-  ({ embedding }, { page, original }, { source, rendering, reference, raw, image }) =>
+  ({ embedding }, { rendering, page, original }, { source, reference, raw, image }) =>
     where(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source, raw, role: "image" }),
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
       Rendering._active({ rendering }).is({ subject: page }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
+      computations.targetHasKind({ target: raw, kind: "relative" }),
       Filing._resolve({ file: page, address: raw }).is({ target: image }),
       Transcoding._original({ subject: image }).is({ original }),
     ),
@@ -67,7 +68,7 @@ export const PrimaryRasterImagesAdmit = reaction(
 /** Render the configured rendition set after an image has been admitted. */
 export const AdmittedRasterImagesRender = reaction(({ original, widths, formats }) =>
   when(Transcoding.admit({}).responds({ original }))
-    .where(ImageRenditionSettings({}).is({ widths, formats }))
+    .where(Governing._images({}).is({ widths, formats }))
     .then(Transcoding.render({ original, widths, formats })),
 );
 
@@ -77,17 +78,20 @@ export const RasterFallbacksStage = reaction(
     original,
     image,
     source,
+    rendering,
     page,
     name,
     path,
     content,
     mediaType,
+    emissionAttempt,
   }) =>
     when(Transcoding.render({ original }).responds({}))
       .where(
         earlier(Referencing.scan, { part: PARTS.body }, { source }),
         Transcoding._original({ subject: image }).is({ original }),
-        RasterBodyAssetReference({ source }).is({ page, image, name }),
+        RasterBodyAssetReference({ source }).is({ rendering, page, image, name }),
+        Rendering._active({ rendering }).is({ emissionAttempt }),
         BesidePageOutput({ page, name }).is({ path }),
         Transcoding._renditions({ original }).is({
           fallback: true,
@@ -95,7 +99,7 @@ export const RasterFallbacksStage = reaction(
           mediaType,
         }),
       )
-      .then(Emitting.intend({ producer: page, claim: image, path, content, medium: mediaType })),
+      .then(Emitting.intend({ producer: page, attempt: emissionAttempt, claim: image, path, content, medium: mediaType })),
 );
 
 /** Declare the embedding only after that fallback intent has been staged. */
@@ -104,6 +108,7 @@ export const RasterFallbacksDeclare = reaction(
     page,
     rendering,
     path,
+    emissionAttempt,
     original,
     derived,
     source,
@@ -119,16 +124,17 @@ export const RasterFallbacksDeclare = reaction(
     height,
     attributes,
   }) =>
-    when(Emitting.intend({ producer: page, path }).responds({}))
+    when(Emitting.intend({ producer: page, attempt: emissionAttempt, path }).responds({}))
       .where(
         earlier(Transcoding.render, { original }, { derived }),
         earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
         RasterBodyAssetReference({ source }).is({ rendering, page, reference, raw, image, name }),
+        Rendering._active({ rendering }).is({ emissionAttempt }),
         Referencing._reference({ reference }).is({ label, attributes }),
         Transcoding._original({ subject: image }).is({ original }),
         BesidePageOutput({ page, name }).is({ path }),
-        Routing._locate({ path }).is({ address }),
-        Routing._retarget({ replacement: address, original: raw }).is({ target: fallback }),
+        OutputPathAddress({ path }).is({ address }),
+        RetargetedReference({ replacement: address, original: raw }).is({ target: fallback }),
         Transcoding._renditions({ original }).is({ fallback: true, format, width, height }),
       )
       .then(
@@ -152,12 +158,13 @@ export const UnretargetableRasterPrimaryImagesDiagnose = reaction(
       .where(
         RasterBodyAssetReference({ source }).is({ page, raw, name }),
         BesidePageOutput({ page, name }).is({ path: outputPath }),
-        Routing._locate({ path: outputPath }).is({ address }),
-        no(Routing._retarget({ replacement: address, original: raw })),
+        OutputPathAddress({ path: outputPath }).is({ address }),
+        no(RetargetedReference({ replacement: address, original: raw })),
         Filing._file({ file: page }).is({ path: sourcePath }),
       )
       .then(
         Diagnosing.report({
+          scope: DIAGNOSTIC_SCOPES.rendering,
           severity: "error",
           code: "INVALID_LOCAL_REFERENCE",
           message: "This local reference cannot be safely retargeted.",
@@ -170,6 +177,7 @@ export const UnretargetableRasterPrimaryImagesDiagnose = reaction(
 export const RasterRenditionsStage = reaction(
   ({
     embedding,
+    rendering,
     page,
     original,
     rendition,
@@ -178,10 +186,12 @@ export const RasterRenditionsStage = reaction(
     name,
     assets,
     path,
+    emissionAttempt,
   }) =>
     when(Embedding.declare({}).responds({ embedding }))
       .where(
-        ResponsiveBodyImageEmbedding({ embedding }).is({ page, original }),
+        ResponsiveBodyImageEmbedding({ embedding }).is({ rendering, page, original }),
+        Rendering._active({ rendering }).is({ emissionAttempt }),
         Transcoding._renditions({ original }).is({
           rendition,
           fallback: false,
@@ -189,10 +199,10 @@ export const RasterRenditionsStage = reaction(
           mediaType,
           name,
         }),
-        ImageAssetPathSetting({}).is({ assets }),
-        Filing._join({ prefix: assets, name }).is({ path }),
+        Governing._paths({}).is({ assets }),
+        JoinedPath({ prefix: assets, name }).is({ path }),
       )
-      .then(Emitting.intend({ producer: page, claim: rendition, path, content, medium: mediaType })),
+      .then(Emitting.intend({ producer: page, attempt: emissionAttempt, claim: rendition, path, content, medium: mediaType })),
 );
 
 /** Offer a rendition only after the matching asset intent has been staged. */
@@ -203,9 +213,9 @@ export const RasterRenditionsOffer = reaction(
         earlier(Embedding.declare, {}, { embedding }),
         ResponsiveBodyImageEmbedding({ embedding }).is({ page, original }),
         Transcoding._renditions({ original }).is({ fallback: false, format, width, order, name }),
-        ImageAssetPathSetting({}).is({ assets }),
-        Filing._join({ prefix: assets, name }).is({ path }),
-        Routing._locate({ path }).is({ address }),
+        Governing._paths({}).is({ assets }),
+        JoinedPath({ prefix: assets, name }).is({ path }),
+        OutputPathAddress({ path }).is({ address }),
       )
       .then(Embedding.offer({ embedding, address, format, width, order })),
 );
@@ -238,7 +248,7 @@ export const RasterAdmissionsDiagnose = reaction(({ image, error, detail, source
       ResolvedLocalBodyReference({ source }).is({ page, role: "image", target: image }),
       Filing._file({ file: page }).is({ path }),
     )
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
+    .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source: path })),
 );
 
 export const RasterRendersDiagnose = reaction(({ original, error, detail, source, page, image, path }) =>
@@ -249,7 +259,7 @@ export const RasterRendersDiagnose = reaction(({ original, error, detail, source
       Transcoding._original({ subject: image }).is({ original }),
       Filing._file({ file: page }).is({ path }),
     )
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
+    .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source: path })),
 );
 
 export const RasterEmbeddingDeclarationsDiagnose = reaction(({ reference, error, detail, source, rendering, page, path }) =>
@@ -260,7 +270,7 @@ export const RasterEmbeddingDeclarationsDiagnose = reaction(({ reference, error,
       Rendering._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
+    .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source: path })),
 );
 
 export const RasterOffersDiagnose = reaction(({ embedding, error, detail, reference, source, rendering, page, path }) =>
@@ -272,5 +282,5 @@ export const RasterOffersDiagnose = reaction(({ embedding, error, detail, refere
       Rendering._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
+    .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source: path })),
 );

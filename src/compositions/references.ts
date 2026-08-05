@@ -1,6 +1,13 @@
 import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import {
+  AddressOutputPath,
+  DirectoryPath,
+  JoinedPath,
+  OutputPathAddress,
+  RetargetedReference,
+} from "./calculations.ts";
+import { DIAGNOSTIC_SCOPES, PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
 const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Rendering, Routing } = conceptRefs;
 
@@ -13,7 +20,7 @@ export const RelativeBodyReference = view(
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
       Rendering._active({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ reference, raw, role }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
+      computations.targetHasKind({ target: raw, kind: "relative" }),
     ),
 ).many();
 
@@ -43,9 +50,9 @@ export const BesidePageOutput = view(
   ({ page, name }, { path }, { pageAddress, pagePath, prefix }) =>
     where(
       Routing._address({ owner: page }).is({ address: pageAddress }),
-      Routing._file({ address: pageAddress }).is({ path: pagePath }),
-      Filing._directory({ path: pagePath }).is({ prefix }),
-      Filing._join({ prefix, name }).is({ path }),
+      AddressOutputPath({ address: pageAddress }).is({ path: pagePath }),
+      DirectoryPath({ path: pagePath }).is({ prefix }),
+      JoinedPath({ prefix, name }).is({ path }),
     ),
 ).optional();
 
@@ -58,7 +65,7 @@ const CopyableBodyAsset = view(
     where(
       UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", asset, sourcePath, name, content }),
       Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-      Matching._matches({ pattern, path: sourcePath }).is({ matched: false }),
+      computations.patternHasResult({ pattern, path: sourcePath, matched: false }),
     ),
   ],
 ).many();
@@ -66,17 +73,17 @@ const CopyableBodyAsset = view(
 const HeldBodyReference = view(
   "held body reference of source (source)",
   ({ source }, { reference, raw }, _bindings) => [
-    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "absolute" })),
-    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "external" })),
-    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "fragment" })),
+    where(Referencing._references({ source }).is({ reference, raw }), computations.targetHasKind({ target: raw, kind: "absolute" })),
+    where(Referencing._references({ source }).is({ reference, raw }), computations.targetHasKind({ target: raw, kind: "external" })),
+    where(Referencing._references({ source }).is({ reference, raw }), computations.targetHasKind({ target: raw, kind: "fragment" })),
   ],
 ).many();
 
 const HeldLayoutReference = view(
   "held layout reference of source (source)",
   ({ source }, { reference, raw }, _bindings) => [
-    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "external" })),
-    where(Referencing._references({ source }).is({ reference, raw }), Routing._classify({ target: raw }).is({ kind: "fragment" })),
+    where(Referencing._references({ source }).is({ reference, raw }), computations.targetHasKind({ target: raw, kind: "external" })),
+    where(Referencing._references({ source }).is({ reference, raw }), computations.targetHasKind({ target: raw, kind: "fragment" })),
   ],
 ).many();
 
@@ -86,22 +93,24 @@ export const ClaimedBodyReferencesRetarget = reaction(({ source, reference, raw,
     .where(
       ResolvedLocalBodyReference({ source }).is({ reference, raw, target }),
       Routing._address({ owner: target }).is({ address }),
-      Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
+      RetargetedReference({ replacement: address, original: raw }).is({ target: value }),
     )
     .then(Referencing.answer({ reference, form: "address", value })),
 );
 
 /** Copy ordinary and non-raster image assets beside the page that references them. */
 export const CopyableBodyAssetsCopy = reaction(
-  ({ source, page, target, name, content, path }) =>
+  ({ source, rendering, page, target, name, content, path, emissionAttempt }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        CopyableBodyAsset({ source }).is({ page, asset: target, name, content }),
+        CopyableBodyAsset({ source }).is({ rendering, page, asset: target, name, content }),
+        Rendering._active({ rendering }).is({ emissionAttempt }),
         BesidePageOutput({ page, name }).is({ path }),
       )
       .then(
         Emitting.intend({
           producer: page,
+          attempt: emissionAttempt,
           claim: target,
           path,
           content,
@@ -118,8 +127,8 @@ export const CopiedBodyAssetsAnswer = reaction(
         earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
         CopyableBodyAsset({ source }).is({ rendering, page, reference, raw, name }),
         BesidePageOutput({ page, name }).is({ path }),
-        Routing._locate({ path }).is({ address }),
-        Routing._retarget({ replacement: address, original: raw }).is({ target: value }),
+        OutputPathAddress({ path }).is({ address }),
+        RetargetedReference({ replacement: address, original: raw }).is({ target: value }),
       )
       .then(Referencing.answer({ reference, form: "address", value })),
 );
@@ -138,6 +147,7 @@ export const UnpublishedDocumentBodyReferencesDiagnose = reaction(
       )
       .then(
         Diagnosing.report({
+          scope: DIAGNOSTIC_SCOPES.rendering,
           severity: "error",
           code: "UNPUBLISHED_DOCUMENT_REFERENCE",
           message: "This local reference targets an unpublished document.",
@@ -162,7 +172,7 @@ function localReferenceDiagnostic(status: "missing" | "outside" | "invalid", cod
         Filing._resolution({ file: page, address: raw }).is({ status }),
         Filing._file({ file: page }).is({ path }),
       )
-      .then(Diagnosing.report({ severity: "error", code, message, source: path })),
+      .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code, message, source: path })),
   );
 }
 
@@ -189,11 +199,12 @@ export const UnretargetableClaimedBodyReferencesDiagnose = reaction(
       .where(
         ResolvedLocalBodyReference({ source }).is({ page, raw, target }),
         Routing._address({ owner: target }).is({ address }),
-        no(Routing._retarget({ replacement: address, original: raw })),
+        no(RetargetedReference({ replacement: address, original: raw })),
         Filing._file({ file: page }).is({ path }),
       )
       .then(
         Diagnosing.report({
+          scope: DIAGNOSTIC_SCOPES.rendering,
           severity: "error",
           code: "INVALID_LOCAL_REFERENCE",
           message: "This local reference cannot be safely retargeted.",
@@ -208,12 +219,13 @@ export const UnretargetableCopiedBodyAssetsDiagnose = reaction(
       .where(
         CopyableBodyAsset({ source }).is({ page, raw, name }),
         BesidePageOutput({ page, name }).is({ path: outputPath }),
-        Routing._locate({ path: outputPath }).is({ address }),
-        no(Routing._retarget({ replacement: address, original: raw })),
+        OutputPathAddress({ path: outputPath }).is({ address }),
+        no(RetargetedReference({ replacement: address, original: raw })),
         Filing._file({ file: page }).is({ path: sourcePath }),
       )
       .then(
         Diagnosing.report({
+          scope: DIAGNOSTIC_SCOPES.rendering,
           severity: "error",
           code: "INVALID_LOCAL_REFERENCE",
           message: "This local reference cannot be safely retargeted.",
@@ -227,7 +239,7 @@ export const AbsoluteLayoutReferencesRebase = reaction(({ source, reference, raw
   when(Referencing.scan({ part: PARTS.layout }).responds({ source }))
     .where(
       Referencing._references({ source }).is({ reference, raw }),
-      Routing._classify({ target: raw }).is({ kind: "absolute" }),
+      computations.targetHasKind({ target: raw, kind: "absolute" }),
       Routing._url({ target: raw }).is({ url }),
     )
     .then(Referencing.answer({ reference, form: "address", value: url })),
@@ -246,11 +258,12 @@ export const RelativeLayoutReferencesDiagnose = reaction(({ source, rendering, p
       Referencing._source({ source }).is({ subject: rendering }),
       Rendering._active({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ raw }),
-      Routing._classify({ target: raw }).is({ kind: "relative" }),
+      computations.targetHasKind({ target: raw, kind: "relative" }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(
       Diagnosing.report({
+        scope: DIAGNOSTIC_SCOPES.rendering,
         severity: "error",
         code: "RELATIVE_LAYOUT_REFERENCE",
         message: "A layout reference must be site-absolute, external, or fragment-only.",

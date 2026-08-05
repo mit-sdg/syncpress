@@ -1,9 +1,11 @@
 import { isProxy } from "node:util/types";
+import picomatch from "picomatch";
 
 export class InvalidText extends Error {}
 export class InvalidDirection extends Error {}
 export class InvalidField extends Error {}
 export class InvalidCondition extends Error {}
+export class InvalidSelector extends Error {}
 export class InvalidCard extends Error {}
 export class CatalogNotFound extends Error {}
 export class NotIncluded extends Error {}
@@ -25,11 +27,14 @@ type CatalogRecord = {
   direction: Direction;
   sort: string | null;
   condition: CatalogCondition | null;
+  selector: string;
+  matches: (path: string) => boolean;
 };
 type EntryRecord = {
   entry: string;
   catalog: string;
   item: string;
+  path: string;
   key: NormalizedValue | undefined;
   tiebreak: string;
   card: NormalizedRecord;
@@ -39,6 +44,30 @@ class UnsupportedValue extends Error {}
 
 const encoder = new TextEncoder();
 const fieldPattern = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
+const globOptions = {
+  basename: false,
+  contains: false,
+  debug: true,
+  dot: true,
+  fastpaths: false,
+  keepQuotes: false,
+  nobrace: false,
+  nobracket: false,
+  nocase: false,
+  noextglob: false,
+  noglobstar: false,
+  nonegate: true,
+  posix: true,
+  strictBrackets: true,
+  strictSlashes: true,
+  windows: false,
+} as const;
+
+function compileGlob(pattern: string): (path: string) => boolean {
+  const matcher = picomatch(pattern, globOptions, true);
+  if (matcher.state.quotes !== 0) throw new SyntaxError("Unterminated quoted run");
+  return matcher;
+}
 
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();
@@ -280,46 +309,59 @@ export class CatalogingConcept {
 
   declare({
     name,
+    selector,
     direction,
     sort,
     condition,
   }: {
     name: unknown;
+    selector: unknown;
     direction: unknown;
     sort: unknown;
     condition: unknown;
   }) {
     requireText(name);
+    requireText(selector);
+    let matches: (path: string) => boolean;
+    try {
+      matches = compileGlob(selector);
+    } catch {
+      throw new InvalidSelector();
+    }
     if (direction !== "asc" && direction !== "desc") throw new InvalidDirection();
     const normalizedSort = sort === null ? null : normalizeField(sort);
     const normalizedCondition = normalizeCondition(condition);
     const existing = this.#catalogsByName.get(name);
     if (existing === undefined) {
       const catalog = catalogIdentity(name);
-      const record: CatalogRecord = { catalog, name, direction, sort: normalizedSort, condition: normalizedCondition };
+      const record: CatalogRecord = { catalog, name, selector, matches, direction, sort: normalizedSort, condition: normalizedCondition };
       this.#catalogsByName.set(name, record);
       this.#catalogsByID.set(catalog, record);
       return { catalog, changed: true };
     }
     const changed =
       existing.direction !== direction ||
+      existing.selector !== selector ||
       existing.sort !== normalizedSort ||
       !equalCondition(existing.condition, normalizedCondition);
     if (!changed) return { catalog: existing.catalog, changed: false };
     existing.direction = direction;
+    existing.selector = selector;
+    existing.matches = matches;
     existing.sort = normalizedSort;
     existing.condition = normalizedCondition;
     for (const [entry, record] of this.#entries) {
       if (record.catalog !== existing.catalog) continue;
-      if (!accepts(record.card, normalizedCondition)) this.#entries.delete(entry);
+      if (!matches(record.path) || !accepts(record.card, normalizedCondition)) this.#entries.delete(entry);
       else record.key = normalizedSort === null ? undefined : readField(record.card, normalizedSort);
     }
     return { catalog: existing.catalog, changed: true };
   }
 
-  index({ catalog, item, tiebreak, card }: { catalog: unknown; item: unknown; tiebreak: unknown; card: unknown }) {
+  index({ catalog, item, path, tiebreak, card }: { catalog: unknown; item: unknown; path: unknown; tiebreak: unknown; card: unknown }) {
     requireText(catalog);
     requireText(item);
+    requireText(path);
     requireText(tiebreak);
     const policy = this.#catalogsByID.get(catalog);
     if (policy === undefined) throw new CatalogNotFound();
@@ -334,19 +376,20 @@ export class CatalogingConcept {
 
     const entry = entryIdentity(catalog, item);
     const existing = this.#entries.get(entry);
-    if (!accepts(normalizedCard, policy.condition)) {
+    if (!policy.matches(path) || !accepts(normalizedCard, policy.condition)) {
       return { entry, included: false, changed: existing === undefined ? false : this.#entries.delete(entry) };
     }
     const normalizedKey = policy.sort === null ? undefined : readField(normalizedCard, policy.sort);
     if (
       existing !== undefined &&
       equalOptionalValue(existing.key, normalizedKey) &&
+      existing.path === path &&
       existing.tiebreak === tiebreak &&
       equalValue(existing.card, normalizedCard)
     ) {
       return { entry, included: true, changed: false };
     }
-    this.#entries.set(entry, { entry, catalog, item, key: normalizedKey, tiebreak, card: normalizedCard });
+    this.#entries.set(entry, { entry, catalog, item, path, key: normalizedKey, tiebreak, card: normalizedCard });
     return { entry, included: true, changed: true };
   }
 
@@ -377,18 +420,18 @@ export class CatalogingConcept {
     return { count };
   }
 
-  _catalogs(): { catalog: string; name: string; direction: Direction; sort: string | null; condition: CatalogCondition | null }[] {
+  _catalogs(): { catalog: string; name: string; selector: string; direction: Direction; sort: string | null; condition: CatalogCondition | null }[] {
     return [...this.#catalogsByID.values()]
       .sort((left, right) => compareText(left.name, right.name))
-      .map(({ catalog, name, direction, sort, condition }) => ({ catalog, name, direction, sort, condition: cloneCondition(condition) }));
+      .map(({ catalog, name, selector, direction, sort, condition }) => ({ catalog, name, selector, direction, sort, condition: cloneCondition(condition) }));
   }
 
-  _named({ name }: { name: unknown }): { catalog: string; direction: Direction; sort: string | null; condition: CatalogCondition | null }[] {
+  _named({ name }: { name: unknown }): { catalog: string; selector: string; direction: Direction; sort: string | null; condition: CatalogCondition | null }[] {
     if (!isText(name)) return [];
     const catalog = this.#catalogsByName.get(name);
     return catalog === undefined
       ? []
-      : [{ catalog: catalog.catalog, direction: catalog.direction, sort: catalog.sort, condition: cloneCondition(catalog.condition) }];
+      : [{ catalog: catalog.catalog, selector: catalog.selector, direction: catalog.direction, sort: catalog.sort, condition: cloneCondition(catalog.condition) }];
   }
 
   _entries({ catalog }: { catalog: unknown }): { entry: string; item: string; card: NormalizedRecord }[] {

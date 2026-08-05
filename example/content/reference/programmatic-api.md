@@ -67,14 +67,15 @@ function watchSite(
   projectDirectory?: string,
   destination?: string,
   options?: {
-    onBuild?: (result: BuildResult) => void;
+    onBuild?: (result: BuildResult, outputDirectory: string) => void;
     onError?: (error: unknown) => void;
   },
 ): Promise<SiteWatcher>;
 ```
 
 `watchSite` performs the initial strict build before resolving. It then watches
-the project recursively and invokes `onBuild` after each successful build.
+the project recursively and invokes `onBuild` after each successful build with
+the result and canonical output directory.
 Later build and watcher failures are passed to `onError` when that callback is
 provided. A failed rebuild leaves the last reconciled output in place.
 

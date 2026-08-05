@@ -6,6 +6,7 @@ import {
   InvalidCondition,
   InvalidDirection,
   InvalidField,
+  InvalidSelector,
   InvalidText,
   NotIncluded,
 } from "./cataloging.ts";
@@ -17,6 +18,7 @@ export const cataloging = registerConcept({
   refusals: {
     INVALID_TEXT: InvalidText,
     INVALID_DIRECTION: InvalidDirection,
+    INVALID_SELECTOR: InvalidSelector,
     COLLECTION_NOT_FOUND: CatalogNotFound,
     INVALID_FIELD: InvalidField,
     INVALID_CONDITION: InvalidCondition,

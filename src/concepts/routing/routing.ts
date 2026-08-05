@@ -1,11 +1,3 @@
-import {
-  encodeSegment,
-  isPathSegment,
-  isText,
-  parseAddress,
-  pathSegments,
-} from "@syncpress/address";
-
 const INVALID_OWNER = "An owner must be a well-formed text identity.";
 const INVALID_BASE = "A base must be a canonical directory address.";
 const INVALID_ORIGIN = "An origin must be a canonical HTTP or HTTPS origin.";
@@ -55,54 +47,57 @@ export class NotClaimed extends Error {
   }
 }
 
-export type AddressKind = "relative" | "absolute" | "external" | "fragment";
-
 type Claim = { claim: string; owner: string; address: string };
+type ParsedAddress = { address: string; segments: string[]; directory: boolean };
 const encoder = new TextEncoder();
-const scheme = /^[a-z][a-z\d+.-]*:/i;
-const literalReferenceCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@/?#-]$/;
-const hexadecimalDigit = /^[A-Fa-f0-9]$/;
-const unsafeUnicodeReferenceCharacter = /[\p{Cc}\p{Cf}\p{Zs}\p{Zl}\p{Zp}]/u;
+const literalAddressCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@-]$/;
+const forbiddenSegmentCharacter = /[\\/\u0000-\u001f\u007f]/u;
+
+function isText(value: unknown): value is string {
+  return typeof value === "string" && value.isWellFormed();
+}
+
+function isPathSegment(value: unknown): value is string {
+  return isText(value) && value !== "" && value !== "." && value !== ".." &&
+    value.normalize("NFC") === value && !forbiddenSegmentCharacter.test(value);
+}
+
+function encodeSegment(segment: string): string {
+  let encoded = "";
+  for (const character of segment) {
+    if (literalAddressCharacter.test(character)) encoded += character;
+    else for (const byte of encoder.encode(character)) encoded += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+  }
+  return encoded;
+}
+
+function decodeSegment(segment: string): string | undefined {
+  try {
+    const decoded = decodeURIComponent(segment);
+    return isPathSegment(decoded) && encodeSegment(decoded) === segment ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseAddress(address: unknown): ParsedAddress | undefined {
+  if (!isText(address) || !address.startsWith("/") || address.startsWith("//")) return undefined;
+  if (address === "/") return { address, segments: [], directory: true };
+  const directory = address.endsWith("/");
+  const body = address.slice(1, directory ? -1 : address.length);
+  if (body === "") return undefined;
+  const segments: string[] = [];
+  for (const encoded of body.split("/")) {
+    const decoded = decodeSegment(encoded);
+    if (decoded === undefined) return undefined;
+    segments.push(decoded);
+  }
+  return !directory && segments.at(-1) === "index.html" ? undefined : { address, segments, directory };
+}
 
 function requireOwner(value: unknown): asserts value is string {
   if (!isText(value)) throw new InvalidOwner();
 }
-
-
-function stripExtension(name: string): string {
-  const dot = name.lastIndexOf(".");
-  if (dot <= 0 || dot === name.length - 1) return name;
-  const stem = name.slice(0, dot);
-  return isPathSegment(stem) ? stem : name;
-}
-
-function deriveAddress(path: unknown): string | undefined {
-  const segments = pathSegments(path);
-  if (segments === undefined) return undefined;
-
-  const leaf = stripExtension(segments.at(-1)!);
-  if (leaf === "index") segments.pop();
-  else segments[segments.length - 1] = leaf;
-  return segments.length === 0 ? "/" : `/${segments.map(encodeSegment).join("/")}/`;
-}
-
-function pathForAddress(address: unknown): string | undefined {
-  const parsed = parseAddress(address);
-  if (parsed === undefined) return undefined;
-  const segments = [...parsed.segments];
-  if (parsed.directory) segments.push("index.html");
-  return segments.join("/");
-}
-
-function addressForPath(path: unknown): string | undefined {
-  const segments = pathSegments(path);
-  if (segments === undefined) return undefined;
-  const directory = segments.at(-1) === "index.html";
-  if (directory) segments.pop();
-  if (segments.length === 0) return "/";
-  return `/${segments.map(encodeSegment).join("/")}${directory ? "/" : ""}`;
-}
-
 function project(base: string, target: unknown): string | undefined {
   if (!isText(target) || !target.startsWith("/") || target.startsWith("//")) return undefined;
   return base === "/" ? target : `${base.slice(0, -1)}${target}`;
@@ -111,77 +106,16 @@ function project(base: string, target: unknown): string | undefined {
 function parseOrigin(origin: unknown): string | undefined {
   if (origin === undefined) return undefined;
   if (!isText(origin)) throw new InvalidOrigin();
-
   let parsed: URL;
   try {
     parsed = new URL(origin);
   } catch {
     throw new InvalidOrigin();
   }
-  if (
-    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
-    parsed.origin !== origin.replace(/\/$/, "")
-  ) {
+  if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.origin !== origin.replace(/\/$/, "")) {
     throw new InvalidOrigin();
   }
   return parsed.origin;
-}
-
-function classify(target: unknown): AddressKind | undefined {
-  if (!isText(target)) return undefined;
-  if (target.startsWith("#")) return "fragment";
-  if (target.startsWith("//") || scheme.test(target)) return "external";
-  if (target.startsWith("/")) return "absolute";
-  return "relative";
-}
-
-function hasSafeReferenceSpelling(target: string): boolean {
-  for (let index = 0; index < target.length; index += 1) {
-    const character = target[index]!;
-    if (character === "%") {
-      if (!hexadecimalDigit.test(target[index + 1] ?? "") || !hexadecimalDigit.test(target[index + 2] ?? "")) {
-        return false;
-      }
-      index += 2;
-      continue;
-    }
-
-    const codePoint = target.codePointAt(index)!;
-    const scalar = String.fromCodePoint(codePoint);
-    if (codePoint <= 0x7f ? !literalReferenceCharacter.test(scalar) : unsafeUnicodeReferenceCharacter.test(scalar)) {
-      return false;
-    }
-    if (codePoint > 0xffff) index += 1;
-  }
-  return true;
-}
-
-function suffixStart(target: string): number {
-  const query = target.indexOf("?");
-  const fragment = target.indexOf("#");
-  if (query === -1) return fragment;
-  if (fragment === -1) return query;
-  return Math.min(query, fragment);
-}
-
-function isSafeRelativeReference(target: unknown): target is string {
-  if (!isText(target) || classify(target) !== "relative" || !hasSafeReferenceSpelling(target)) return false;
-
-  const fragment = target.indexOf("#");
-  if (fragment !== -1 && target.indexOf("#", fragment + 1) !== -1) return false;
-
-  const start = suffixStart(target);
-  const path = start === -1 ? target : target.slice(0, start);
-  const slash = path.indexOf("/");
-  const firstSegment = path.slice(0, slash === -1 ? path.length : slash);
-  return !firstSegment.includes(":");
-}
-
-function retarget(replacement: unknown, original: unknown): string | undefined {
-  const parsed = parseAddress(replacement);
-  if (parsed === undefined || !isSafeRelativeReference(original)) return undefined;
-  const start = suffixStart(original);
-  return start === -1 ? parsed.address : `${parsed.address}${original.slice(start)}`;
 }
 
 function compareText(left: string, right: string): number {
@@ -251,37 +185,17 @@ export class RoutingConcept {
     return { claim: claim.claim, address: claim.address };
   }
 
-  _derive({ path }: { path: unknown }): { address: string }[] {
-    const address = deriveAddress(path);
-    return address === undefined ? [] : [{ address }];
-  }
-
   _address({ owner }: { owner: unknown }): { address: string; url: string }[] {
     if (!isText(owner)) return [];
     const claim = this.#claimsByOwner.get(owner);
     return claim === undefined ? [] : [{ address: claim.address, url: project(this.#base, claim.address)! }];
   }
 
-  _owner({ address }: { address: unknown }): { owner: string }[] {
+  _owner({ address }: { address: string }): { owner: string }[] {
     const parsed = parseAddress(address);
     if (parsed === undefined) return [];
     const claim = this.#claimsByAddress.get(parsed.address);
     return claim === undefined ? [] : [{ owner: claim.owner }];
-  }
-
-  _file({ address }: { address: unknown }): { path: string }[] {
-    const path = pathForAddress(address);
-    return path === undefined ? [] : [{ path }];
-  }
-
-  _locate({ path }: { path: unknown }): { address: string }[] {
-    const address = addressForPath(path);
-    return address === undefined ? [] : [{ address }];
-  }
-
-  _retarget({ replacement, original }: { replacement: unknown; original: unknown }): { target: string }[] {
-    const target = retarget(replacement, original);
-    return target === undefined ? [] : [{ target }];
   }
 
   _url({ target }: { target: unknown }): { url: string }[] {
@@ -293,11 +207,6 @@ export class RoutingConcept {
     const parsed = parseAddress(address);
     if (this.#origin === undefined || parsed === undefined) return [];
     return [{ url: `${this.#origin}${project(this.#base, parsed.address)!}` }];
-  }
-
-  _classify({ target }: { target: unknown }): { kind: AddressKind }[] {
-    const kind = classify(target);
-    return kind === undefined ? [] : [{ kind }];
   }
 
   _claims(): { owner: string; address: string }[] {

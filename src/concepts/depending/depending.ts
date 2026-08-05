@@ -1,5 +1,7 @@
 const INVALID_TEXT_MESSAGE = "Subjects and inputs must be well-formed text.";
 const NOT_BUILDING_MESSAGE = "This result is not being computed.";
+const STALE_ATTEMPT_MESSAGE = "This computation attempt is no longer active.";
+const ATTEMPT_EXHAUSTED_MESSAGE = "No further computation attempt can be represented.";
 
 export class InvalidText extends Error {
   constructor() {
@@ -15,6 +17,20 @@ export class NotBuilding extends Error {
   }
 }
 
+export class StaleAttempt extends Error {
+  constructor() {
+    super(STALE_ATTEMPT_MESSAGE);
+    this.name = "StaleAttempt";
+  }
+}
+
+export class AttemptExhausted extends Error {
+  constructor() {
+    super(ATTEMPT_EXHAUSTED_MESSAGE);
+    this.name = "AttemptExhausted";
+  }
+}
+
 export type ResultState = "building" | "current" | "stale";
 
 type ResultRecord = {
@@ -25,6 +41,7 @@ type ResultRecord = {
   inputs: Set<string>;
   attemptInputs: Set<string>;
   settled: boolean;
+  attempt: number;
 };
 
 const encoder = new TextEncoder();
@@ -75,22 +92,26 @@ export class DependingConcept {
         inputs: new Set(),
         attemptInputs: new Set(),
         settled: false,
+        attempt: 1,
       };
       this.#results.set(subject, result);
-      return { result: result.result };
+      return { result: result.result, attempt: result.attempt };
     }
 
+    if (result.attempt === Number.MAX_SAFE_INTEGER) throw new AttemptExhausted();
     this.#discardAttempt(result);
     if (result.state === "current") result.reason = undefined;
     result.state = "building";
-    return { result: result.result };
+    result.attempt += 1;
+    return { result: result.result, attempt: result.attempt };
   }
 
-  use({ subject, input }: { subject: unknown; input: unknown }) {
+  use({ subject, attempt, input }: { subject: unknown; attempt: unknown; input: unknown }) {
     requireText(subject);
     requireText(input);
     const result = this.#results.get(subject);
     if (result?.state !== "building" && result?.state !== "current") throw new NotBuilding();
+    if (attempt !== result.attempt) throw new StaleAttempt();
 
     const inputs = result.state === "building" ? result.attemptInputs : result.inputs;
     if (!inputs.has(input)) {
@@ -100,10 +121,11 @@ export class DependingConcept {
     return { use: useIdentity(result.result, input) };
   }
 
-  settle({ subject }: { subject: unknown }) {
+  settle({ subject, attempt }: { subject: unknown; attempt: unknown }) {
     requireText(subject);
     const result = this.#results.get(subject);
     if (result?.state !== "building") throw new NotBuilding();
+    if (attempt !== result.attempt) throw new StaleAttempt();
 
     if (result.settled) this.#clearInputs(result);
     result.inputs = result.attemptInputs;
@@ -164,6 +186,12 @@ export class DependingConcept {
     if (!isText(subject)) return [];
     const result = this.#results.get(subject);
     return result?.state === "current" ? [{ result: result.result }] : [];
+  }
+
+  _attempt({ subject }: { subject: unknown }): { attempt: number }[] {
+    if (!isText(subject)) return [];
+    const result = this.#results.get(subject);
+    return result === undefined ? [] : [{ attempt: result.attempt }];
   }
 
   _reason({ subject }: { subject: unknown }): { reason: string }[] {

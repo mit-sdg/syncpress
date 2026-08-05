@@ -1,5 +1,4 @@
 import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Node } from "yaml";
-import { isCanonicalAddress } from "@syncpress/address";
 
 export type ConfigurationProblem = {
   code: "INVALID_CONFIGURATION";
@@ -26,8 +25,33 @@ export type PaginationPolicy = {
   title?: string;
 };
 
+export type SiteValue = null | boolean | number | string | SiteValue[] | SiteValues;
+export type SiteValues = { [key: string]: SiteValue };
+export type CatalogCondition =
+  | { test: "equals" | "contains"; field: string; value: SiteValue }
+  | { test: "exists"; field: string };
+export type DefaultPolicy = { index: number; match: string; values: SiteValues };
+export type CollectionPolicy = {
+  name: string;
+  match: string;
+  direction: "asc" | "desc";
+  sort: string | null;
+  condition: CatalogCondition | null;
+};
+
 export type SitePolicy = {
-  outputPath: string;
+  paths: {
+    content: string;
+    templates: string;
+    public: string;
+    assets: string;
+    output: string;
+  };
+  site: SiteValues;
+  defaults: DefaultPolicy[];
+  collections: CollectionPolicy[];
+  markdown: { extensions: string[]; raw: boolean; excerptSeparator: string };
+  images: { widths: number[]; formats: string[] };
   deploy: {
     nojekyll: boolean;
     requireNotFound: boolean;
@@ -38,18 +62,113 @@ export type SitePolicy = {
   };
 };
 
+export type SiteSource = {
+  name: "content" | "templates" | "public";
+  path: string;
+};
+
 type Mapping = Map<string, Node | null>;
 
 const TOP_LEVEL_KEYS = new Set(["site", "paths", "defaults", "collections", "images", "markdown", "deploy"]);
-const PATH_KEYS = new Set(["content", "templates", "public", "assets", "output"]);
+const PATH_KEYS = new Set<keyof SitePolicy["paths"]>(["content", "templates", "public", "assets", "output"]);
 const DEPLOY_KEYS = new Set(["nojekyll", "requireNotFound", "sitemap", "feed", "redirects", "pagination"]);
-const DEFAULT_PATHS = { output: "dist" };
+const DEFAULT_PATHS = {
+  content: "content",
+  templates: "templates",
+  public: "public",
+  assets: "assets",
+  output: "dist",
+};
+const DEFAULT_MARKDOWN = {
+  extensions: ["tables", "footnotes", "strikethrough", "autolinks"],
+  raw: true,
+  excerptSeparator: "",
+};
+const DEFAULT_IMAGES = { widths: [480, 960, 1440], formats: ["avif", "webp", "original"] };
+const addressEncoder = new TextEncoder();
+const literalAddressCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@-]$/;
+const forbiddenAddressSegmentCharacter = /[\\/\u0000-\u001f\u007f]/u;
+
+function addressText(value: unknown): value is string {
+  return typeof value === "string" && value.isWellFormed();
+}
+
+function addressSegment(value: unknown): value is string {
+  return addressText(value) && value !== "" && value !== "." && value !== ".." &&
+    value.normalize("NFC") === value && !forbiddenAddressSegmentCharacter.test(value);
+}
+
+function encodeAddressSegment(segment: string): string {
+  let encoded = "";
+  for (const character of segment) {
+    if (literalAddressCharacter.test(character)) encoded += character;
+    else for (const byte of addressEncoder.encode(character)) encoded += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+  }
+  return encoded;
+}
+
+function parseAddress(address: unknown): { directory: boolean } | undefined {
+  if (!addressText(address) || !address.startsWith("/") || address.startsWith("//")) return undefined;
+  if (address === "/") return { directory: true };
+  const directory = address.endsWith("/");
+  const body = address.slice(1, directory ? -1 : address.length);
+  if (body === "") return undefined;
+  const segments: string[] = [];
+  for (const encoded of body.split("/")) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(encoded);
+    } catch {
+      return undefined;
+    }
+    if (!addressSegment(decoded) || encodeAddressSegment(decoded) !== encoded) return undefined;
+    segments.push(decoded);
+  }
+  return !directory && segments.at(-1) === "index.html" ? undefined : { directory };
+}
+
+function isCanonicalAddress(value: unknown): value is string {
+  return parseAddress(value) !== undefined;
+}
+
+function canonicalOrigin(value: unknown): string | undefined {
+  if (!addressText(value)) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return undefined;
+  }
+  return (parsed.protocol === "http:" || parsed.protocol === "https:") && parsed.origin === value.replace(/\/$/, "")
+    ? parsed.origin
+    : undefined;
+}
+
+export class InvalidConfiguration extends Error {
+  constructor() {
+    super("The assessed site configuration is invalid.");
+    this.name = "InvalidConfiguration";
+  }
+}
 
 function defaultPolicy(): SitePolicy {
   return {
-    outputPath: DEFAULT_PATHS.output,
+    paths: { ...DEFAULT_PATHS },
+    site: {},
+    defaults: [],
+    collections: [],
+    markdown: structuredClone(DEFAULT_MARKDOWN),
+    images: structuredClone(DEFAULT_IMAGES),
     deploy: { nojekyll: false, requireNotFound: false, sitemap: false, redirects: [], pagination: [] },
   };
+}
+
+function siteSources(policy: SitePolicy): SiteSource[] {
+  return [
+    { name: "content", path: policy.paths.content },
+    { name: "templates", path: policy.paths.templates },
+    { name: "public", path: policy.paths.public },
+  ];
 }
 
 function mapping(node: Node | null | undefined): Mapping | undefined {
@@ -144,13 +263,51 @@ function externalRedirectTarget(value: string): boolean {
   }
 }
 
-function parseDefaults(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): void {
-  if (node === undefined) return;
+function defineValue(record: SiteValues, key: string, value: SiteValue): void {
+  Object.defineProperty(record, key, { value, enumerable: true, configurable: true, writable: true });
+}
+
+function normalizeNode(node: Node | null | undefined): SiteValue | undefined {
+  if (isScalar(node)) {
+    const value = node.value;
+    return value === null || typeof value === "string" || typeof value === "boolean" ||
+      (typeof value === "number" && Number.isFinite(value))
+      ? value
+      : undefined;
+  }
+  if (isSeq(node)) {
+    const values: SiteValue[] = [];
+    for (const item of node.items) {
+      const value = normalizeNode(item as Node | null);
+      if (value === undefined) return undefined;
+      values.push(value);
+    }
+    return values;
+  }
+  if (!isMap(node)) return undefined;
+  const values: SiteValues = {};
+  for (const pair of node.items) {
+    if (!isScalar(pair.key) || typeof pair.key.value !== "string") return undefined;
+    const value = normalizeNode(pair.value as Node | null);
+    if (value === undefined) return undefined;
+    defineValue(values, pair.key.value, value);
+  }
+  return values;
+}
+
+function normalizedMapping(node: Node | null | undefined): SiteValues | undefined {
+  const value = normalizeNode(node);
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+}
+
+function parseDefaults(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): DefaultPolicy[] {
+  if (node === undefined) return [];
   if (!isSeq(node)) {
     problem(problems, counter, node, "defaults must be a sequence.");
-    return;
+    return [];
   }
-  for (const rule of node.items) {
+  const policies: DefaultPolicy[] = [];
+  for (const [index, rule] of node.items.entries()) {
     const entries = mapping(rule as Node | null);
     if (entries === undefined) {
       problem(problems, counter, rule as Node | null, "Each defaults entry must be a mapping.");
@@ -159,37 +316,46 @@ function parseDefaults(node: Node | null | undefined, problems: ConfigurationPro
     const match = stringValue(entries, "match", undefined, problems, counter);
     if (match === undefined) problem(problems, counter, rule as Node | null, "Each defaults entry needs a match string.");
     const values = entries.get("values");
-    if (mapping(values) === undefined) problem(problems, counter, values, "Each defaults entry needs a values mapping.");
+    const normalizedValues = normalizedMapping(values);
+    if (normalizedValues === undefined) problem(problems, counter, values, "Each defaults entry needs a values mapping.");
+    if (match !== undefined && normalizedValues !== undefined) policies.push({ index, match, values: normalizedValues });
   }
+  return policies;
 }
 
-function parseCollections(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): void {
-  if (node === undefined) return;
+function parseCollections(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): CollectionPolicy[] {
+  if (node === undefined) return [];
   const collections = mapping(node);
   if (collections === undefined) {
     problem(problems, counter, node, "collections must be a mapping.");
-    return;
+    return [];
   }
+  const policies: CollectionPolicy[] = [];
   for (const [name, ruleNode] of collections) {
     const rule = mapping(ruleNode);
     if (rule === undefined) {
       problem(problems, counter, ruleNode, `collections.${name} must be a mapping.`);
       continue;
     }
-    if (stringValue(rule, "match", undefined, problems, counter) === undefined) {
+    const match = stringValue(rule, "match", undefined, problems, counter);
+    if (match === undefined) {
       problem(problems, counter, ruleNode, `collections.${name} needs a match string.`);
     }
+    let sortBy: string | null = null;
+    let direction: "asc" | "desc" = "asc";
     const sort = rule.get("sort");
     if (sort !== undefined) {
       const values = mapping(sort);
       if (values === undefined) {
         problem(problems, counter, sort, `collections.${name}.sort must be a mapping.`);
       } else {
-        stringValue(values, "by", undefined, problems, counter);
+        sortBy = stringValue(values, "by", undefined, problems, counter) ?? null;
         const order = stringValue(values, "order", "asc", problems, counter);
         if (order !== "asc" && order !== "desc") problem(problems, counter, values.get("order"), "sort.order must be asc or desc.");
+        else direction = order;
       }
     }
+    let condition: CatalogCondition | null = null;
     const where = rule.get("where");
     if (where !== undefined) {
       const values = mapping(where);
@@ -203,46 +369,67 @@ function parseCollections(node: Node | null | undefined, problems: Configuration
         if (values.has("exists") && booleanValue(values, "exists", false, problems, counter) !== true) {
           problem(problems, counter, values.get("exists"), "where.exists must be true.");
         }
+        if (field !== undefined && predicates.length === 1) {
+          const predicate = predicates[0]!;
+          if (predicate === "exists") condition = { test: "exists", field };
+          else {
+            const value = normalizeNode(values.get(predicate));
+            if (value === undefined) {
+              problem(
+                problems,
+                counter,
+                values.get(predicate),
+                `collections.${name}.where.${predicate} must be a supported configuration value.`,
+              );
+            } else condition = { test: predicate as "equals" | "contains", field, value };
+          }
+        }
       }
     }
+    if (match !== undefined) policies.push({ name, match, direction, sort: sortBy, condition });
   }
+  return policies.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function parseImages(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): void {
-  if (node === undefined) return;
+function parseImages(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): SitePolicy["images"] {
+  const settings = structuredClone(DEFAULT_IMAGES);
+  if (node === undefined) return settings;
   const images = mapping(node);
   if (images === undefined) {
     problem(problems, counter, node, "images must be a mapping.");
-    return;
+    return settings;
   }
   const widths = images.get("widths");
   if (widths !== undefined) {
     if (!isSeq(widths) || widths.items.some((item) => !isScalar(item) || typeof item.value !== "number" || !Number.isSafeInteger(item.value) || item.value <= 0)) {
       problem(problems, counter, widths, "images.widths must be a sequence of positive safe integers.");
-    }
+    } else settings.widths = widths.items.map((item) => (item as { value: number }).value);
   }
   const formats = images.get("formats");
   const supported = new Set(["avif", "gif", "jpeg", "jpg", "png", "webp", "original"]);
   if (formats !== undefined) {
     if (!isSeq(formats) || formats.items.some((item) => !isScalar(item) || typeof item.value !== "string" || !supported.has(item.value))) {
       problem(problems, counter, formats, "images.formats must be a sequence of supported rendition formats.");
-    }
+    } else settings.formats = formats.items.map((item) => (item as { value: string }).value);
   }
+  return settings;
 }
 
-function parseMarkdown(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): void {
-  if (node === undefined) return;
+function parseMarkdown(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): SitePolicy["markdown"] {
+  const settings = structuredClone(DEFAULT_MARKDOWN);
+  if (node === undefined) return settings;
   const markdown = mapping(node);
   if (markdown === undefined) {
     problem(problems, counter, node, "markdown must be a mapping.");
-    return;
+    return settings;
   }
   const extensions = markdown.get("extensions");
   if (extensions !== undefined && (!isSeq(extensions) || extensions.items.some((item) => !isScalar(item) || typeof item.value !== "string"))) {
     problem(problems, counter, extensions, "markdown.extensions must be a sequence of strings.");
-  }
-  booleanValue(markdown, "raw", true, problems, counter);
-  stringValue(markdown, "excerptSeparator", "", problems, counter);
+  } else if (isSeq(extensions)) settings.extensions = extensions.items.map((item) => (item as { value: string }).value);
+  settings.raw = booleanValue(markdown, "raw", true, problems, counter);
+  settings.excerptSeparator = stringValue(markdown, "excerptSeparator", "", problems, counter);
+  return settings;
 }
 
 function parseFeed(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): FeedPolicy | undefined {
@@ -257,8 +444,11 @@ function parseFeed(node: Node | null | undefined, problems: ConfigurationProblem
   const title = stringValue(feed, "title", undefined, problems, counter);
   const description = stringValue(feed, "description", undefined, problems, counter);
   if (collection === undefined) problem(problems, counter, node, "deploy.feed needs a collection string.");
+  else if (collection === "") problem(problems, counter, feed.get("collection"), "deploy.feed.collection must not be empty.");
   if (!portableRelativePath(path)) problem(problems, counter, feed.get("path"), "deploy.feed.path must be a portable output path.");
-  return collection === undefined ? undefined : { collection, path, ...(title === undefined ? {} : { title }), ...(description === undefined ? {} : { description }) };
+  return collection === undefined || collection === ""
+    ? undefined
+    : { collection, path, ...(title === undefined ? {} : { title }), ...(description === undefined ? {} : { description }) };
 }
 
 function parseRedirects(node: Node | null | undefined, problems: ConfigurationProblem[], counter: LineCounter): RedirectPolicy[] {
@@ -337,11 +527,14 @@ function parsePagination(node: Node | null | undefined, problems: ConfigurationP
     const route = stringValue(rule, "route", undefined, problems, counter);
     const template = stringValue(rule, "template", "page.html", problems, counter);
     const title = stringValue(rule, "title", undefined, problems, counter);
+    if (name === "") problem(problems, counter, ruleNode, "deploy.pagination names must not be empty.");
     if (collection === undefined) problem(problems, counter, ruleNode, `deploy.pagination.${name} needs a collection string.`);
+    else if (collection === "") problem(problems, counter, rule.get("collection"), `deploy.pagination.${name}.collection must not be empty.`);
+    if (template === "") problem(problems, counter, rule.get("template"), `deploy.pagination.${name}.template must not be empty.`);
     if (route === undefined || route.split(":page").length !== 2 || !isCanonicalAddress(route.replace(":page", "1"))) {
       problem(problems, counter, rule.get("route"), `deploy.pagination.${name}.route must contain one :page in a canonical route.`);
     }
-    if (collection !== undefined && perPage !== undefined && route !== undefined) {
+    if (name !== "" && collection !== undefined && collection !== "" && perPage !== undefined && route !== undefined && template !== "") {
       policies.push({ name, collection, perPage, route, template, ...(title === undefined ? {} : { title }) });
     }
   }
@@ -351,7 +544,17 @@ function parsePagination(node: Node | null | undefined, problems: ConfigurationP
 /** Parse the product-owned portion of a valid Syncpress YAML configuration. */
 export function parseSitePolicy(source: string): { policy: SitePolicy; problems: ConfigurationProblem[] } {
   const counter = new LineCounter();
-  const document = parseDocument(source, { lineCounter: counter, prettyErrors: false, schema: "core", version: "1.2" });
+  const document = parseDocument(source, {
+    customTags: [],
+    lineCounter: counter,
+    merge: false,
+    prettyErrors: false,
+    resolveKnownTags: false,
+    schema: "core",
+    strict: true,
+    uniqueKeys: true,
+    version: "1.2",
+  });
   const problems: ConfigurationProblem[] = [];
   for (const issue of [...document.errors, ...document.warnings]) {
     const position = counter.linePos(issue.pos[0]);
@@ -376,27 +579,38 @@ export function parseSitePolicy(source: string): { policy: SitePolicy; problems:
   checkKnownKeys(root, TOP_LEVEL_KEYS, "site.yaml", problems, counter);
   const paths = root.get("paths") === undefined ? undefined : mapping(root.get("paths"));
   if (root.has("paths") && paths === undefined) problem(problems, counter, root.get("paths"), "paths must be a mapping.");
-  let outputPath = DEFAULT_PATHS.output;
+  const policyPaths = { ...DEFAULT_PATHS };
   if (paths !== undefined) {
     checkKnownKeys(paths, PATH_KEYS, "paths", problems, counter);
     for (const key of PATH_KEYS) {
-      const value = stringValue(paths, key, key === "output" ? DEFAULT_PATHS.output : undefined, problems, counter);
+      const value = stringValue(paths, key, DEFAULT_PATHS[key], problems, counter);
       if (value !== undefined && !portableRelativePath(value)) problem(problems, counter, paths.get(key), `paths.${key} must be a portable project-relative directory path.`);
-      if (key === "output" && value !== undefined) outputPath = value;
+      if (value !== undefined) policyPaths[key] = value;
     }
   }
 
   const site = root.get("site") === undefined ? undefined : mapping(root.get("site"));
   if (root.has("site") && site === undefined) problem(problems, counter, root.get("site"), "site must be a mapping.");
+  const normalizedSite = site === undefined ? undefined : normalizedMapping(root.get("site"));
+  if (site !== undefined && normalizedSite === undefined) {
+    problem(problems, counter, root.get("site"), "site must contain only supported configuration values.");
+  }
+  const siteValues = normalizedSite ?? {};
   if (site !== undefined) {
-    stringValue(site, "basePath", "/", problems, counter);
-    stringValue(site, "origin", undefined, problems, counter);
+    const base = stringValue(site, "basePath", "/", problems, counter);
+    if (parseAddress(base)?.directory !== true) {
+      problem(problems, counter, site.get("basePath"), "site.basePath must be a canonical directory address.");
+    }
+    const declaredOrigin = stringValue(site, "origin", undefined, problems, counter);
+    if (declaredOrigin !== undefined && canonicalOrigin(declaredOrigin) === undefined) {
+      problem(problems, counter, site.get("origin"), "site.origin must be a canonical HTTP or HTTPS origin.");
+    }
   }
 
-  parseDefaults(root.get("defaults"), problems, counter);
-  parseCollections(root.get("collections"), problems, counter);
-  parseImages(root.get("images"), problems, counter);
-  parseMarkdown(root.get("markdown"), problems, counter);
+  const defaults = parseDefaults(root.get("defaults"), problems, counter);
+  const collections = parseCollections(root.get("collections"), problems, counter);
+  const images = parseImages(root.get("images"), problems, counter);
+  const markdown = parseMarkdown(root.get("markdown"), problems, counter);
 
   const deployNode = root.get("deploy");
   const deploy = deployNode === undefined ? undefined : mapping(deployNode);
@@ -413,7 +627,18 @@ export function parseSitePolicy(source: string): { policy: SitePolicy; problems:
     problem(problems, counter, deployNode ?? document.contents, "site.origin is required when sitemap or feed generation is enabled.");
   }
 
-  return { policy: { outputPath, deploy: { nojekyll, requireNotFound, sitemap, ...(feed === undefined ? {} : { feed }), redirects, pagination } }, problems };
+  return {
+    policy: {
+      paths: policyPaths,
+      site: siteValues,
+      defaults,
+      collections,
+      markdown,
+      images,
+      deploy: { nojekyll, requireNotFound, sitemap, ...(feed === undefined ? {} : { feed }), redirects, pagination },
+    },
+    problems,
+  };
 }
 
 type Assessment = {
@@ -426,7 +651,7 @@ type Assessment = {
 export class GoverningConcept {
   #assessment: Assessment | undefined;
 
-  assess({ source }: { source: string }): { policy: SitePolicy; valid: boolean } {
+  assess({ source }: { source: string }): { policy: SitePolicy; sources: SiteSource[] } {
     if (this.#assessment?.source !== source) {
       const { policy, problems } = parseSitePolicy(source);
       this.#assessment = {
@@ -435,19 +660,49 @@ export class GoverningConcept {
         problems: structuredClone(problems),
       };
     }
+    if (this.#assessment.problems.length > 0) throw new InvalidConfiguration();
     return {
       policy: structuredClone(this.#assessment.policy),
-      valid: this.#assessment.problems.length === 0,
+      sources: siteSources(this.#assessment.policy),
     };
   }
 
-  _policy(): { policy: SitePolicy; valid: boolean }[] {
-    return this.#assessment === undefined
+  _policy(): { policy: SitePolicy }[] {
+    return this.#assessment === undefined || this.#assessment.problems.length > 0
       ? []
-      : [{
-          policy: structuredClone(this.#assessment.policy),
-          valid: this.#assessment.problems.length === 0,
-        }];
+      : [{ policy: structuredClone(this.#assessment.policy) }];
+  }
+
+  _paths(): { content: string; templates: string; public: string; assets: string; output: string }[] {
+    return this.#valid(({ paths }) => ({ ...paths }));
+  }
+
+  _site(): { site: SiteValues; base: string }[] {
+    return this.#valid(({ site }) => ({ site: structuredClone(site), base: typeof site.basePath === "string" ? site.basePath : "/" }));
+  }
+
+  _origin(): { origin: string }[] {
+    return this.#valid(({ site }) => typeof site.origin === "string" ? { origin: site.origin } : undefined);
+  }
+
+  _markdown(): { extensions: string[]; raw: boolean; separator: string }[] {
+    return this.#valid(({ markdown }) => ({ extensions: [...markdown.extensions], raw: markdown.raw, separator: markdown.excerptSeparator }));
+  }
+
+  _images(): { widths: number[]; formats: string[] }[] {
+    return this.#valid(({ images }) => ({ widths: [...images.widths], formats: [...images.formats] }));
+  }
+
+  _defaults(): { index: number; text: string; values: SiteValues }[] {
+    return this.#assessment === undefined || this.#assessment.problems.length > 0
+      ? []
+      : this.#assessment.policy.defaults.map(({ index, match, values }) => ({ index, text: match, values: structuredClone(values) }));
+  }
+
+  _collections(): CollectionPolicy[] {
+    return this.#assessment === undefined || this.#assessment.problems.length > 0
+      ? []
+      : structuredClone(this.#assessment.policy.collections);
   }
 
   _deployment(): { nojekyll: boolean; requireNotFound: boolean; sitemap: boolean }[] {
@@ -469,5 +724,11 @@ export class GoverningConcept {
 
   _problems(): ConfigurationProblem[] {
     return structuredClone(this.#assessment?.problems ?? []);
+  }
+
+  #valid<Row>(select: (policy: SitePolicy) => Row | undefined): Row[] {
+    if (this.#assessment === undefined || this.#assessment.problems.length > 0) return [];
+    const row = select(this.#assessment.policy);
+    return row === undefined ? [] : [row];
   }
 }

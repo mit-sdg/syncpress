@@ -9,4 +9,4 @@ export function createSyncpressRuntime() {
   return { application, gateway };
 }
 
-export type Application = ReturnType<typeof createSyncpressRuntime>["application"];
+export type Gateway = ReturnType<typeof createSyncpressRuntime>["gateway"];

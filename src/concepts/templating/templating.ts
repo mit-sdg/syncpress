@@ -21,16 +21,11 @@ const TEMPLATE_SYNTAX = "This Liquid template cannot be parsed.";
 const UNDEFINED_VARIABLE = "This Liquid template reads a context value that is not defined.";
 const UNSUPPORTED_TEMPLATE = "This Liquid feature is unsupported because its dependencies or escaping cannot be determined.";
 const USED_TEMPLATE_NOT_FOUND = "A rendered template is not defined.";
-
-const COLLECTION_EXCERPT_WILDCARD = ["collections", "*", "*", "excerpt"];
+const INVALID_TEMPLATE_ORIGIN = "A template origin must be well-formed text.";
+const TEMPLATE_NAME_TAKEN = "Another source already owns this template name.";
 
 export type TrustedWildcardPath = { readonly wildcard: readonly string[] };
 export type TrustedPath = readonly string[] | TrustedWildcardPath;
-
-/** Trust excerpts on every card in every collection. */
-export const TRUSTED_COLLECTION_EXCERPTS: TrustedWildcardPath = Object.freeze({
-  wildcard: Object.freeze([...COLLECTION_EXCERPT_WILDCARD]),
-});
 
 export type TemplateErrorLocation = {
   templateName?: string;
@@ -80,6 +75,20 @@ export class InvalidTrustedValue extends Error {
     super(INVALID_TRUSTED_VALUE);
     this.name = "InvalidTrustedValue";
     this.path = [...path];
+  }
+}
+
+export class InvalidTemplateOrigin extends Error {
+  constructor() {
+    super(INVALID_TEMPLATE_ORIGIN);
+    this.name = "InvalidTemplateOrigin";
+  }
+}
+
+export class TemplateNameTaken extends Error {
+  constructor() {
+    super(TEMPLATE_NAME_TAKEN);
+    this.name = "TemplateNameTaken";
   }
 }
 
@@ -142,7 +151,7 @@ type SegmentArray = Array<string | number | SegmentArray>;
 type Use = { used: string; location: TemplateErrorLocation };
 type PreparedTrustedPath =
   | { kind: "exact"; path: string[] }
-  | { kind: "collection-excerpts" };
+  | { kind: "wildcard"; path: string[] };
 type Inspection = { templates: LiquidTemplate[]; uses: Use[]; directReads: Read[] };
 type TemplateRecord = {
   template: string;
@@ -294,10 +303,6 @@ function copyPath(path: readonly string[]): string[] | undefined {
   }
 }
 
-function hasSegments(path: readonly string[], expected: readonly string[]): boolean {
-  return path.length === expected.length && path.every((segment, index) => segment === expected[index]);
-}
-
 function copyTrustedWildcardPath(value: unknown): string[] | undefined {
   try {
     if (value === null || typeof value !== "object" || Array.isArray(value) || isProxy(value)) return undefined;
@@ -331,8 +336,8 @@ function copyTrustedPaths(paths: readonly TrustedPath[]): PreparedTrustedPath[] 
       if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) throw new InvalidTrustedPath(index);
       const wildcard = copyTrustedWildcardPath(descriptor.value);
       if (wildcard !== undefined) {
-        if (!hasSegments(wildcard, COLLECTION_EXCERPT_WILDCARD)) throw new InvalidTrustedPath(index);
-        copy[index] = { kind: "collection-excerpts" };
+        if (!wildcard.includes("*")) throw new InvalidTrustedPath(index);
+        copy[index] = { kind: "wildcard", path: wildcard };
         continue;
       }
       const path = copyPath(descriptor.value as readonly string[]);
@@ -455,42 +460,43 @@ function denseArrayItems(value: unknown): unknown[] | undefined {
   }
 }
 
-function hasOwnExcerpt(value: unknown): boolean | undefined {
-  if (!isPlainRecord(value)) return undefined;
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(value, "excerpt");
-    if (descriptor === undefined) return false;
-    if (!descriptor.enumerable || !("value" in descriptor)) return undefined;
-    // Collection cards without an excerpt are represented as an own nullish
-    // value by the generic composition record, not as a missing key.
-    return descriptor.value === undefined || descriptor.value === null ? false : true;
-  } catch {
-    return undefined;
-  }
-}
-
-function collectionExcerptPaths(context: Record<string, unknown>): string[][] {
-  if (!isPlainRecord(context)) throw new InvalidTrustedValue(["collections"]);
-  let collections: unknown;
-  try {
-    collections = ownValue(context, "collections");
-  } catch {
-    throw new InvalidTrustedValue(["collections"]);
-  }
-  const entries = ownRecordEntries(collections);
-  if (entries === undefined) throw new InvalidTrustedValue(["collections"]);
-
+function wildcardPaths(context: Record<string, unknown>, pattern: readonly string[]): string[][] {
   const paths: string[][] = [];
-  for (const [name, collection] of entries) {
-    const items = denseArrayItems(collection);
-    if (items === undefined) throw new InvalidTrustedValue(["collections", name]);
-    for (let index = 0; index < items.length; index += 1) {
-      const path = ["collections", name, String(index), "excerpt"];
-      const hasExcerpt = hasOwnExcerpt(items[index]);
-      if (hasExcerpt === undefined) throw new InvalidTrustedValue(path);
-      if (hasExcerpt) paths.push(path);
+
+  const visit = (value: unknown, index: number, path: string[]): void => {
+    if (index === pattern.length) {
+      if (value === undefined || value === null) return;
+      if (typeof value !== "string") throw new InvalidTrustedValue(path);
+      paths.push(path);
+      return;
     }
-  }
+
+    const segment = pattern[index]!;
+    if (segment === "*") {
+      const items = denseArrayItems(value);
+      if (items !== undefined) {
+        items.forEach((item, itemIndex) => visit(item, index + 1, [...path, String(itemIndex)]));
+        return;
+      }
+      const entries = ownRecordEntries(value);
+      if (entries === undefined) throw new InvalidTrustedValue(path);
+      for (const [key, item] of entries) visit(item, index + 1, [...path, key]);
+      return;
+    }
+
+    if (!isPlainRecord(value)) throw new InvalidTrustedValue(path);
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, segment);
+    } catch {
+      throw new InvalidTrustedValue([...path, segment]);
+    }
+    if (descriptor === undefined) return;
+    if (!("value" in descriptor)) throw new InvalidTrustedValue([...path, segment]);
+    visit(descriptor.value, index + 1, [...path, segment]);
+  };
+
+  visit(context, 0, []);
   return paths;
 }
 
@@ -505,7 +511,7 @@ function trustedContext(
       prepared = trustOne(prepared, path.path);
       continue;
     }
-    for (const excerpt of collectionExcerptPaths(prepared)) prepared = trustOne(prepared, excerpt);
+    for (const match of wildcardPaths(prepared, path.path)) prepared = trustOne(prepared, match);
   }
   return prepared;
 }
@@ -566,8 +572,23 @@ export class TemplatingConcept {
   readonly #renderingsByKey = new Map<string, RenderingRecord>();
   readonly #renderingsByID = new Map<string, RenderingRecord>();
   readonly #failuresBySubject = new Map<string, FailureRecord>();
+  readonly #originsByName = new Map<string, string>();
 
   define({ name, source }: { name: string; source: string }) {
+    if (this.#originsByName.has(name) && this.#templatesByName.get(name)?.source !== source) throw new TemplateNameTaken();
+    return this.#define(name, source);
+  }
+
+  register({ name, source, origin }: { name: string; source: string; origin: unknown }) {
+    if (typeof origin !== "string" || !origin.isWellFormed()) throw new InvalidTemplateOrigin();
+    const current = this.#originsByName.get(name);
+    if (current !== undefined && current !== origin) throw new TemplateNameTaken();
+    const result = this.#define(name, source);
+    this.#originsByName.set(name, origin);
+    return result;
+  }
+
+  #define(name: string, source: string) {
     const inspected = this.#inspect(source, name);
     const current = this.#templatesByName.get(name);
     if (current?.source === source) return { template: current.template, changed: false };
@@ -590,6 +611,7 @@ export class TemplatingConcept {
     const record = this.#templatesByName.get(name);
     if (record === undefined) throw new TemplateNotFound();
     this.#templatesByName.delete(name);
+    this.#originsByName.delete(name);
     this.#templatesByID.delete(record.template);
     for (const [key, rendering] of this.#renderingsByKey) {
       if (rendering.template !== record.template) continue;

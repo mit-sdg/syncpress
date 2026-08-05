@@ -2,6 +2,8 @@ export class InvalidText extends Error {}
 export class InvalidData extends Error {}
 export class InvalidProfile extends Error {}
 export class InvalidTemplate extends Error {}
+export class InvalidAttempt extends Error {}
+export class StaleAttempt extends Error {}
 export class UnknownSource extends Error {}
 export class RenderingNotFound extends Error {}
 export class StageNotReady extends Error {}
@@ -16,6 +18,8 @@ type RenderingRecord = {
   template: string;
   stage: RenderingStage;
   order: bigint;
+  dependencyAttempt: number;
+  emissionAttempt: number;
 };
 
 function isText(value: unknown): value is string {
@@ -59,19 +63,54 @@ function selectedTemplate(requested: unknown): string {
   return requested;
 }
 
+function requireAttempt(value: unknown): asserts value is number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) throw new InvalidAttempt();
+}
+
 /** Coordinate observable page rendering attempts without performing peer behavior. */
 export class RenderingConcept {
   readonly #attempts = new Map<string, RenderingRecord>();
   readonly #latestBySubject = new Map<string, RenderingRecord>();
   #nextRendering = 1n;
 
-  begin({ subject, path, data }: { subject: unknown; path: unknown; data: unknown }) {
+  begin({
+    subject,
+    path,
+    data,
+    dependencyAttempt,
+    emissionAttempt,
+  }: {
+    subject: unknown;
+    path: unknown;
+    data: unknown;
+    dependencyAttempt: unknown;
+    emissionAttempt: unknown;
+  }) {
     requireText(subject);
     requireText(path);
+    requireAttempt(dependencyAttempt);
+    requireAttempt(emissionAttempt);
     const controls = renderingControls(data);
     const profile = selectedProfile(path, controls.profile);
     const template = selectedTemplate(controls.template);
     const previous = this.#latestBySubject.get(subject);
+    if (previous !== undefined) {
+      const sameAttempts = previous.dependencyAttempt === dependencyAttempt && previous.emissionAttempt === emissionAttempt;
+      if (sameAttempts) {
+        if (previous.path !== path || previous.profile !== profile || previous.template !== template) throw new StaleAttempt();
+        return {
+          rendering: previous.rendering,
+          subject,
+          profile,
+          template,
+          dependencyAttempt,
+          emissionAttempt,
+        };
+      }
+      if (dependencyAttempt <= previous.dependencyAttempt || emissionAttempt <= previous.emissionAttempt) {
+        throw new StaleAttempt();
+      }
+    }
     if (previous !== undefined && previous.stage !== "completed" && previous.stage !== "superseded") {
       previous.stage = "superseded";
     }
@@ -79,10 +118,20 @@ export class RenderingConcept {
     const order = this.#nextRendering;
     this.#nextRendering += 1n;
     const rendering = `rendering:${order}`;
-    const record: RenderingRecord = { rendering, subject, path, profile, template, stage: "started", order };
+    const record: RenderingRecord = {
+      rendering,
+      subject,
+      path,
+      profile,
+      template,
+      stage: "started",
+      order,
+      dependencyAttempt,
+      emissionAttempt,
+    };
     this.#attempts.set(rendering, record);
     this.#latestBySubject.set(subject, record);
-    return { rendering, subject, profile, template };
+    return { rendering, subject, profile, template, dependencyAttempt, emissionAttempt };
   }
 
   settleBody({ rendering }: { rendering: unknown }) {
@@ -140,6 +189,8 @@ export class RenderingConcept {
           profile: record.profile,
           template: record.template,
           stage: record.stage,
+          dependencyAttempt: record.dependencyAttempt,
+          emissionAttempt: record.emissionAttempt,
         }];
   }
 
@@ -162,6 +213,8 @@ export class RenderingConcept {
       profile: record.profile,
       template: record.template,
       stage: record.stage,
+      dependencyAttempt: record.dependencyAttempt,
+      emissionAttempt: record.emissionAttempt,
     };
   }
 }

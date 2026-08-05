@@ -1,19 +1,11 @@
 import type { InvocationResult } from "@mit-sdg/sync-engine/boundary";
-import { lstat, mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { Buffer } from "node:buffer";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { SyncpressWire } from "../../generated/wire.ts";
-import {
-  CONFIGURATION_PATH,
-  DEFAULTS,
-  PATHS,
-  ROOTS,
-} from "@syncpress/compositions/shared";
-import { PageOperationalInspection } from "@syncpress/compositions/views";
-import type { SitePolicy } from "@syncpress/concepts/governing/governing";
-import { createSyncpressRuntime, type Application } from "./application.ts";
+import { CONFIGURATION_PATH, ROOTS } from "@syncpress/compositions/shared";
+import { createSyncpressRuntime, type Gateway } from "./application.ts";
 
-type Configuring = Application["concepts"]["Configuring"];
 type SourceFile = { path: string; source: string };
 type Diagnostic = {
   severity: "error" | "warning";
@@ -23,43 +15,34 @@ type Diagnostic = {
   line: number | undefined;
   column: number | undefined;
 };
-type ActionFailure = { readonly error: string; readonly detail?: unknown };
-type ActionValue<T> = T extends { readonly error: string } ? never : T;
-type OperationalInspection = {
-  rendering: {
-    attempt: string | null;
-    path: string | null;
-    profile: string | null;
-    template: string | null;
-    stage: string | null;
-    body: { source: string } | null;
-    layout: { source: string } | null;
-  };
-  renderings: Array<{ attempt: string; path: string; profile: string; template: string; stage: string }>;
-  memberships: Array<{ collection: string; name: string; index: number }>;
-  dependencies: {
-    state: string;
-    reason: string | null;
-    inputs: Array<{ input: string }>;
-  };
-  outputs: Array<{ path: string; digest: string; medium: string }>;
-  claims: Array<{ owner: string; address: string }>;
-  diagnostics: Array<{
-    diagnostic: string;
-    severity: "error" | "warning";
-    code: string;
-    message: string;
-    source: string | null;
-    line: number | null;
-    column: number | null;
-    related: Array<{
-      source: string;
-      line: number | null;
-      column: number | null;
-      note: string;
-    }>;
-  }>;
+type FormedDiagnostic = Omit<Diagnostic, "source" | "line" | "column"> & {
+  source: string | null;
+  line: number | null;
+  column: number | null;
 };
+
+const destinationTails = new Map<string, Promise<void>>();
+
+async function acquireDestination(destination: string): Promise<() => void> {
+  const previous = destinationTails.get(destination) ?? Promise.resolve();
+  let unlock!: () => void;
+  const held = new Promise<void>((resolve) => {
+    unlock = resolve;
+  });
+  const tail = previous.then(() => held);
+  destinationTails.set(destination, tail);
+  await previous;
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    unlock();
+    void tail.finally(() => {
+      if (destinationTails.get(destination) === tail) destinationTails.delete(destination);
+    });
+  };
+}
 
 function errorCode(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
@@ -83,17 +66,6 @@ function describe(value: unknown): string {
   }
 }
 
-function isActionFailure(value: unknown): value is ActionFailure {
-  return typeof value === "object" && value !== null && "error" in value && typeof value.error === "string";
-}
-
-function actionValue<T>(result: T, context: string): ActionValue<T> {
-  if (isActionFailure(result)) {
-    throw new Error(`${context}: ${typeof result.detail === "string" ? result.detail : result.error}`);
-  }
-  return result as ActionValue<T>;
-}
-
 function gatewayError(error: { kind: "domain"; value: unknown } | { kind: "framework"; code: string; detail?: string }): string {
   return error.kind === "domain" ? describe(error.value) : error.detail ?? error.code;
 }
@@ -101,6 +73,13 @@ function gatewayError(error: { kind: "domain"; value: unknown } | { kind: "frame
 function gatewayValue<T>(result: InvocationResult<T, unknown>, context: string): T {
   if (!result.ok) throw new Error(`${context}: ${gatewayError(result.error)}`);
   return result.value;
+}
+
+async function readSiteSummary(gateway: Gateway) {
+  return gatewayValue<SyncpressWire["/site/summary"]["output"]>(
+    await gateway.invoke("/site/summary", {}),
+    "Could not read the site build summary",
+  ).summary;
 }
 
 export function containsPath(parent: string, child: string): boolean {
@@ -160,7 +139,6 @@ async function readRequiredFile(file: string, name: string): Promise<Uint8Array>
 }
 
 async function sourceFiles(directory: string, name: string): Promise<SourceFile[]> {
-  await requireDirectory(directory, name);
   const files: SourceFile[] = [];
 
   async function visit(current: string, prefix: string): Promise<void> {
@@ -197,28 +175,7 @@ async function sourceFiles(directory: string, name: string): Promise<SourceFile[
   return files;
 }
 
-async function configuredPath(
-  configuring: Configuring,
-  root: string,
-  path: readonly string[],
-  otherwise: string,
-  name: string,
-): Promise<string> {
-  const value = (await configuring._scalar({ node: root, path, otherwise }))[0]?.value;
-  if (typeof value !== "string") throw new Error(`Configured ${name} must be a string.`);
-  return value;
-}
-
 function sourceDirectory(siteDirectory: string, configured: string, name: string): string {
-  if (
-    configured === "" ||
-    isAbsolute(configured) ||
-    configured.includes("\\") ||
-    configured.split("/").some((segment) => segment === "" || segment === "." || segment === "..")
-  ) {
-    throw new Error(`Configured ${name} must be a project-relative portable directory path.`);
-  }
-
   const directory = resolve(siteDirectory, configured);
   if (!containsPath(siteDirectory, directory)) {
     throw new Error(`Configured ${name} must stay inside the site directory.`);
@@ -226,47 +183,27 @@ function sourceDirectory(siteDirectory: string, configured: string, name: string
   return directory;
 }
 
-function outputPrefix(configured: string, name: string): void {
-  if (
-    configured === "" ||
-    isAbsolute(configured) ||
-    /^[a-z]:\//i.test(configured) ||
-    configured.includes("\\") ||
-    configured.split("/").some((segment) => segment === "" || segment === "." || segment === "..")
-  ) {
-    throw new Error(`Configured ${name} must be a portable relative output prefix.`);
-  }
+async function stageBytes(
+  gateway: Gateway,
+  name: string,
+  filePath: string,
+  content: Uint8Array,
+  context: string,
+): Promise<void> {
+  gatewayValue<SyncpressWire["/site/stage"]["output"]>(
+    await gateway.invoke("/site/stage", { name, filePath, encoded: Buffer.from(content).toString("base64") }),
+    context,
+  );
 }
 
-const INCLUDES_PREFIX = `${ROOTS.includes}/`;
-
-function logicalTemplateName(path: string): string {
-  return path.startsWith(INCLUDES_PREFIX) ? path.slice(INCLUDES_PREFIX.length) : path;
-}
-
-function requireUniqueTemplateNames(files: readonly SourceFile[]): void {
-  const names = new Map<string, string>();
-  for (const file of files) {
-    const name = logicalTemplateName(file.path);
-    const existing = names.get(name);
-    if (existing !== undefined) {
-      throw new Error(`Duplicate logical Liquid template name "${name}": "${existing}" and "${file.path}".`);
-    }
-    names.set(name, file.path);
-  }
-}
-
-async function placeFile(application: Application, root: string, path: string, source: string): Promise<void> {
+async function placeFile(gateway: Gateway, name: string, path: string, source: string): Promise<void> {
   let content: Uint8Array;
   try {
     content = new Uint8Array(await readFile(source));
   } catch (error) {
     throw new Error(`Could not read source file ${source}: ${errorMessage(error)}`);
   }
-  actionValue(
-    await application.concepts.Filing.place({ root, path, content }),
-    `Could not stage source file ${source}`,
-  );
+  await stageBytes(gateway, name, path, content, `Could not stage source file ${source}`);
 }
 
 function formatDiagnostics(diagnostics: readonly Diagnostic[]): string {
@@ -280,143 +217,58 @@ function formatDiagnostics(diagnostics: readonly Diagnostic[]): string {
     .join("\n");
 }
 
-async function runPhases(application: Application, sequence: string): Promise<string> {
-  const started = actionValue(
-    await application.concepts.Phasing.start({ sequence, mode: "once" }),
+function normalizeDiagnostics(diagnostics: readonly FormedDiagnostic[]): Diagnostic[] {
+  return diagnostics.map(({ source, line, column, ...diagnostic }) => ({
+    ...diagnostic,
+    source: source ?? undefined,
+    line: line ?? undefined,
+    column: column ?? undefined,
+  }));
+}
+
+async function runPhases(gateway: Gateway, sequence: string): Promise<string> {
+  const started = gatewayValue<SyncpressWire["/site/start"]["output"]>(
+    await gateway.invoke("/site/start", { sequence }),
     "Could not start the site build",
   );
-  await application.whenIdle();
+  await gateway.whenIdle();
 
-  let phase: string | null = started.phase;
-  while (phase !== null) {
-    const advanced = actionValue(
-      await application.concepts.Phasing.advance({ job: started.job }),
+  let attempt: string | null = started.attempt;
+  while (attempt !== null) {
+    const advanced: SyncpressWire["/site/advance"]["output"] = gatewayValue<SyncpressWire["/site/advance"]["output"]>(
+      await gateway.invoke("/site/advance", { job: started.job, attempt }),
       "Could not advance the site build",
     );
-    await application.whenIdle();
-    phase = advanced.phase;
+    await gateway.whenIdle();
+    attempt = advanced.attempt;
   }
   return started.job;
 }
 
-async function validateProjectPolicy(application: Application, configuration: Uint8Array): Promise<SitePolicy> {
-  let source: string;
-  try {
-    source = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(configuration);
-  } catch {
-    throw new Error(`${CONFIGURATION_PATH} must be valid UTF-8 text.`);
-  }
-
-  actionValue(
-    await application.concepts.Configuring.load({ source, notation: "yaml" }),
-    `Could not parse ${CONFIGURATION_PATH}`,
-  );
-  const assessed = actionValue(
-    await application.concepts.Governing.assess({ source }),
-    `Could not assess ${CONFIGURATION_PATH}`,
-  );
-  const problems = await application.concepts.Governing._problems();
-  for (const diagnostic of problems) {
-    actionValue(
-      await application.concepts.Diagnosing.report({
-        severity: "error",
-        code: diagnostic.code,
-        message: diagnostic.message,
-        source: CONFIGURATION_PATH,
-        line: diagnostic.line,
-        column: diagnostic.column,
-      }),
-      `Could not record a ${CONFIGURATION_PATH} diagnostic`,
-    );
-  }
-  if (!assessed.valid) {
-    throw new Error(`Invalid ${CONFIGURATION_PATH}:\n\n${formatDiagnostics(await application.concepts.Diagnosing._all())}`);
-  }
-  return assessed.policy;
-}
-
-/** Stage filesystem inputs and run every phase without reconciling the output tree. */
-async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string) {
+/** Stage the configuration and engine-authored source plan into a fresh model. */
+async function stageSite(projectDirectory = ".") {
   const siteDirectory = resolve(projectDirectory);
   await requireDirectory(siteDirectory, "site");
   const canonicalSiteDirectory = await canonicalPath(siteDirectory, "site directory");
 
   const configurationFile = join(siteDirectory, CONFIGURATION_PATH);
   const configuration = await readRequiredFile(configurationFile, CONFIGURATION_PATH);
-  const { application, gateway } = createSyncpressRuntime();
-  const policy = await validateProjectPolicy(application, configuration);
-  const outputDirectory = destination === undefined
-    ? sourceDirectory(siteDirectory, policy.outputPath, "paths.output")
-    : resolve(siteDirectory, destination);
+  const { gateway } = createSyncpressRuntime();
+  await stageBytes(gateway, ROOTS.project, CONFIGURATION_PATH, configuration, `Could not stage ${CONFIGURATION_PATH}`);
 
-  const project = actionValue(
-    await application.concepts.Filing.open({ name: ROOTS.project }),
-    "Could not open the project Filing root",
-  );
-  actionValue(
-    await application.concepts.Filing.place({ root: project.root, path: CONFIGURATION_PATH, content: configuration }),
-    `Could not stage ${CONFIGURATION_PATH}`,
-  );
-
-  const configured = gatewayValue<SyncpressWire["/site/configure"]["output"]>(
-    await gateway.invoke("/site/configure", { destination: outputDirectory }),
-    "Could not configure the site build",
-  );
-  const active = await application.concepts.Configuring._active();
-  if (active.length !== 1) throw new Error("Site configuration did not produce one active configuration.");
-
-  const configurationRoot = active[0]!.root;
-  const contentPath = await configuredPath(
-    application.concepts.Configuring,
-    configurationRoot,
-    PATHS.pathsContent,
-    DEFAULTS.contentPath,
-    "paths.content",
-  );
-  const templatesPath = await configuredPath(
-    application.concepts.Configuring,
-    configurationRoot,
-    PATHS.pathsTemplates,
-    DEFAULTS.templatesPath,
-    "paths.templates",
-  );
-  const publicPath = await configuredPath(
-    application.concepts.Configuring,
-    configurationRoot,
-    PATHS.pathsPublic,
-    DEFAULTS.publicPath,
-    "paths.public",
-  );
-  const assetsPath = await configuredPath(
-    application.concepts.Configuring,
-    configurationRoot,
-    PATHS.pathsAssets,
-    DEFAULTS.assetsPath,
-    "paths.assets",
-  );
-  outputPrefix(assetsPath, "paths.assets");
-
-  const contentDirectory = sourceDirectory(
-    siteDirectory,
-    contentPath,
-    "paths.content",
-  );
-  const templatesDirectory = sourceDirectory(
-    siteDirectory,
-    templatesPath,
-    "paths.templates",
-  );
-  const publicDirectory = sourceDirectory(
-    siteDirectory,
-    publicPath,
-    "paths.public",
-  );
-
-  const sourceRoots = [
-    { name: ROOTS.content, directory: contentDirectory },
-    { name: ROOTS.templates, directory: templatesDirectory },
-    { name: ROOTS.public, directory: publicDirectory },
-  ];
+  const assessed = await gateway.invoke("/site/assess", {});
+  if (!assessed.ok) {
+    await gateway.whenIdle();
+    const summary = await readSiteSummary(gateway) as { pages: number; diagnostics: FormedDiagnostic[] };
+    throw new Error(
+      `Invalid ${CONFIGURATION_PATH}: ${gatewayError(assessed.error)}\n\n${formatDiagnostics(normalizeDiagnostics(summary.diagnostics))}`,
+    );
+  }
+  const policy = assessed.value.policy;
+  const sourceRoots = assessed.value.sources.map(({ name, path }) => ({
+    name,
+    directory: sourceDirectory(siteDirectory, path, `paths.${name}`),
+  }));
   for (const source of sourceRoots) await requireDirectory(source.directory, source.name);
   const canonicalSourceRoots = await Promise.all(
     sourceRoots.map(async (source) => ({
@@ -431,13 +283,46 @@ async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string
       );
     }
   }
+
+  let inputFiles = 1;
+  for (const source of canonicalSourceRoots) {
+    const files = await sourceFiles(source.directory, source.name);
+    inputFiles += files.length;
+    for (const file of files) await placeFile(gateway, source.name, file.path, file.source);
+  }
+
+  return {
+    gateway,
+    inputFiles,
+    policy,
+    siteDirectory,
+    canonicalSiteDirectory,
+    configurationFile,
+    sourceRoots: canonicalSourceRoots,
+  };
+}
+
+/** Run a staged model with publication directed at one validated destination. */
+async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string) {
+  const staged = await stageSite(projectDirectory);
+  const {
+    gateway,
+    policy,
+    siteDirectory,
+    canonicalSiteDirectory,
+    configurationFile,
+    sourceRoots,
+  } = staged;
+  const outputDirectory = destination === undefined
+    ? sourceDirectory(siteDirectory, policy.paths.output, "paths.output")
+    : resolve(siteDirectory, destination);
   const comparableOutputDirectory = await canonicalPath(outputDirectory, "output directory");
   if (destination === undefined && !containsPath(canonicalSiteDirectory, comparableOutputDirectory)) {
     throw new Error(
       `Configured paths.output must stay inside the site directory after resolving symbolic links: ${outputDirectory}`,
     );
   }
-  for (const source of canonicalSourceRoots) {
+  for (const source of sourceRoots) {
     if (pathsOverlap(source.canonicalDirectory, comparableOutputDirectory)) {
       throw new Error(
         `Output directory overlaps configured ${source.name} directory: ${outputDirectory} and ${source.directory}`,
@@ -448,152 +333,122 @@ async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string
     throw new Error(`Output directory overlaps ${CONFIGURATION_PATH}: ${outputDirectory} and ${configurationFile}`);
   }
 
-  const contentFiles = await sourceFiles(contentDirectory, ROOTS.content);
-  const templateFiles = await sourceFiles(templatesDirectory, ROOTS.templates);
-  const publicFiles = await sourceFiles(publicDirectory, ROOTS.public);
-  requireUniqueTemplateNames(templateFiles);
-  const inputFiles = 1 + contentFiles.length + templateFiles.length + publicFiles.length;
-
-  const content = actionValue(
-    await application.concepts.Filing.open({ name: ROOTS.content }),
-    "Could not open the content Filing root",
-  );
-  const templates = actionValue(
-    await application.concepts.Filing.open({ name: ROOTS.templates }),
-    "Could not open the templates Filing root",
-  );
-  const includes = actionValue(
-    await application.concepts.Filing.open({ name: ROOTS.includes }),
-    "Could not open the includes Filing root",
-  );
-  const publicFilesRoot = actionValue(
-    await application.concepts.Filing.open({ name: ROOTS.public }),
-    "Could not open the public Filing root",
-  );
-
-  for (const file of contentFiles) await placeFile(application, content.root, file.path, file.source);
-  for (const file of templateFiles) {
-    const isInclude = file.path.startsWith(INCLUDES_PREFIX);
-    await placeFile(
-      application,
-      isInclude ? includes.root : templates.root,
-      logicalTemplateName(file.path),
-      file.source,
+  const releaseDestination = await acquireDestination(comparableOutputDirectory);
+  try {
+    const configured = gatewayValue<SyncpressWire["/site/configure"]["output"]>(
+      await gateway.invoke("/site/configure", { destination: outputDirectory }),
+      "Could not configure the site build",
     );
+    const job = await runPhases(gateway, configured.sequence);
+    return {
+      gateway,
+      job,
+      inputFiles: staged.inputFiles,
+      policy,
+      outputDirectory: comparableOutputDirectory,
+      releaseDestination,
+    };
+  } catch (error) {
+    releaseDestination();
+    throw error;
   }
-  for (const file of publicFiles) await placeFile(application, publicFilesRoot.root, file.path, file.source);
+}
 
-  const job = await runPhases(application, configured.sequence);
-  return { application, gateway, job, inputFiles, policy };
+/** Internal watch entry that updates output exclusion before reconciliation writes. */
+export async function buildSiteForWatch(
+  projectDirectory = ".",
+  destination?: string,
+  beforeReconcile?: (outputDirectory: string) => Promise<void>,
+) {
+  const { gateway, job, inputFiles, policy, outputDirectory, releaseDestination } = await stageAndRunSiteBuild(
+    projectDirectory,
+    destination,
+  );
+  try {
+    await beforeReconcile?.(outputDirectory);
+    const reconciled = await gateway.invoke("/site/reconcile", { job });
+    await gateway.whenIdle();
+    const summary = await readSiteSummary(gateway) as { pages: number; diagnostics: FormedDiagnostic[] };
+    const diagnostics = normalizeDiagnostics(summary.diagnostics);
+    if (!reconciled.ok) {
+      throw new Error(
+        `Could not reconcile the site build: ${gatewayError(reconciled.error)}\n\nDiagnostics:\n${formatDiagnostics(diagnostics)}`,
+      );
+    }
+
+    return {
+      result: { pages: summary.pages, inputFiles, policy, ...reconciled.value, diagnostics },
+      outputDirectory,
+    };
+  } finally {
+    releaseDestination();
+  }
 }
 
 export async function buildSite(projectDirectory = ".", destination?: string) {
-  const { application, gateway, job, inputFiles, policy } = await stageAndRunSiteBuild(projectDirectory, destination);
-  const reconciled = await gateway.invoke("/site/reconcile", { job });
-  const diagnostics = await application.concepts.Diagnosing._all();
-  if (!reconciled.ok) {
-    throw new Error(
-      `Could not reconcile the site build: ${gatewayError(reconciled.error)}\n\nDiagnostics:\n${formatDiagnostics(diagnostics)}`,
-    );
-  }
-
-  const pages = (await application.concepts.Routing._claims()).length;
-  return { pages, inputFiles, policy, ...reconciled.value, diagnostics };
-}
-
-function leafPaths(value: unknown, prefix: string[] = []): string[][] {
-  if (Array.isArray(value)) return value.flatMap((item, index) => leafPaths(item, [...prefix, String(index)]));
-  if (value !== null && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>);
-    return entries.length === 0 ? [prefix] : entries.flatMap(([key, item]) => leafPaths(item, [...prefix, key]));
-  }
-  return [prefix];
+  return (await buildSiteForWatch(projectDirectory, destination)).result;
 }
 
 /** Build an isolated application model and report the current provenance for one page or route. */
 export async function inspectSite(projectDirectory: string, target: string) {
-  const temporary = await mkdtemp(join(tmpdir(), "syncpress-inspect-"));
-  try {
-    const { application } = await stageAndRunSiteBuild(projectDirectory, join(temporary, "output"));
-    let owner: string | undefined;
-    if (target.startsWith("/")) owner = (await application.concepts.Routing._owner({ address: target }))[0]?.owner;
-    else {
-      const content = (await application.concepts.Filing._named({ name: ROOTS.content }))[0];
-      if (content !== undefined) owner = (await application.concepts.Filing._at({ root: content.root, path: target }))[0]?.file;
-    }
-    if (owner === undefined) {
-      const diagnostics = await application.concepts.Diagnosing._all();
-      throw new Error(`No routed page or content source matches ${JSON.stringify(target)}.\n\nDiagnostics:\n${formatDiagnostics(diagnostics)}`);
-    }
+  const { gateway } = await stageSite(projectDirectory);
+  const prepared = gatewayValue<SyncpressWire["/site/prepare"]["output"]>(
+    await gateway.invoke("/site/prepare", {}),
+    "Could not prepare the site model",
+  );
+  await runPhases(gateway, prepared.sequence);
 
-    const source = (await application.concepts.Filing._file({ file: owner }))[0];
-    const address = (await application.concepts.Routing._address({ owner }))[0]?.address;
-    const selected = source === undefined
-      ? undefined
-      : (await application.concepts.Layering._value({ subject: owner, path: PATHS.buildTemplate }))[0]?.value;
-    const generated = source === undefined
-      ? (await application.concepts.Deploying._forOwner({ owner }))[0]
-      : undefined;
-    const templateName = source === undefined
-      ? generated?.kind === "pagination-page" ? generated.templateName : undefined
-      : typeof selected === "string" ? selected : DEFAULTS.template;
-    const template = templateName === undefined
-      ? undefined
-      : (await application.concepts.Templating._template({ name: templateName }))[0];
-    const resolved = source === undefined ? undefined : await application.concepts.Layering._resolved({ subject: owner });
-    const layers = source === undefined ? [] : await application.concepts.Layering._layers({ subject: owner });
-    const origins = source === undefined || resolved === undefined
-      ? []
-      : (await Promise.all(
-          leafPaths(resolved.values).filter((path) => path.length > 0).map(async (path) => ({
-            path,
-            ...(await application.concepts.Layering._origin({ subject: owner!, path }))[0],
-          })),
-        )).filter((origin) => origin.layer !== undefined);
-    const operational = await application.form(PageOperationalInspection({ owner })) as OperationalInspection;
-    const diagnostics = operational.diagnostics.map(({ related, source, line, column, ...diagnostic }) => ({
-      ...diagnostic,
-      source: source ?? undefined,
+  const inspected = await gateway.invoke("/site/inspect", { target });
+  if (!inspected.ok) {
+    if (inspected.error.kind !== "domain" || inspected.error.value !== "INSPECTION_TARGET_NOT_FOUND") {
+      throw new Error(`Could not inspect the site model: ${gatewayError(inspected.error)}`);
+    }
+    const summary = await readSiteSummary(gateway) as { pages: number; diagnostics: FormedDiagnostic[] };
+    throw new Error(`No routed page or content source matches ${JSON.stringify(target)}.\n\nDiagnostics:\n${formatDiagnostics(normalizeDiagnostics(summary.diagnostics))}`);
+  }
+  const { owner, inspection } = inspected.value;
+  const source = inspection.source.path === null ? undefined : inspection.source;
+  const template = inspection.template.name === null || inspection.template.digest === null
+    ? undefined
+    : inspection.template;
+  const diagnostics = inspection.diagnostics.map(({ related, source, line, column, ...diagnostic }) => ({
+    ...diagnostic,
+    source: source ?? undefined,
+    line: line ?? undefined,
+    column: column ?? undefined,
+    related: related.map(({ line, column, ...relation }) => ({
+      ...relation,
       line: line ?? undefined,
       column: column ?? undefined,
-      related: related.map(({ line, column, ...relation }) => ({
-        ...relation,
-        line: line ?? undefined,
-        column: column ?? undefined,
-      })),
-    }));
+    })),
+  }));
 
-    return {
-      target,
-      owner,
-      route: address,
-      source: source === undefined ? undefined : { path: source.path, digest: source.digest },
-      template: template === undefined || templateName === undefined
-        ? undefined
-        : { name: templateName, digest: template.digest, tree: await application.concepts.Templating._tree({ owner: template.template }) },
-      layers,
-      origins,
-      rendering: operational.rendering.attempt === null
-        ? undefined
-        : {
-            ...operational.rendering,
-            body: operational.rendering.body ?? undefined,
-            layout: operational.rendering.layout ?? undefined,
-          },
-      renderings: operational.renderings,
-      memberships: operational.memberships,
-      dependencies: {
-        state: [{ state: operational.dependencies.state }],
-        reason: operational.dependencies.reason ?? undefined,
-        inputs: operational.dependencies.inputs,
-      },
-      outputs: operational.outputs,
-      claims: operational.claims,
-      diagnostics,
-    };
-  } finally {
-    await rm(temporary, { force: true, recursive: true });
-  }
+  return {
+    target,
+    owner,
+    route: inspection.route.address ?? undefined,
+    source: source === undefined ? undefined : { path: source.path!, digest: source.digest! },
+    template: template === undefined ? undefined : { name: template.name!, digest: template.digest!, tree: template.tree },
+    layers: inspection.layers,
+    origins: inspection.origins,
+    rendering: inspection.rendering.attempt === null
+      ? undefined
+      : {
+          ...inspection.rendering,
+          body: inspection.rendering.body ?? undefined,
+          layout: inspection.rendering.layout ?? undefined,
+        },
+    renderings: inspection.renderings,
+    memberships: inspection.memberships,
+    dependencies: {
+      state: [{ state: inspection.dependencies.state }],
+      reason: inspection.dependencies.reason ?? undefined,
+      inputs: inspection.dependencies.inputs,
+    },
+    outputs: inspection.outputs,
+    claims: inspection.claims,
+    diagnostics,
+  };
 }
 
 export type BuildResult = Awaited<ReturnType<typeof buildSite>>;

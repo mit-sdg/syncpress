@@ -7,6 +7,7 @@ import {
   InvalidCondition,
   InvalidDirection,
   InvalidField,
+  InvalidSelector,
   InvalidText,
   NotIncluded,
   type CatalogCondition,
@@ -21,7 +22,7 @@ function declare(
   sort: string | null = "data.score",
   condition: CatalogCondition | null = null,
 ) {
-  return cataloging.declare({ name, direction, sort, condition }).catalog;
+  return cataloging.declare({ name, selector: "**/*", direction, sort, condition }).catalog;
 }
 
 function index(
@@ -32,7 +33,7 @@ function index(
   tiebreak = item,
   extra: Record<string, unknown> = {},
 ) {
-  return cataloging.index({ catalog, item, tiebreak, card: { data: { score: value }, ...extra } });
+  return cataloging.index({ catalog, item, path: tiebreak, tiebreak, card: { data: { score: value }, ...extra } });
 }
 
 function items(cataloging: CatalogingConcept, catalog: string): string[] {
@@ -50,23 +51,24 @@ test("its principle: policies admit complete cards, derive order, and reconcile 
   const first = { data: { title: "First", date: "2026-01-01", featured: true } };
   const second = { data: { title: "Second", date: "2026-02-01", featured: false } };
 
-  expect(cataloging.index({ catalog: newest, item: "first", tiebreak: "first", card: first })).toMatchObject({
+  expect(cataloging.index({ catalog: newest, item: "first", path: "first", tiebreak: "first", card: first })).toMatchObject({
     included: true,
     changed: true,
   });
-  cataloging.index({ catalog: newest, item: "second", tiebreak: "second", card: second });
+  cataloging.index({ catalog: newest, item: "second", path: "second", tiebreak: "second", card: second });
   expect(items(cataloging, newest)).toEqual(["second", "first"]);
-  expect(cataloging.index({ catalog: featured, item: "first", tiebreak: "first", card: first })).toMatchObject({
+  expect(cataloging.index({ catalog: featured, item: "first", path: "first", tiebreak: "first", card: first })).toMatchObject({
     included: true,
     changed: true,
   });
-  expect(cataloging.index({ catalog: featured, item: "second", tiebreak: "second", card: second })).toMatchObject({
+  expect(cataloging.index({ catalog: featured, item: "second", path: "second", tiebreak: "second", card: second })).toMatchObject({
     included: false,
     changed: false,
   });
   expect(cataloging.index({
     catalog: featured,
     item: "first",
+    path: "first",
     tiebreak: "first",
     card: { data: { ...first.data, featured: false } },
   })).toMatchObject({ included: false, changed: true });
@@ -75,27 +77,28 @@ test("its principle: policies admit complete cards, derive order, and reconcile 
 
 test("declarations validate complete policy, report changes, and retain stable identities", () => {
   const cataloging = new CatalogingConcept();
-  const first = cataloging.declare({ name: "scores", direction: "asc", sort: "data.score", condition: null });
+  const first = cataloging.declare({ name: "scores", selector: "**/*", direction: "asc", sort: "data.score", condition: null });
   index(cataloging, first.catalog, "low", 1);
   index(cataloging, first.catalog, "high", 2);
 
-  expect(cataloging.declare({ name: "scores", direction: "asc", sort: "data.score", condition: null })).toEqual({
+  expect(cataloging.declare({ name: "scores", selector: "**/*", direction: "asc", sort: "data.score", condition: null })).toEqual({
     catalog: first.catalog,
     changed: false,
   });
-  expect(cataloging.declare({ name: "scores", direction: "desc", sort: "data.score", condition: null })).toEqual({
+  expect(cataloging.declare({ name: "scores", selector: "**/*", direction: "desc", sort: "data.score", condition: null })).toEqual({
     catalog: first.catalog,
     changed: true,
   });
   expect(items(cataloging, first.catalog)).toEqual(["high", "low"]);
-  expect(() => cataloging.declare({ name: "scores", direction: "sideways", sort: null, condition: null })).toThrow(
+  expect(() => cataloging.declare({ name: "scores", selector: "**/*", direction: "sideways", sort: null, condition: null })).toThrow(
     InvalidDirection,
   );
-  expect(() => cataloging.declare({ name: "scores", direction: "asc", sort: "data..score", condition: null })).toThrow(
+  expect(() => cataloging.declare({ name: "scores", selector: "**/*", direction: "asc", sort: "data..score", condition: null })).toThrow(
     InvalidField,
   );
   expect(() => cataloging.declare({
     name: "scores",
+    selector: "**/*",
     direction: "asc",
     sort: null,
     condition: { test: "exists", field: "data.score", value: true },
@@ -103,11 +106,53 @@ test("declarations validate complete policy, report changes, and retain stable i
   const accessor = Object.defineProperty({}, "field", { enumerable: true, get: () => "data.score" });
   const proxy = new Proxy({ test: "exists", field: "data.score" }, {});
   for (const condition of [accessor, proxy]) {
-    expect(() => cataloging.declare({ name: "scores", direction: "asc", sort: null, condition })).toThrow(
+    expect(() => cataloging.declare({ name: "scores", selector: "**/*", direction: "asc", sort: null, condition })).toThrow(
       InvalidCondition,
     );
   }
   expect(cataloging._named({ name: "scores" })[0]?.direction).toBe("desc");
+});
+
+test("selectors atomically admit, remove, and re-evaluate retained cards", () => {
+  const cataloging = new CatalogingConcept();
+  const declared = cataloging.declare({
+    name: "posts",
+    selector: "posts/**",
+    direction: "asc",
+    sort: null,
+    condition: null,
+  });
+  expect(cataloging.index({
+    catalog: declared.catalog,
+    item: "post",
+    path: "posts/one.md",
+    tiebreak: "posts/one.md",
+    card: { title: "Post" },
+  })).toMatchObject({ included: true, changed: true });
+  expect(cataloging.index({
+    catalog: declared.catalog,
+    item: "page",
+    path: "about.md",
+    tiebreak: "about.md",
+    card: { title: "About" },
+  })).toMatchObject({ included: false, changed: false });
+
+  expect(cataloging.declare({
+    name: "posts",
+    selector: "notes/**",
+    direction: "asc",
+    sort: null,
+    condition: null,
+  })).toEqual({ catalog: declared.catalog, changed: true });
+  expect(cataloging._entries({ catalog: declared.catalog })).toEqual([]);
+  expect(() => cataloging.declare({
+    name: "posts",
+    selector: "posts/**{",
+    direction: "asc",
+    sort: null,
+    condition: null,
+  })).toThrow(InvalidSelector);
+  expect(cataloging._named({ name: "posts" })[0]?.selector).toBe("notes/**");
 });
 
 test("equals, contains, and exists use safe own-property field traversal", () => {
@@ -130,7 +175,7 @@ test("equals, contains, and exists use safe own-property field traversal", () =>
 
   for (const [name, condition, included] of policies) {
     const catalog = declare(cataloging, name, "asc", null, condition);
-    expect(cataloging.index({ catalog, item: "page", tiebreak: "page", card }).included).toBe(included);
+    expect(cataloging.index({ catalog, item: "page", path: "page", tiebreak: "page", card }).included).toBe(included);
   }
 });
 
@@ -154,8 +199,8 @@ test("ascending and descending order every value kind and leave missing fields l
   ];
   for (const [item, value] of [...values].reverse()) {
     const card = value === undefined ? { data: {} } : { data: { score: value } };
-    cataloging.index({ catalog: ascending, item, tiebreak: item, card });
-    cataloging.index({ catalog: descending, item, tiebreak: item, card });
+    cataloging.index({ catalog: ascending, item, path: item, tiebreak: item, card });
+    cataloging.index({ catalog: descending, item, path: item, tiebreak: item, card });
   }
 
   const expected = values.map(([item]) => item);
@@ -180,8 +225,8 @@ test("records normalize, inputs and query results clone, and arbitrary catalog n
   const proto = declare(cataloging, "__proto__");
   const score = { ranks: [1, 2] };
   const card = { data: { score }, details: { labels: ["kept"] } };
-  cataloging.index({ catalog: constructor, item: "one", tiebreak: "one", card });
-  cataloging.index({ catalog: proto, item: "two", tiebreak: "two", card: { data: { score: 1 } } });
+  cataloging.index({ catalog: constructor, item: "one", path: "one", tiebreak: "one", card });
+  cataloging.index({ catalog: proto, item: "two", path: "two", tiebreak: "two", card: { data: { score: 1 } } });
   score.ranks.push(3);
   card.details.labels[0] = "changed";
 
@@ -206,10 +251,10 @@ test("invalid cards, proxies, cycles, and malformed text refuse atomically", () 
   const decorated = Object.assign([], { extra: true });
   const proxy = new Proxy({ value: 1 }, {});
   for (const card of [[], { value: undefined }, { value: Infinity }, cyclic, { sparse }, { decorated }, proxy]) {
-    expect(() => cataloging.index({ catalog, item: "invalid", tiebreak: "invalid", card })).toThrow(InvalidCard);
+    expect(() => cataloging.index({ catalog, item: "invalid", path: "invalid", tiebreak: "invalid", card })).toThrow(InvalidCard);
   }
   expect(items(cataloging, catalog)).toEqual([]);
-  expect(() => cataloging.index({ catalog: 1, item: "one", tiebreak: "one", card: {} })).toThrow(InvalidText);
+  expect(() => cataloging.index({ catalog: 1, item: "one", path: "one", tiebreak: "one", card: {} })).toThrow(InvalidText);
   expect(() => cataloging.withdraw({ item: "\ud800" })).toThrow(InvalidText);
 });
 
@@ -239,17 +284,18 @@ test("registry exposes every declared refusal with its normative message", async
   const app = assemble({ vocabulary: concepts.vocabulary, instances: concepts.implementations(), composition: {} });
   const Cataloging = app.concepts.Cataloging;
 
-  expect(await Cataloging.declare({ name: "pages", direction: "sideways", sort: null, condition: null })).toEqual({
+  expect(await Cataloging.declare({ name: "pages", selector: "**/*", direction: "sideways", sort: null, condition: null })).toEqual({
     error: "INVALID_DIRECTION",
     detail: "Direction must be asc or desc.",
   });
-  expect(await Cataloging.declare({ name: "pages", direction: "asc", sort: "data..date", condition: null })).toEqual({
+  expect(await Cataloging.declare({ name: "pages", selector: "**/*", direction: "asc", sort: "data..date", condition: null })).toEqual({
     error: "INVALID_FIELD",
     detail: "A configured field must use dotted ASCII segments.",
   });
   expect(catalogingRegistration.refusals).toEqual({
     INVALID_TEXT: InvalidText,
     INVALID_DIRECTION: InvalidDirection,
+    INVALID_SELECTOR: InvalidSelector,
     COLLECTION_NOT_FOUND: CatalogNotFound,
     INVALID_FIELD: InvalidField,
     INVALID_CONDITION: InvalidCondition,

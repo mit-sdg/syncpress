@@ -1,7 +1,7 @@
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, realpath } from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import { join, resolve } from "node:path";
-import { canonicalPath, containsPath } from "./site.ts";
+import { containsPath } from "./site.ts";
 import { watchSite } from "./watch.ts";
 
 function contentType(path: string): string {
@@ -54,12 +54,17 @@ async function respondFile(response: ServerResponse, root: string, pathname: str
     return;
   }
   try {
+    const canonicalFile = await realpath(file);
+    if (!containsPath(root, canonicalFile)) {
+      response.writeHead(403).end("Forbidden");
+      return;
+    }
     const status = await lstat(file);
     if (!status.isFile() || status.isSymbolicLink()) {
       response.writeHead(404).end("Not found");
       return;
     }
-    const body = await readFile(file);
+    const body = await readFile(canonicalFile);
     if (file.endsWith(".html")) {
       response.writeHead(200, { "content-type": contentType(file), "cache-control": "no-store" }).end(liveReloadMarkup(body.toString("utf8")));
     } else {
@@ -80,22 +85,14 @@ export async function serveSite(
 ): Promise<DevelopmentServer> {
   const clients = new Set<ServerResponse>();
   const siteDirectory = resolve(projectDirectory);
-  let outputDirectory = "";
-  let outputUpdate = Promise.resolve();
+  let outputDirectory: string | undefined;
   const watcher = await watchSite(siteDirectory, destination, {
-    onBuild(result) {
-      const output = resolve(siteDirectory, destination ?? result.policy.outputPath);
-      outputUpdate = canonicalPath(output, "output directory").then(
-        (target) => {
-          outputDirectory = target;
-          for (const client of clients) client.write("data: reload\n\n");
-        },
-        (error) => options.onError?.(error),
-      );
+    onBuild(_result, output) {
+      outputDirectory = output;
+      for (const client of clients) client.write("data: reload\n\n");
     },
     onError: options.onError,
   });
-  await outputUpdate;
   const host = options.host ?? "127.0.0.1";
   const requestedPort = options.port ?? 3000;
   const server = createServer((request, response) => {
@@ -117,15 +114,24 @@ export async function serveSite(
       request.on("close", () => clients.delete(response));
       return;
     }
+    if (outputDirectory === undefined) {
+      response.writeHead(503).end("Site unavailable");
+      return;
+    }
     void respondFile(response, outputDirectory, url.pathname);
   });
-  await new Promise<void>((resolveListening, rejectListening) => {
-    server.once("error", rejectListening);
-    server.listen(requestedPort, host, () => {
-      server.off("error", rejectListening);
-      resolveListening();
+  try {
+    await new Promise<void>((resolveListening, rejectListening) => {
+      server.once("error", rejectListening);
+      server.listen(requestedPort, host, () => {
+        server.off("error", rejectListening);
+        resolveListening();
+      });
     });
-  });
+  } catch (error) {
+    await watcher.close();
+    throw error;
+  }
   const address = server.address();
   const port = typeof address === "object" && address !== null ? address.port : requestedPort;
   return {

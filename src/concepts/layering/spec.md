@@ -151,9 +151,12 @@ _value (subject: Subject, path: Keys) : optional (value: Value)
 _flag (subject: Subject, path: Keys, otherwise: Flag) : one (value: Flag)
 _equal (subject: Subject, path: Keys, value: Value) : one (present: Flag, equal: Flag)
 _origin (subject: Subject, path: Keys) : optional (rank: Number, layer: Layer)
+_leafOrigins (subject: Subject) : many (path: Keys, rank: Number, layer: Layer)
 _layers (subject: Subject) : many (layer: Layer, rank: Number, values: Values)
 ```
 
-`_layers` uses ascending numeric rank order. Layering does not decide where
+`_leafOrigins` lists scalar and empty-mapping leaves in resolved-tree traversal
+order, omitting sequences because paths do not traverse them. `_layers` uses ascending
+numeric rank order. Layering does not decide where
 contributions come from, what a resolved record controls, or what filtering or
 containment operations an application needs.

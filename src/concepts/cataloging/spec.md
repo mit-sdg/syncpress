@@ -26,9 +26,14 @@ a Value, NaN, and positive or negative infinity are not Values. Negative zero
 is normalized to zero. Inputs are normalized and cloned before storage, and
 queries return clones.
 
-Text is a well-formed Unicode string. Catalog names, catalog and item identities,
-and tiebreaks must be Text. Actions refuse `INVALID_TEXT` before using another
+Text is a well-formed Unicode string. Catalog names, selectors, catalog and item
+identities, paths, and tiebreaks must be Text. Actions refuse `INVALID_TEXT` before using another
 value that is not Text. Lookup queries answer no row for a non-Text input.
+
+A selector follows the shared portable glob value contract: it is nonempty,
+case-sensitive, matches a complete `/`-separated path, includes dotfiles, and
+supports portable wildcards, classes, braces, extglobs, quoting, and escapes.
+Malformed or unbalanced syntax is not a selector.
 
 A Field has one or more dot-separated segments. Every segment contains only
 ASCII letters, digits, `_`, or `-`. There are no escapes, empty segments,
@@ -51,6 +56,7 @@ texts. It is false for other value kinds.
 ```state
 a set of Catalogs with
   a unique name Name
+  a selector Pattern
   a direction Direction                 -- asc or desc
   an optional sort Field
   an optional condition Condition
@@ -58,6 +64,7 @@ a set of Catalogs with
 a set of Entries with
   a catalog Catalog
   an item Item
+  a path Path
   a tiebreak Text
   a card Values
   a sort key derived from the catalog policy and card
@@ -70,10 +77,13 @@ Catalog and entry identities are deterministic encodings of their name and
 ## Actions
 
 ```actions
-declare (name: Name, direction: Direction, sort: OptionalField, condition: OptionalCondition) : return (catalog: Catalog, changed: Flag)
+declare (name: Name, selector: Pattern, direction: Direction, sort: OptionalField, condition: OptionalCondition) : return (catalog: Catalog, changed: Flag)
   where name is not Text
   then
-    refuse INVALID_TEXT "Names, identities, and tiebreaks must be text."
+    refuse INVALID_TEXT "Names, selectors, identities, paths, and tiebreaks must be text."
+  where selector is not a valid portable glob
+  then
+    refuse INVALID_SELECTOR "A catalog selector must be a valid portable glob."
   where direction is neither asc nor desc
   then
     refuse INVALID_DIRECTION "Direction must be asc or desc."
@@ -93,17 +103,17 @@ declare (name: Name, direction: Direction, sort: OptionalField, condition: Optio
   then
     add it and return catalog and changed true
 
-index (catalog: Catalog, item: Item, tiebreak: Text, card: Values) : return (entry: Entry, included: Flag, changed: Flag)
-  where catalog, item, or tiebreak is not Text
+index (catalog: Catalog, item: Item, path: Path, tiebreak: Text, card: Values) : return (entry: Entry, included: Flag, changed: Flag)
+  where catalog, item, path, or tiebreak is not Text
   then
-    refuse INVALID_TEXT "Names, identities, and tiebreaks must be text."
+    refuse INVALID_TEXT "Names, selectors, identities, paths, and tiebreaks must be text."
   where catalog is absent
   then
     refuse COLLECTION_NOT_FOUND "There is no such catalog."
   where card is not a record of Values
   then
     refuse INVALID_CARD "A card must be a record of supported values."
-  where card does not satisfy the catalog condition
+  where path does not match the selector or card does not satisfy the catalog condition
   then
     remove its prior entry if present and return included false with whether state changed
   where card satisfies the condition and an equal normalized projection is indexed
@@ -116,7 +126,7 @@ index (catalog: Catalog, item: Item, tiebreak: Text, card: Values) : return (ent
 unindex (catalog: Catalog, item: Item) : return (entry: Entry)
   where catalog or item is not Text
   then
-    refuse INVALID_TEXT "Names, identities, and tiebreaks must be text."
+    refuse INVALID_TEXT "Names, selectors, identities, paths, and tiebreaks must be text."
   where item is absent from catalog
   then
     refuse NOT_INCLUDED "This item is not indexed in that catalog."
@@ -127,7 +137,7 @@ unindex (catalog: Catalog, item: Item) : return (entry: Entry)
 withdraw (item: Item) : return (item: Item, count: Number)
   where item is not Text
   then
-    refuse INVALID_TEXT "Names, identities, and tiebreaks must be text."
+    refuse INVALID_TEXT "Names, selectors, identities, paths, and tiebreaks must be text."
   then
     remove the item from every catalog and return how many entries were removed
 
@@ -144,8 +154,8 @@ were previously excluded; a caller indexes those cards again.
 ## Queries
 
 ```queries
-_catalogs () : many (catalog: Catalog, name: Name, direction: Direction, sort: OptionalField, condition: OptionalCondition)
-_named (name: Name) : optional (catalog: Catalog, direction: Direction, sort: OptionalField, condition: OptionalCondition)
+_catalogs () : many (catalog: Catalog, name: Name, selector: Pattern, direction: Direction, sort: OptionalField, condition: OptionalCondition)
+_named (name: Name) : optional (catalog: Catalog, selector: Pattern, direction: Direction, sort: OptionalField, condition: OptionalCondition)
 _entries (catalog: Catalog) : many (entry: Entry, item: Item, card: Values)
 _membership (item: Item) : many (entry: Entry, catalog: Catalog, name: Name)
 _position (catalog: Catalog, item: Item) : optional (index: Number)

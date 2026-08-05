@@ -14,6 +14,7 @@ import {
   PathContested,
   PathLeavesDestination,
   ReconciliationFailed,
+  StaleAttempt,
 } from "./emitting.ts";
 import spec from "./spec.md" with { type: "text" };
 
@@ -32,6 +33,7 @@ export const emitting = registerConcept({
     INVALID_MEDIUM: InvalidMedium,
     PATH_CONTESTED: PathContested,
     NOT_BEGUN: NotBegun,
+    STALE_ATTEMPT: StaleAttempt,
     DESTINATION_NOT_DIRECTED: DestinationNotDirected,
     RECONCILIATION_FAILED: ReconciliationFailed,
   },

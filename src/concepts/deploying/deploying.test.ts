@@ -102,9 +102,7 @@ test("its principle: prepare one ordered deployment through completion", () => {
   expect(deploying._current()).toEqual([]);
   expect(deploying._outcome()).toEqual({ state: "completed" });
 
-  const replacement = deploying.start({ policy: emptyPolicy });
-  expect(replacement.completed).toBe(true);
-  expect(deploying._forOwner({ owner: "deployment:redirect:/old/" })).toEqual([]);
+  expect(() => deploying.start({ policy: emptyPolicy })).toThrow(DeploymentActive);
 });
 
 test("pagination division creates one page for an empty collection", () => {
@@ -119,6 +117,27 @@ test("pagination division creates one page for an empty collection", () => {
   const divided = deploying.divide({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
   expect(divided.pages).toBe(1);
   expect(deploying._work({ work: divided.work })[0]).toMatchObject({ number: 1, pages: 1, address: "/page/1/" });
+});
+
+test("pagination plan and page identities cannot collide with punctuated names", () => {
+  const deploying = new DeployingConcept();
+  const started = deploying.start({
+    policy: {
+      ...emptyPolicy,
+      pagination: [
+        { name: "news", collection: "news", perPage: 2, route: "/news/:page/", template: "page.html" },
+        { name: "news:1", collection: "news", perPage: 2, route: "/archive/:page/", template: "page.html" },
+      ],
+    },
+  });
+  deploying.dispatch({ deployment: started.deployment, work: started.work! });
+  const page = deploying.divide({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
+  deploying.dispatch({ deployment: started.deployment, work: page.work });
+  deploying.context({ work: page.work, site: {}, collections: {} });
+  const nextPlan = deploying.complete({ work: page.work });
+
+  expect(nextPlan.work).not.toBe(page.work);
+  expect(deploying._work({ work: nextPlan.work! })[0]).toMatchObject({ kind: "pagination-plan", name: "news:1" });
 });
 
 test("refuses stale work and malformed supplied facts", () => {
@@ -226,7 +245,9 @@ test("failed context snapshots leave pagination work active", () => {
 
   expect(() => deploying.context({ work: divided.work, site: { invalid: () => undefined }, collections: {} })).toThrow(InvalidContext);
   expect(deploying._current()[0]).toMatchObject({ work: divided.work, status: "active" });
-  expect(deploying.context({ work: divided.work, site: {}, collections: {} })).toMatchObject({ owner: "deployment:pagination:posts:1" });
+  expect(deploying.context({ work: divided.work, site: {}, collections: {} })).toMatchObject({
+    owner: 'deployment-owner:["pagination-page","posts",1]',
+  });
 });
 
 test("registry promises expose one latest deployment", () => {

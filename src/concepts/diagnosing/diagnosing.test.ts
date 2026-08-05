@@ -73,10 +73,24 @@ test("its principle: problems accumulate, repeat idempotently, and retract by so
   expect(diagnosing._for({ source: "records/alpha.txt" })[0]!.message).toBe("A required value is absent.");
   expect(diagnosing._related({ diagnostic: first.diagnostic })).toHaveLength(1);
 
-  expect(diagnosing.retract({ source: "records/alpha.txt" })).toEqual({ source: "records/alpha.txt", count: 2 });
+  expect(diagnosing.retract({ source: "records/alpha.txt" })).toEqual({ scope: undefined, source: "records/alpha.txt", count: 2 });
   expect(diagnosing._clean()).toEqual({ clean: true });
   expect(diagnosing.clear()).toEqual({ count: 1 });
   expect(diagnosing._all()).toEqual([]);
+});
+
+test("scopes isolate replacement for checks that share one source", () => {
+  const diagnosing = new DiagnosingConcept();
+  const assessment = report(diagnosing, { scope: "assessment", source: "site.yaml", line: undefined, column: undefined });
+  const settings = report(diagnosing, { scope: "settings", source: "site.yaml", line: undefined, column: undefined });
+  expect(assessment.diagnostic).not.toBe(settings.diagnostic);
+
+  expect(diagnosing.retract({ scope: "assessment", source: "site.yaml" })).toEqual({
+    scope: "assessment",
+    source: "site.yaml",
+    count: 1,
+  });
+  expect(diagnosing._all()).toEqual([expect.objectContaining({ diagnostic: settings.diagnostic, scope: "settings" })]);
 });
 
 test("diagnostic ordering is total, UTF-8 based, and independent of arrival", () => {
@@ -190,13 +204,13 @@ test("source retraction and clearing have exact repeated-work lifecycle semantic
   diagnosing.relate({ diagnostic: alpha.diagnostic, source: "beta", note: "related to beta" });
   diagnosing.relate({ diagnostic: beta.diagnostic, source: "alpha", note: "related to alpha" });
 
-  expect(diagnosing.retract({ source: "alpha" })).toEqual({ source: "alpha", count: 1 });
+  expect(diagnosing.retract({ source: "alpha" })).toEqual({ scope: undefined, source: "alpha", count: 1 });
   expect(diagnosing._related({ diagnostic: alpha.diagnostic })).toEqual([]);
   expect(diagnosing._related({ diagnostic: beta.diagnostic })).toEqual([
     { source: "alpha", line: undefined, column: undefined, note: "related to alpha" },
   ]);
-  expect(diagnosing.retract({ source: "alpha" })).toEqual({ source: "alpha", count: 0 });
-  expect(diagnosing.retract({})).toEqual({ source: undefined, count: 1 });
+  expect(diagnosing.retract({ source: "alpha" })).toEqual({ scope: undefined, source: "alpha", count: 0 });
+  expect(diagnosing.retract({})).toEqual({ scope: undefined, source: undefined, count: 1 });
   expect(diagnosing._related({ diagnostic: global.diagnostic })).toEqual([]);
 
   const recreated = report(diagnosing, {
@@ -226,6 +240,7 @@ test("actions reject malformed runtime values atomically and lookup queries stay
     { message: null },
     { source: 1 },
     { source: malformed },
+    { scope: malformed },
   ]) {
     expect(() => report(diagnosing, overrides)).toThrow(InvalidText);
   }
@@ -280,12 +295,12 @@ test("registry exposes every declared refusal and exact query cardinality", asyn
   });
   expect(registeredDiagnosing.specification.actions.flatMap(({ refusals }) => refusals.map(({ code, message }) => [code, message]))).toEqual([
     ["UNKNOWN_SEVERITY", "A diagnostic is an error or a warning."],
-    ["INVALID_TEXT", "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."],
+    ["INVALID_TEXT", "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."],
     ["INVALID_LOCATION", "A location needs a source; line and column must be positive safe integers, and a column needs a line."],
-    ["INVALID_TEXT", "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."],
+    ["INVALID_TEXT", "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."],
     ["DIAGNOSTIC_NOT_FOUND", "There is no such diagnostic."],
     ["INVALID_LOCATION", "A location needs a source; line and column must be positive safe integers, and a column needs a line."],
-    ["INVALID_TEXT", "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."],
+    ["INVALID_TEXT", "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."],
   ]);
   expect(registeredDiagnosing.specification.queries.map(({ name, promise }) => [name, promise])).toEqual([
     ["_all", "many"],
@@ -303,7 +318,7 @@ test("registry exposes every declared refusal and exact query cardinality", asyn
   });
   expect(await app.concepts.Diagnosing.report({ severity: "error", code: 1, message: "x" })).toEqual({
     error: "INVALID_TEXT",
-    detail: "Codes, messages, sources, diagnostic identities, and notes must be well-formed text.",
+    detail: "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text.",
   });
   expect(await app.concepts.Diagnosing.report({ severity: "error", code: "X", message: "x", line: 1 })).toEqual({
     error: "INVALID_LOCATION",

@@ -1,5 +1,5 @@
 const UNKNOWN_SEVERITY_MESSAGE = "A diagnostic is an error or a warning.";
-const INVALID_TEXT_MESSAGE = "Codes, messages, sources, diagnostic identities, and notes must be well-formed text.";
+const INVALID_TEXT_MESSAGE = "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text.";
 const INVALID_LOCATION_MESSAGE = "A location needs a source; line and column must be positive safe integers, and a column needs a line.";
 const DIAGNOSTIC_NOT_FOUND_MESSAGE = "There is no such diagnostic.";
 
@@ -41,6 +41,7 @@ type Location = {
 
 type DiagnosticRecord = Location & {
   diagnostic: string;
+  scope: string | undefined;
   severity: DiagnosticSeverity;
   code: string;
   message: string;
@@ -110,8 +111,8 @@ function severityOrder(severity: DiagnosticSeverity): number {
   return severity === "error" ? 0 : 1;
 }
 
-function diagnosticIdentity(severity: DiagnosticSeverity, code: string, location: Location): string {
-  return `diagnostic:${JSON.stringify([severity, code, location.source ?? null, location.line ?? null, location.column ?? null])}`;
+function diagnosticIdentity(scope: string | undefined, severity: DiagnosticSeverity, code: string, location: Location): string {
+  return `diagnostic:${JSON.stringify([scope ?? null, severity, code, location.source ?? null, location.line ?? null, location.column ?? null])}`;
 }
 
 function relationIdentity(diagnostic: string, source: string, line: number | undefined, column: number | undefined, note: string): string {
@@ -121,6 +122,7 @@ function relationIdentity(diagnostic: string, source: string, line: number | und
 function compareDiagnostic(left: DiagnosticRecord, right: DiagnosticRecord): number {
   return (
     severityOrder(left.severity) - severityOrder(right.severity) ||
+    compareOptional(left.scope, right.scope, compareText) ||
     compareOptional(left.source, right.source, compareText) ||
     compareOptional(left.line, right.line, compareNumber) ||
     compareOptional(left.column, right.column, compareNumber) ||
@@ -143,6 +145,7 @@ export class DiagnosingConcept {
   readonly #relations = new Map<string, RelationRecord>();
 
   report({
+    scope,
     severity,
     code,
     message,
@@ -150,6 +153,7 @@ export class DiagnosingConcept {
     line,
     column,
   }: {
+    scope?: unknown;
     severity: unknown;
     code: unknown;
     message: unknown;
@@ -158,14 +162,16 @@ export class DiagnosingConcept {
     column?: unknown;
   }) {
     if (severity !== "error" && severity !== "warning") throw new UnknownSeverity();
+    const normalizedScope = optionalText(scope);
     const normalizedCode = text(code);
     const normalizedMessage = text(message);
     const normalizedLocation = location(optionalText(source), line, column);
-    const diagnostic = diagnosticIdentity(severity, normalizedCode, normalizedLocation);
+    const diagnostic = diagnosticIdentity(normalizedScope, severity, normalizedCode, normalizedLocation);
     if (this.#diagnostics.has(diagnostic)) return { diagnostic };
 
     this.#diagnostics.set(diagnostic, {
       diagnostic,
+      scope: normalizedScope,
       severity,
       code: normalizedCode,
       message: normalizedMessage,
@@ -212,15 +218,16 @@ export class DiagnosingConcept {
     return { relation };
   }
 
-  retract({ source }: { source?: unknown }) {
+  retract({ scope, source }: { scope?: unknown; source?: unknown }) {
+    const normalizedScope = optionalText(scope);
     const normalizedSource = optionalText(source);
     let count = 0;
     for (const record of [...this.#diagnostics.values()]) {
-      if (record.source !== normalizedSource) continue;
+      if (record.scope !== normalizedScope || record.source !== normalizedSource) continue;
       this.#remove(record.diagnostic);
       count += 1;
     }
-    return { source: normalizedSource, count };
+    return { scope: normalizedScope, source: normalizedSource, count };
   }
 
   clear() {
@@ -232,6 +239,7 @@ export class DiagnosingConcept {
 
   _all(): {
     diagnostic: string;
+    scope: string | undefined;
     severity: DiagnosticSeverity;
     code: string;
     message: string;
@@ -239,8 +247,9 @@ export class DiagnosingConcept {
     line: number | undefined;
     column: number | undefined;
   }[] {
-    return this.#orderedDiagnostics().map(({ diagnostic, severity, code, message, source, line, column }) => ({
+    return this.#orderedDiagnostics().map(({ diagnostic, scope, severity, code, message, source, line, column }) => ({
       diagnostic,
+      scope,
       severity,
       code,
       message,
@@ -252,6 +261,7 @@ export class DiagnosingConcept {
 
   _errors(): {
     diagnostic: string;
+    scope: string | undefined;
     code: string;
     message: string;
     source: string | undefined;
@@ -260,11 +270,12 @@ export class DiagnosingConcept {
   }[] {
     return this.#orderedDiagnostics()
       .filter(({ severity }) => severity === "error")
-      .map(({ diagnostic, code, message, source, line, column }) => ({ diagnostic, code, message, source, line, column }));
+      .map(({ diagnostic, scope, code, message, source, line, column }) => ({ diagnostic, scope, code, message, source, line, column }));
   }
 
   _for({ source }: { source?: unknown }): {
     diagnostic: string;
+    scope: string | undefined;
     severity: DiagnosticSeverity;
     code: string;
     message: string;
@@ -274,7 +285,7 @@ export class DiagnosingConcept {
     if (source !== undefined && !isText(source)) return [];
     return this.#orderedDiagnostics()
       .filter((diagnostic) => diagnostic.source === source)
-      .map(({ diagnostic, severity, code, message, line, column }) => ({ diagnostic, severity, code, message, line, column }));
+      .map(({ diagnostic, scope, severity, code, message, line, column }) => ({ diagnostic, scope, severity, code, message, line, column }));
   }
 
   _related({ diagnostic }: { diagnostic: unknown }): {

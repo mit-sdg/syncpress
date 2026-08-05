@@ -10,13 +10,11 @@ from using the same address, and project canonical addresses into site URLs.
 Ada gives one note the address `/notes/design/`. Giving another note that address
 is refused, so the first note keeps it. Giving the first note the same address
 again changes nothing, while moving it to a free address keeps the note's claim
-identity. The address points to `notes/design/index.html`; `/404.html` points to
-`404.html`. Changing the public base from `/` to `/library/` changes the URLs
+identity. Changing the public base from `/` to `/library/` changes the URLs
 people use but not who owns either address. Releasing an address makes it free
-for someone else. Retargeting `./design.md?print=1#section` to
-`/notes/design/` gives `/notes/design/?print=1#section`. Malformed requests leave
-every existing claim untouched. Configuring the origin `https://notes.example/`
-then makes the rebased `/notes/design/` address available as
+for someone else. Malformed requests leave every existing claim untouched.
+Configuring the origin `https://notes.example/` then makes the rebased
+`/notes/design/` address available as
 `https://notes.example/library/notes/design/`; clearing the origin leaves the
 relative URL unchanged.
 
@@ -51,28 +49,9 @@ empty segments, and encoded `.` or `..` segments are not canonical.
 
 The file-style address `/index.html`, and any file-style address ending in
 `/index.html`, is not canonical. Its canonical address is the corresponding
-directory address. This reservation makes address and output-path conversion a
-bijection:
-
-- `/` corresponds to `index.html`.
-- `/notes/design/` corresponds to `notes/design/index.html`.
-- `/404.html` corresponds to `404.html`.
-- `/a%20b/` corresponds to `a b/index.html`.
-
-`_file` performs the address-to-path direction. `_locate` performs the inverse,
-turning a path ending in `index.html` into a directory address and every other
-path into a file address. For every valid input, applying one and then the other
-returns the original value exactly.
-
-`_derive` turns a Path into a directory address. It first removes the final
-extension from the last segment: the extension begins at the last `.` only when
-the dot is neither first nor last and the remaining stem is still a valid
-segment. It then removes a last segment equal to `index`. The remaining segments
-are canonically encoded. Thus `index.md` derives `/`, while both `about.md` and
-`about/index.md` derive `/about/` and will conflict if different owners claim
-them. This derivation convention and the `index.html` path projection are
-intrinsic parts of this hierarchical address scheme; callers decide whether and
-when to use them.
+directory address. Pure application computations share this grammar when they
+derive addresses, project output paths, and rewrite references; Routing owns
+only the mutable address space and its projections.
 
 A Base is a canonical directory Address. The initial base is `/`. A base changes
 only URL projection and never changes an Address or a Claim. `_url` accepts any
@@ -93,36 +72,6 @@ changes a Base, Address, or Claim. Omitting its `origin` input, or giving it
 Origin is configured and its input is a canonical Address. Its URL is the
 Origin followed by that Address's current Base projection. It accepts no query
 or fragment and does not require the Address to be claimed.
-
-`_classify` classifies Text lexically. Text beginning `#` is `fragment`; Text
-beginning `//` or with an ASCII URI scheme is `external`; remaining Text beginning
-`/` is `absolute`; and all other Text, including empty and query-only Text, is
-`relative`. Network-path references are checked before site-absolute references.
-Classification does not claim that a target is otherwise a valid URI.
-
-`_retarget` replaces the path of a safe relative URI-reference while preserving
-its suffix. `replacement` must be a canonical Address with no query or fragment.
-`original` may have a relative path, an empty path, or be empty. It may be followed
-by a query beginning `?`, a fragment beginning `#`, or both in that order. A
-query-only original is accepted. A fragment-only original is not: it already
-targets the current resource and does not need another path.
-
-An accepted original uses URI-reference punctuation literally: ASCII letters,
-digits, `-._~!$&'()*+,;=:@/?#`, and syntactically complete `%HH` escapes. Raw
-non-ASCII Unicode scalar values are also accepted except control, format, and
-separator characters. The first path segment may not contain a literal `:`, and
-there may be at most one literal `#`. These rules reject ambiguous scheme-like
-paths, whitespace, backslashes, double quotes, angle delimiters, malformed
-percent escapes, and other unsafe punctuation. A site-absolute, fragment-only,
-scheme-bearing, or network-path original answers no row. In particular, protocol
-and network-path targets are never stripped and converted into local targets.
-
-Only the substring beginning at the first `?` or `#` is copied; the original path
-is discarded. The suffix is copied exactly as Text. Percent-escape case, escaped
-versus literal spelling, repeated `?` characters, and Unicode normalization are
-not decoded, normalized, or otherwise changed. Empty query and fragment markers
-are preserved. When the original has no suffix, the result is exactly the
-replacement Address. Retargeting does not apply the current Base.
 
 ## State
 
@@ -200,30 +149,21 @@ former base active, and a second owner never displaces the incumbent.
 ## Queries
 
 ```queries
-_derive (path: Path) : optional (address: Address)
 _address (owner: Owner) : optional (address: Address, url: Url)
 _owner (address: Address) : optional (owner: Owner)
-_file (address: Address) : optional (path: Path)
-_locate (path: Path) : optional (address: Address)
-_retarget (replacement: Address, original: Target) : optional (target: Target)
 _url (target: Address) : optional (url: Url)
 _absolute (address: Address) : optional (url: Url)
-_classify (target: Address) : optional (kind: AddressKind)
 _claims () : many (owner: Owner, address: Address)
 ```
 
-`_derive`, `_file`, and `_locate` answer no row for a noncanonical input.
-`_owner` likewise requires the exact canonical spelling and answers no row for an
+`_owner` requires the exact canonical spelling and answers no row for an
 unclaimed address. `_address` answers the current URL using the current base, so
-rebasing is visible immediately without rewriting claims. `_classify` has exactly
-one row for every Text target and no row for a non-Text value. `_retarget` answers
-one row exactly for the accepted pair described above and otherwise no row.
+rebasing is visible immediately without rewriting claims.
 `_absolute` answers one row exactly when its canonical Address and a configured
 Origin can form a canonical absolute URL, and otherwise no row.
 `_claims` answers all claims in ascending UTF-8 byte order of canonical address,
 independent of claim arrival order.
 
-Routing owns this address grammar, unique claims, path projection, reference
-classification and retargeting, and base and origin projection. It does not
+Routing owns this address grammar, unique claims, and base and origin projection. It does not
 decide what an owner means, which things deserve addresses, whether an address
 should be reachable, or what is stored at the corresponding path.

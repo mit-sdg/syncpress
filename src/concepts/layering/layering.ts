@@ -157,6 +157,18 @@ function readAt(values: LayerValues, path: readonly string[]): ReadResult {
   return { present: true, value: current };
 }
 
+function leafPaths(value: LayerValue, prefix: string[] = [], paths: string[][] = []): string[][] {
+  if (Array.isArray(value)) return paths;
+  if (!isMapping(value)) {
+    if (prefix.length > 0) paths.push(prefix);
+    return paths;
+  }
+  const keys = Object.keys(value);
+  if (keys.length === 0 && prefix.length > 0) paths.push(prefix);
+  for (const key of keys) leafPaths(value[key]!, [...prefix, key], paths);
+  return paths;
+}
+
 function isAtOrBelow(prefix: readonly string[], path: readonly string[]): boolean {
   return prefix.length <= path.length && prefix.every((segment, index) => segment === path[index]);
 }
@@ -275,6 +287,14 @@ export class LayeringConcept {
     if (normalizedPath === undefined || normalizedPath.length === 0) return [];
     const origin = this.#resolve(subject).origins.get(pathKey(normalizedPath));
     return origin === undefined ? [] : [{ rank: origin.layer.rank, layer: origin.layer.layer }];
+  }
+
+  _leafOrigins({ subject }: { subject: string }): { path: string[]; rank: number; layer: string }[] {
+    const resolution = this.#resolve(subject);
+    return leafPaths(resolution.values).map((path) => {
+      const origin = resolution.origins.get(pathKey(path))!;
+      return { path, rank: origin.layer.rank, layer: origin.layer.layer };
+    });
   }
 
   _layers({ subject }: { subject: string }): { layer: string; rank: number; values: LayerValues }[] {

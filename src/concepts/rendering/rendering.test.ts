@@ -2,24 +2,29 @@ import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 import {
   InvalidProfile,
+  InvalidAttempt,
   InvalidData,
   InvalidTemplate,
   InvalidText,
   RenderingConcept,
   RenderingNotFound,
   StageNotReady,
+  StaleAttempt,
   UnknownSource,
 } from "./rendering.ts";
 import { rendering as registration } from "./registry.ts";
 
+const attempts = { dependencyAttempt: 1, emissionAttempt: 1 } as const;
+
 test("its principle: attempts select profiles and advance each stage once", () => {
   const rendering = new RenderingConcept();
-  const markdown = rendering.begin({ subject: "page:post", path: "posts/post.md", data: {} });
-  const html = rendering.begin({ subject: "page:about", path: "about.html", data: {} });
+  const markdown = rendering.begin({ subject: "page:post", path: "posts/post.md", data: {}, ...attempts });
+  const html = rendering.begin({ subject: "page:about", path: "about.html", data: {}, ...attempts });
   const custom = rendering.begin({
     subject: "page:custom",
     path: "custom.txt",
     data: { build: { markup: "custom", template: "special.html" } },
+    ...attempts,
   });
 
   expect(markdown.profile).toBe("markdown");
@@ -37,30 +42,53 @@ test("its principle: attempts select profiles and advance each stage once", () =
   expect(rendering._active({ rendering: markdown.rendering })).toEqual([]);
   expect(rendering.finish({ rendering: markdown.rendering })).toMatchObject({ transitioned: false });
   expect(rendering._attempt({ rendering: markdown.rendering })).toEqual([
-    { subject: "page:post", path: "posts/post.md", profile: "markdown", template: "page.html", stage: "completed" },
+    { subject: "page:post", path: "posts/post.md", profile: "markdown", template: "page.html", stage: "completed", ...attempts },
   ]);
 });
 
 test("a new attempt supersedes unfinished work and ignores its late completion", () => {
   const rendering = new RenderingConcept();
-  const first = rendering.begin({ subject: "page:post", path: "post.md", data: {} });
+  const first = rendering.begin({ subject: "page:post", path: "post.md", data: {}, ...attempts });
   rendering.settleBody({ rendering: first.rendering });
-  const second = rendering.begin({ subject: "page:post", path: "post.html", data: {} });
+  const replacementAttempts = { dependencyAttempt: 2, emissionAttempt: 2 } as const;
+  const second = rendering.begin({ subject: "page:post", path: "post.html", data: {}, ...replacementAttempts });
 
   expect(rendering._attempt({ rendering: first.rendering })).toEqual([
-    { subject: "page:post", path: "post.md", profile: "markdown", template: "page.html", stage: "superseded" },
+    { subject: "page:post", path: "post.md", profile: "markdown", template: "page.html", stage: "superseded", ...attempts },
   ]);
   expect(rendering._active({ rendering: first.rendering })).toEqual([]);
   expect(rendering._active({ rendering: second.rendering })[0]?.stage).toBe("started");
   expect(rendering.settleLayout({ rendering: first.rendering })).toMatchObject({ transitioned: false });
   expect(rendering._latest({ subject: "page:post" })).toEqual([
-    { rendering: second.rendering, path: "post.html", profile: "verbatim", template: "page.html", stage: "started" },
+    { rendering: second.rendering, path: "post.html", profile: "verbatim", template: "page.html", stage: "started", ...replacementAttempts },
   ]);
+});
+
+test("begin is idempotent for one exact pair and refuses stale or inconsistent pairs", () => {
+  const rendering = new RenderingConcept();
+  const first = rendering.begin({ subject: "page:post", path: "post.md", data: {}, ...attempts });
+
+  expect(rendering.begin({ subject: "page:post", path: "post.md", data: {}, ...attempts })).toEqual(first);
+  expect(rendering._all()).toHaveLength(1);
+  expect(() => rendering.begin({
+    subject: "page:post",
+    path: "post.html",
+    data: {},
+    ...attempts,
+  })).toThrow(StaleAttempt);
+  expect(() => rendering.begin({
+    subject: "page:post",
+    path: "post.md",
+    data: {},
+    dependencyAttempt: 2,
+    emissionAttempt: 1,
+  })).toThrow(StaleAttempt);
+  expect(rendering._latest({ subject: "page:post" })[0]?.rendering).toBe(first.rendering);
 });
 
 test("out-of-order and unknown transitions refuse without changing state", () => {
   const rendering = new RenderingConcept();
-  const attempt = rendering.begin({ subject: "page:post", path: "post.md", data: {} });
+  const attempt = rendering.begin({ subject: "page:post", path: "post.md", data: {}, ...attempts });
 
   expect(() => rendering.settleLayout({ rendering: attempt.rendering })).toThrow(StageNotReady);
   expect(() => rendering.finish({ rendering: attempt.rendering })).toThrow(StageNotReady);
@@ -70,13 +98,13 @@ test("out-of-order and unknown transitions refuse without changing state", () =>
 
 test("begin validates source and profile values before superseding current work", () => {
   const rendering = new RenderingConcept();
-  const current = rendering.begin({ subject: "page:post", path: "post.md", data: {} });
+  const current = rendering.begin({ subject: "page:post", path: "post.md", data: {}, ...attempts });
 
-  expect(() => rendering.begin({ subject: 1, path: "post.md", data: {} })).toThrow(InvalidText);
-  expect(() => rendering.begin({ subject: "page:post", path: "post.md", data: null })).toThrow(InvalidData);
-  expect(() => rendering.begin({ subject: "page:post", path: "post.md", data: { build: { markup: 1 } } })).toThrow(InvalidProfile);
-  expect(() => rendering.begin({ subject: "page:post", path: "post.md", data: { build: { template: 1 } } })).toThrow(InvalidTemplate);
-  expect(() => rendering.begin({ subject: "page:post", path: "post.txt", data: {} })).toThrow(UnknownSource);
+  expect(() => rendering.begin({ subject: 1, path: "post.md", data: {}, ...attempts })).toThrow(InvalidText);
+  expect(() => rendering.begin({ subject: "page:post", path: "post.md", data: null, ...attempts })).toThrow(InvalidData);
+  expect(() => rendering.begin({ subject: "page:post", path: "post.md", data: { build: { markup: 1 } }, ...attempts })).toThrow(InvalidProfile);
+  expect(() => rendering.begin({ subject: "page:post", path: "post.md", data: { build: { template: 1 } }, ...attempts })).toThrow(InvalidTemplate);
+  expect(() => rendering.begin({ subject: "page:post", path: "post.txt", data: {}, ...attempts })).toThrow(UnknownSource);
   expect(rendering._latest({ subject: "page:post" })[0]).toMatchObject({
     rendering: current.rendering,
     stage: "started",
@@ -85,8 +113,8 @@ test("begin validates source and profile values before superseding current work"
 
 test("queries retain attempts in start order and reject malformed identities", () => {
   const rendering = new RenderingConcept();
-  const first = rendering.begin({ subject: "page:a", path: "a.md", data: {} });
-  const second = rendering.begin({ subject: "page:b", path: "b.html", data: {} });
+  const first = rendering.begin({ subject: "page:a", path: "a.md", data: {}, ...attempts });
+  const second = rendering.begin({ subject: "page:b", path: "b.html", data: {}, ...attempts });
 
   expect(rendering._all().map(({ rendering: identity }) => identity)).toEqual([first.rendering, second.rendering]);
   expect(rendering._attempt({ rendering: null })).toEqual([]);
@@ -97,6 +125,8 @@ test("queries retain attempts in start order and reject malformed identities", (
 
 test("registry refusals, promises, and assembled outcomes match the specification", async () => {
   expect(registration.refusals).toEqual({
+    INVALID_ATTEMPT: InvalidAttempt,
+    STALE_ATTEMPT: StaleAttempt,
     INVALID_TEXT: InvalidText,
     INVALID_DATA: InvalidData,
     INVALID_PROFILE: InvalidProfile,
@@ -114,15 +144,15 @@ test("registry refusals, promises, and assembled outcomes match the specificatio
 
   const concepts = conceptSet({ Rendering: registration });
   const app = assemble({ vocabulary: concepts.vocabulary, instances: concepts.implementations(), composition: {} });
-  expect(await app.concepts.Rendering.begin({ subject: "page", path: "page.txt", data: {} })).toEqual({
+  expect(await app.concepts.Rendering.begin({ subject: "page", path: "page.txt", data: {}, ...attempts })).toEqual({
     error: "UNKNOWN_SOURCE",
     detail: "A page source must select a profile or use a supported extension.",
   });
-  const attempt = (await app.concepts.Rendering.begin({ subject: "page", path: "page.md", data: {} })) as {
+  const attempt = (await app.concepts.Rendering.begin({ subject: "page", path: "page.md", data: {}, ...attempts })) as {
     rendering: string;
   };
   expect(await app.concepts.Rendering._attempt({ rendering: attempt.rendering })).toEqual([
-    { subject: "page", path: "page.md", profile: "markdown", template: "page.html", stage: "started" },
+    { subject: "page", path: "page.md", profile: "markdown", template: "page.html", stage: "started", ...attempts },
   ]);
   await app.whenIdle();
 });

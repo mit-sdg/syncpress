@@ -1,21 +1,49 @@
 import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { DEFAULTS, PAGE_PATTERNS, PARTS, PATHS, ROOTS } from "./shared.ts";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
 const {
   Cataloging,
-  Configuring,
   Converting,
   Depending,
   Diagnosing,
   Emitting,
   Filing,
+  Governing,
   Layering,
   Matching,
   Referencing,
   Rendering,
   Routing,
+  Templating,
 } = conceptRefs;
+
+export const InspectionOwner = view(
+  "the inspection owner of target (target)",
+  ({ target }, { owner }, { root }) => [
+    where(Routing._owner({ address: target }).is({ owner })),
+    where(
+      Filing._named({ name: ROOTS.content }).is({ root }),
+      Filing._at({ root, path: target }).is({ file: owner }),
+    ),
+  ],
+).optional();
+
+export const SiteBuildSummary = former(
+  "the site build summary",
+  (_inputs, { owner, severity, code, message, source, line, column }) =>
+    form({
+      pages: each(Routing._claims({}).is({ owner })).count(),
+      diagnostics: each(Diagnosing._all({}).is({ severity, code, message, source, line, column })).form({
+        severity,
+        code,
+        message,
+        source,
+        line,
+        column,
+      }),
+    }),
+);
 
 /** Authored content files supported by the document pipeline. */
 export const ContentDocumentFile = view(
@@ -25,126 +53,24 @@ export const ContentDocumentFile = view(
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
       Matching._compiled({ text: PAGE_PATTERNS.markdown }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
+      computations.patternHasResult({ pattern, path, matched: true }),
       Filing._text({ file }).is({ text }),
     ),
     where(
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
       Matching._compiled({ text: PAGE_PATTERNS.html }).is({ pattern }),
-      Matching._matches({ pattern, path }).is({ matched: true }),
+      computations.patternHasResult({ pattern, path, matched: true }),
       Filing._text({ file }).is({ text }),
     ),
   ],
 ).many();
 
-export const MarkdownSettings = view(
-  "active markdown settings",
-  (_inputs, { extensions, raw, separator }, { root }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._values({
-        node: root,
-        path: PATHS.markdownExtensions,
-        otherwise: [...DEFAULTS.markdownExtensions],
-      }).is({ values: extensions }),
-      Configuring._scalar({ node: root, path: PATHS.markdownRaw, otherwise: DEFAULTS.markdownRaw }).is({
-        value: raw,
-      }),
-      Configuring._scalar({ node: root, path: PATHS.markdownExcerptSeparator, otherwise: "" }).is({
-        value: separator,
-      }),
-    ),
-).one();
-
-export const VerbatimSettings = view(
-  "active verbatim settings",
-  (_inputs, { separator }, { root }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._scalar({ node: root, path: PATHS.markdownExcerptSeparator, otherwise: "" }).is({
-        value: separator,
-      }),
-    ),
-).one();
-
-export const DefaultPatternSetting = view(
-  "active default pattern setting",
-  (_inputs, { text }, { root, defaults, rule }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._at({ node: root, path: PATHS.defaults }).is({ found: defaults }),
-      Configuring._items({ node: defaults }).is({ item: rule }),
-      Configuring._at({ node: rule, path: PATHS.defaultMatch }).is({ value: text }),
-    ),
-).many();
-
-export const CollectionSetting = view(
-  "active collection setting",
-  (_inputs, { name, rule, text, direction, sort }, { root, collections }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._at({ node: root, path: ["collections"] }).is({ found: collections }),
-      Configuring._entries({ node: collections }).is({ key: name, child: rule }),
-      Configuring._at({ node: rule, path: PATHS.collectionMatch }).is({ value: text }),
-      Configuring._scalar({ node: rule, path: PATHS.collectionSortOrder, otherwise: "asc" }).is({
-        value: direction,
-      }),
-      Configuring._scalar({ node: rule, path: PATHS.collectionSortBy, otherwise: null }).is({ value: sort }),
-    ),
-).many();
-
-export const ActiveSiteBasePath = view(
-  "active site base path",
-  (_inputs, { base }, { root }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._scalar({ node: root, path: PATHS.siteBasePath, otherwise: DEFAULTS.basePath }).is({ value: base }),
-    ),
-).one();
-
-export const DeclaredSiteOrigin = view(
-  "declared site origin",
-  (_inputs, { origin }, { root }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._at({ node: root, path: PATHS.siteOrigin }).is({ value: origin }),
-    ),
-).optional();
-
-export const ActiveSiteSettings = view(
-  "active site settings",
-  (_inputs, { site }, { root }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._values({ node: root, path: PATHS.site, otherwise: {} }).is({ values: site }),
-    ),
-).one();
-
-export const ImageRenditionSettings = view(
-  "active image rendition settings",
-  (_inputs, { widths, formats }, { root }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._values({ node: root, path: PATHS.imagesWidths, otherwise: [...DEFAULTS.imageWidths] }).is({ values: widths }),
-      Configuring._values({ node: root, path: PATHS.imagesFormats, otherwise: [...DEFAULTS.imageFormats] }).is({ values: formats }),
-    ),
-).one();
-
-export const ImageAssetPathSetting = view(
-  "active image asset path setting",
-  (_inputs, { assets }, { root }) =>
-    where(
-      Configuring._active({}).is({ root }),
-      Configuring._scalar({ node: root, path: PATHS.pathsAssets, otherwise: DEFAULTS.assetsPath }).is({ value: assets }),
-    ),
-).one();
-
 const SiteRenderFacts = former(
   "the site render facts",
   (_inputs, { site, collections }) =>
     where(
-      ActiveSiteSettings({}).is({ site }),
+      Governing._site({}).is({ site }),
       Cataloging._record({}).is({ catalogs: collections }),
     ).form({ collections, site }),
 );
@@ -260,8 +186,7 @@ export const PageOperationalInspection = former(
       outputPath,
       digest,
       medium,
-      claimOwner,
-      address,
+       address,
       diagnostic,
       severity,
       code,
@@ -330,10 +255,9 @@ export const PageOperationalInspection = former(
         digest,
         medium,
       }),
-      claims: each(Routing._claims({}).is({ owner: claimOwner, address })).form({ owner: claimOwner, address }),
-      diagnostics: each(
-        Diagnosing._all({}).is({ diagnostic, severity, code, message, source, line, column }),
-      ).form({
+      claims: each(Routing._claims({}).is({ owner, address })).form({ owner, address }),
+      // Diagnostics are build-wide until reporting records an explicit subject relation.
+      diagnostics: each(Diagnosing._all({}).is({ diagnostic, severity, code, message, source, line, column })).form({
         diagnostic,
         severity,
         code,
@@ -351,4 +275,48 @@ export const PageOperationalInspection = former(
         ).form({ source: relatedSource, line: relatedLine, column: relatedColumn, note }),
       }),
     }),
+);
+
+/** Complete inspection data, joined declaratively from concept-owned state. */
+export const SiteInspection = former(
+  "the site inspection of owner (owner)",
+  (
+    { owner },
+    {
+      route,
+      sourcePath,
+      sourceDigest,
+      templateName,
+      templateOwner,
+      templateDigest,
+      used,
+      layer,
+      rank,
+      values,
+      originPath,
+      originRank,
+      originLayer,
+    },
+  ) =>
+    form({
+      route: where(whether(Routing._address({ owner }).is({ address: route }))).form({ address: route }),
+      source: where(whether(Filing._file({ file: owner }).is({ path: sourcePath, digest: sourceDigest }))).form({
+        path: sourcePath,
+        digest: sourceDigest,
+      }),
+      template: where(
+        whether(Rendering._latest({ subject: owner }).is({ template: templateName })),
+        whether(Templating._template({ name: templateName }).is({ template: templateOwner, digest: templateDigest })),
+      ).form({
+        name: templateName,
+        digest: templateDigest,
+        tree: each(Templating._tree({ owner: templateOwner }).is({ used })).form({ used }),
+      }),
+      layers: each(Layering._layers({ subject: owner }).is({ layer, rank, values })).form({ layer, rank, values }),
+      origins: each(Layering._leafOrigins({ subject: owner }).is({ path: originPath, rank: originRank, layer: originLayer })).form({
+        path: originPath,
+        rank: originRank,
+        layer: originLayer,
+      }),
+    }).splicing(PageOperationalInspection({ owner })),
 );

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
+import { syncpressComputations } from "../../computations.ts";
 import {
   AddressTaken,
   InvalidAddress,
@@ -8,16 +9,30 @@ import {
   InvalidOwner,
   NotClaimed,
   RoutingConcept,
-  type AddressKind,
 } from "./routing.ts";
 import { routing as routingRegistration } from "./registry.ts";
 
+type AddressKind = Parameters<typeof syncpressComputations.targetHasKind>[0]["kind"];
+
+function optionalRow<Key extends string>(key: Key, value: string | null): { [Name in Key]: string }[] {
+  return value === null ? [] : [{ [key]: value } as { [Name in Key]: string }];
+}
+
+const calculations = {
+  _derive: ({ path }: { path: unknown }) => optionalRow("address", syncpressComputations.deriveAddress({ path })),
+  _file: ({ address }: { address: unknown }) => optionalRow("path", syncpressComputations.addressOutputPath({ address })),
+  _locate: ({ path }: { path: unknown }) => optionalRow("address", syncpressComputations.outputPathAddress({ path })),
+  _retarget: ({ replacement, original }: { replacement: unknown; original: unknown }) =>
+    optionalRow("target", syncpressComputations.retargetReference({ replacement, original })),
+  _classify: ({ target }: { target: unknown }): { kind: AddressKind }[] => {
+    const kind = (["relative", "absolute", "external", "fragment"] as const)
+      .find((candidate) => syncpressComputations.targetHasKind({ target, kind: candidate }));
+    return kind === undefined ? [] : [{ kind }];
+  },
+};
+
 test("its principle: one owner keeps a route while the base changes only its URL", () => {
   const routing = new RoutingConcept();
-  expect(routing._derive({ path: "posts/compiler-design/index.md" })).toEqual([
-    { address: "/posts/compiler-design/" },
-  ]);
-
   const page = routing.claim({ owner: "page", address: "/posts/compiler-design/" });
   expect(page.changed).toBe(true);
   expect(routing.claim({ owner: "page", address: "/posts/compiler-design/" })).toEqual({
@@ -33,14 +48,6 @@ test("its principle: one owner keeps a route while the base changes only its URL
   expect(routing._owner({ address: "/posts/compiler-design/" })).toEqual([{ owner: "page" }]);
 
   routing.claim({ owner: "not-found", address: "/404.html" });
-  expect(routing._file({ address: "/posts/compiler-design/" })).toEqual([
-    { path: "posts/compiler-design/index.html" },
-  ]);
-  expect(routing._file({ address: "/404.html" })).toEqual([{ path: "404.html" }]);
-  expect(
-    routing._retarget({ replacement: "/posts/compiler-design/", original: "./index.md?print=1#section" }),
-  ).toEqual([{ target: "/posts/compiler-design/?print=1#section" }]);
-
   expect(routing.rebase({ base: "/library/" })).toEqual({ base: "/library/", changed: true });
   expect(routing._address({ owner: "page" })).toEqual([
     { address: "/posts/compiler-design/", url: "/library/posts/compiler-design/" },
@@ -69,7 +76,7 @@ test("derives canonical directory addresses from logical paths", () => {
     ["notes and #/café?.md", "/notes%20and%20%23/caf%C3%A9%3F/"],
     ["literal%/item.md", "/literal%25/item/"],
   ]);
-  for (const [path, address] of examples) expect(routing._derive({ path })).toEqual([{ address }]);
+  for (const [path, address] of examples) expect(calculations._derive({ path })).toEqual([{ address }]);
 
   for (const path of [
     "",
@@ -85,7 +92,7 @@ test("derives canonical directory addresses from logical paths", () => {
     1,
     null,
   ]) {
-    expect(routing._derive({ path })).toEqual([]);
+    expect(calculations._derive({ path })).toEqual([]);
   }
 });
 
@@ -136,7 +143,7 @@ test("accepts only canonical, unambiguous claimed addresses", () => {
     expect(() => routing.claim({ owner: "kept", address })).toThrow(InvalidAddress);
     expect(routing._address({ owner: "kept" })[0]?.address).toBe("/kept/");
     expect(routing._owner({ address })).toEqual([]);
-    expect(routing._file({ address })).toEqual([]);
+    expect(calculations._file({ address })).toEqual([]);
   }
 });
 
@@ -151,8 +158,8 @@ test("file and address projections are exact inverses", () => {
     ["/index.html/", "index.html/index.html"],
   ]);
   for (const [address, path] of addresses) {
-    expect(routing._file({ address })).toEqual([{ path }]);
-    expect(routing._locate({ path })).toEqual([{ address }]);
+    expect(calculations._file({ address })).toEqual([{ path }]);
+    expect(calculations._locate({ path })).toEqual([{ address }]);
   }
 
   for (const path of [
@@ -164,16 +171,16 @@ test("file and address projections are exact inverses", () => {
     "index.html/child",
     "literal%/index.html",
   ]) {
-    const located = routing._locate({ path });
+    const located = calculations._locate({ path });
     expect(located).toHaveLength(1);
-    expect(routing._file({ address: located[0]!.address })).toEqual([{ path }]);
+    expect(calculations._file({ address: located[0]!.address })).toEqual([{ path }]);
   }
 
   for (const address of ["/index.html", "/a/index.html", "/raw café/", "/bad%2fpath/"]) {
-    expect(routing._file({ address })).toEqual([]);
+    expect(calculations._file({ address })).toEqual([]);
   }
   for (const path of ["", "/index.html", "a//index.html", "a/../index.html", "a\\index.html", "\ud800"]) {
-    expect(routing._locate({ path })).toEqual([]);
+    expect(calculations._locate({ path })).toEqual([]);
   }
 });
 
@@ -203,13 +210,13 @@ test("classifies references and projects only site-absolute targets below the ba
     ["https", "relative"],
     ["", "relative"],
   ]);
-  for (const [target, kind] of classifications) expect(routing._classify({ target })).toEqual([{ kind }]);
+  for (const [target, kind] of classifications) expect(calculations._classify({ target })).toEqual([{ kind }]);
 
   for (const target of ["relative", "#top", "https://example.test", "//example.test/x", 1, null, "\ud800"]) {
     expect(routing._url({ target })).toEqual([]);
   }
-  expect(routing._classify({ target: 1 })).toEqual([]);
-  expect(routing._classify({ target: "\ud800" })).toEqual([]);
+  expect(calculations._classify({ target: 1 })).toEqual([]);
+  expect(calculations._classify({ target: "\ud800" })).toEqual([]);
 });
 
 test("validates optional HTTP(S) origins and projects canonical absolute URLs", () => {
@@ -282,11 +289,11 @@ test("retargets safe relative references while preserving their exact suffix spe
     ["/about/", "./a:b?escaped=%2f&unicode=cafe\u0301", "/about/?escaped=%2f&unicode=cafe\u0301"],
   ];
   for (const [replacement, original, target] of examples) {
-    expect(routing._retarget({ replacement, original })).toEqual([{ target }]);
+    expect(calculations._retarget({ replacement, original })).toEqual([{ target }]);
   }
 
   routing.rebase({ base: "/library/" });
-  expect(routing._retarget({ replacement: "/about/", original: "about.md?x=%2F" })).toEqual([
+  expect(calculations._retarget({ replacement: "/about/", original: "about.md?x=%2F" })).toEqual([
     { target: "/about/?x=%2F" },
   ]);
 });
@@ -304,7 +311,7 @@ test("retargeting rejects nonlocal, malformed, and ambiguous inputs without thro
     null,
     "\ud800",
   ]) {
-    expect(routing._retarget({ replacement, original: "about.md?print=1" })).toEqual([]);
+    expect(calculations._retarget({ replacement, original: "about.md?print=1" })).toEqual([]);
   }
 
   for (const original of [
@@ -340,7 +347,7 @@ test("retargeting rejects nonlocal, malformed, and ambiguous inputs without thro
     1,
     null,
   ]) {
-    expect(routing._retarget({ replacement: "/about/", original })).toEqual([]);
+    expect(calculations._retarget({ replacement: "/about/", original })).toEqual([]);
   }
 });
 
@@ -424,15 +431,15 @@ test("actions reject malformed runtime identities and lookup queries stay safe",
   expect(routing._address({ owner: "kept" })).toEqual([{ address: "/kept/", url: "/kept/" }]);
 
   for (const value of [1, null, {}, "\ud800"]) {
-    expect(routing._derive({ path: value })).toEqual([]);
-    expect(routing._owner({ address: value })).toEqual([]);
-    expect(routing._file({ address: value })).toEqual([]);
-    expect(routing._locate({ path: value })).toEqual([]);
-    expect(routing._retarget({ replacement: value, original: "relative" })).toEqual([]);
-    expect(routing._retarget({ replacement: "/relative/", original: value })).toEqual([]);
+    expect(calculations._derive({ path: value })).toEqual([]);
+    expect(routing._owner({ address: value as string })).toEqual([]);
+    expect(calculations._file({ address: value })).toEqual([]);
+    expect(calculations._locate({ path: value })).toEqual([]);
+    expect(calculations._retarget({ replacement: value, original: "relative" })).toEqual([]);
+    expect(calculations._retarget({ replacement: "/relative/", original: value })).toEqual([]);
     expect(routing._url({ target: value })).toEqual([]);
     expect(routing._absolute({ address: value })).toEqual([]);
-    expect(routing._classify({ target: value })).toEqual([]);
+    expect(calculations._classify({ target: value })).toEqual([]);
   }
   expect(routing._claims()).toEqual([{ owner: "kept", address: "/kept/" }]);
 });
@@ -460,15 +467,10 @@ test("registry refusals, messages, and query promises match the standalone contr
     ["NOT_CLAIMED", "This owner has claimed no address."],
   ]);
   expect(routingRegistration.specification.queries.map(({ name, promise }) => [name, promise])).toEqual([
-    ["_derive", "optional"],
     ["_address", "optional"],
     ["_owner", "optional"],
-    ["_file", "optional"],
-    ["_locate", "optional"],
-    ["_retarget", "optional"],
     ["_url", "optional"],
     ["_absolute", "optional"],
-    ["_classify", "optional"],
     ["_claims", "many"],
   ]);
 

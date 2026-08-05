@@ -55,9 +55,9 @@ native paths to this form before placing files.
 
 `_under` treats its prefix as a directory, not an arbitrary text prefix, and
 answers descendants in ascending UTF-8 byte order of their complete paths.
-`_join`, `_directory`, and `_name` answer no row when an input is not canonical.
-The other optional and many queries likewise answer no rows for unknown
-identities, unknown roots, or non-canonical lookup paths.
+Optional and many queries answer no rows for unknown identities, unknown roots,
+or non-canonical lookup paths. Pure application computations own path joining,
+directory selection, names, and relative-path projection under the same grammar.
 
 Resolution interprets an address as a URI reference relative to the source
 file's directory and never crosses roots. Percent-encoded path segments are
@@ -99,6 +99,23 @@ place (root: Root, path: Path, content: Bytes) : return (file: File, digest: Dig
   then
     add a file with copied content and changed true
 
+placeBase64 (root: Root, path: Path, encoded: Text) : return (file: File, digest: Digest, changed: Flag)
+  where encoded is not canonical Base64
+  then
+    refuse INVALID_ENCODING "Staged file content must use canonical Base64."
+  where encoded is canonical Base64 and root is absent
+  then
+    refuse ROOT_NOT_FOUND "There is no such root."
+  where encoded is canonical Base64 and path climbs outside root
+  then
+    refuse PATH_LEAVES_ROOT "A file path must stay inside its root."
+  where encoded is canonical Base64 and path is not canonical
+  then
+    refuse INVALID_PATH "A file path must use the canonical portable form."
+  where encoded, root, and path are valid
+  then
+    decode it to bytes and behave exactly as place with root, path, and those bytes
+
 discard (file: File) : return (root: Root, path: Path, name: Name)
   where file is absent
   then
@@ -124,9 +141,6 @@ _at (root: Root, path: Path) : optional (file: File, digest: Digest)
 _under (root: Root, prefix: Directory) : many (file: File, path: Path, digest: Digest)
 _resolve (file: File, address: Address) : optional (target: File, path: Path)
 _resolution (file: File, address: Address) : one (status: ResolutionStatus)
-_join (prefix: Directory, name: Name) : optional (path: Path)
-_directory (path: Path) : optional (prefix: Directory)
-_name (path: Path) : optional (name: Name)
 ```
 
 Filing owns named byte trees, their strict UTF-8 view, their logical path

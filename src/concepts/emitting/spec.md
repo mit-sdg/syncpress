@@ -67,12 +67,17 @@ artifact queries and reconciliation until committed; only `_producers` reports
 their reservation ownership. This guarantees that an unfinished attempt cannot
 add, replace, or remove any destination artifact. Attempt zero is the initial,
 direct-intent state; `_attempt` reports the latest number whether or not an
-attempt is currently open.
+attempt is currently open, while `_open` reports it only while staged work is
+open.
 
 `direct` only inspects a destination; an absent destination is not created until
 reconciliation. It records every regular file and non-directory entry already
 there. Reconciliation re-inspects the destination, prepares the complete
 intended tree beside it, and installs that tree only after preparation succeeds.
+After atomically moving an existing destination aside, it verifies that tree is
+still the exact snapshot used during preparation. A concurrent process that
+changed the destination is restored and reconciliation is refused rather than
+allowing an older build to overwrite newer output.
 If preparation or installation is refused, the prior tree is restored. This
 makes a successful reconciliation an all-or-nothing publication action rather
 than a sequence that first deletes stale files. Structural directories are
@@ -158,7 +163,10 @@ begin (producer: Producer) : return (producer: Producer, attempt: Number)
     raise its attempt and open an empty staged set
     return producer and attempt
 
-intend (producer: Producer, path: Path, content: Content, medium: Medium, claim: Claim) : return (intent: Intent, path: Path, digest: Digest)
+intend (producer: Producer, attempt: OptionalNumber, path: Path, content: Content, medium: Medium, claim: Claim) : return (intent: Intent, path: Path, digest: Digest)
+  where producer has an open attempt and attempt does not identify it, or producer has no open attempt and attempt is present
+  then
+    refuse STALE_ATTEMPT "This producer attempt is no longer active."
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
@@ -188,26 +196,32 @@ intend (producer: Producer, path: Path, content: Content, medium: Medium, claim:
     keep the intent identity for producer and path
     return intent, path, and digest
 
-commit (producer: Producer) : return (producer: Producer, dropped: Number)
+commit (producer: Producer, attempt: Number) : return (producer: Producer, dropped: Number)
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
   where producer has no open attempt
   then
     refuse NOT_BEGUN "This producer has no open attempt."
+  where attempt does not identify the open attempt
+  then
+    refuse STALE_ATTEMPT "This producer attempt is no longer active."
   where producer has an open attempt
   then
     atomically replace its active intents with its staged intents
     close the attempt
     return producer and the number of formerly active paths omitted from the stage
 
-abort (producer: Producer) : return (producer: Producer, discarded: Number)
+abort (producer: Producer, attempt: Number) : return (producer: Producer, discarded: Number)
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
   where producer has no open attempt
   then
     refuse NOT_BEGUN "This producer has no open attempt."
+  where attempt does not identify the open attempt
+  then
+    refuse STALE_ATTEMPT "This producer attempt is no longer active."
   where producer has an open attempt
   then
     delete every staged intent and release its reservation
@@ -252,6 +266,7 @@ _intent (path: Path) : optional (digest: Digest, medium: Medium)
 _producers (path: Path) : many (producer: Producer)
 _byProducer (producer: Producer) : many (path: Path, digest: Digest, medium: Medium)
 _attempt (producer: Producer) : optional (attempt: Number)
+_open (producer: Producer) : optional (attempt: Number)
 _pending () : many (path: Path, digest: Digest)
 _orphans () : many (path: Path)
 ```

@@ -2,18 +2,21 @@ import { expect, test } from "bun:test";
 import { templating as registration } from "./registry.ts";
 import {
   InvalidTrustedPath,
+  InvalidTemplateOrigin,
   InvalidTrustedValue,
   RecursiveTemplate,
   TemplateFailed,
   TemplateNotFound,
+  TemplateNameTaken,
   TemplateSyntax,
-  TRUSTED_COLLECTION_EXCERPTS,
   TemplatingConcept,
   type TrustedPath,
   UndefinedVariable,
   UnsupportedTemplate,
   UsedTemplateNotFound,
 } from "./templating.ts";
+
+const TRUSTED_COLLECTION_EXCERPTS = { wildcard: ["collections", "*", "*", "excerpt"] } as const;
 
 type ErrorClass<T extends Error> = abstract new (...args: never[]) => T;
 
@@ -357,14 +360,13 @@ test("the collection excerpt capability trusts only rich collection excerpts", (
   ).toBe("<i>literal stars</i>");
 });
 
-test("collection excerpt trust rejects broad declarations and unsafe collection shapes", () => {
+test("wildcard trust rejects malformed declarations and unsafe matched values", () => {
   const templating = new TemplatingConcept();
   const context = { collections: { posts: [{ excerpt: "<p>Excerpt</p>" }] } };
   const inherited = Object.create({ wildcard: ["collections", "*", "*", "excerpt"] });
   const declarations = [
-    { wildcard: ["collections", "*", "excerpt"] },
-    { wildcard: ["collections", "*", "*", "body"] },
-    { wildcard: ["collections", "*", "*", "excerpt", "more"] },
+    { wildcard: ["collections"] },
+    { wildcard: [] },
     { wildcard: ["collections", "*", "*", "excerpt"], extra: true },
     inherited,
     new Proxy({ wildcard: ["collections", "*", "*", "excerpt"] }, {}),
@@ -708,12 +710,22 @@ test("forget removes a definition and its direct renderings only", () => {
   thrown(() => templating.forget({ name: "partial" }), TemplateNotFound);
 });
 
+test("registered origins atomically own logical template names", () => {
+  const templating = new TemplatingConcept();
+  templating.register({ name: "page", source: "one", origin: "templates/page" });
+  templating.register({ name: "page", source: "two", origin: "templates/page" });
+  expect(() => templating.register({ name: "page", source: "other", origin: "includes/page" })).toThrow(TemplateNameTaken);
+  expect(templating._template({ name: "page" })).toHaveLength(1);
+});
+
 test("the registry maps every declared refusal to its error class", () => {
   expect(registration.refusals).toEqual({
+    INVALID_TEMPLATE_ORIGIN: InvalidTemplateOrigin,
     INVALID_TRUSTED_PATH: InvalidTrustedPath,
     INVALID_TRUSTED_VALUE: InvalidTrustedValue,
     RECURSIVE_TEMPLATE: RecursiveTemplate,
     TEMPLATE_FAILED: TemplateFailed,
+    TEMPLATE_NAME_TAKEN: TemplateNameTaken,
     TEMPLATE_NOT_FOUND: TemplateNotFound,
     TEMPLATE_SYNTAX: TemplateSyntax,
     UNDEFINED_VARIABLE: UndefinedVariable,
@@ -726,7 +738,8 @@ test("the registry maps every declared refusal to its error class", () => {
       action.refusals.map((refusal) => refusal.code),
     ]),
   ).toEqual([
-    ["define", ["TEMPLATE_SYNTAX", "UNSUPPORTED_TEMPLATE"]],
+    ["define", ["TEMPLATE_NAME_TAKEN", "TEMPLATE_SYNTAX", "UNSUPPORTED_TEMPLATE"]],
+    ["register", ["INVALID_TEMPLATE_ORIGIN", "TEMPLATE_NAME_TAKEN", "TEMPLATE_SYNTAX", "UNSUPPORTED_TEMPLATE"]],
     ["forget", ["TEMPLATE_NOT_FOUND"]],
     [
       "fill",

@@ -70,7 +70,7 @@ to its retained Uses; it does not start or alter an attempt.
 ## Actions
 
 ```actions
-begin (subject: Subject) : return (result: Result)
+begin (subject: Subject) : return (result: Result, attempt: Number)
   where subject is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
@@ -78,17 +78,24 @@ begin (subject: Subject) : return (result: Result)
   then
     add a result with no uses or reason, start an empty attempt, set it to building, and return it
   where a result has subject
+  and its attempt number is exhausted
+  then
+    refuse ATTEMPT_EXHAUSTED "No further computation attempt can be represented."
+  where a result has subject and another attempt can be represented
   then
     discard its uncommitted attempt, retain its uses from the latest settlement if any,
     clear its reason if it was current, start an empty attempt, set it to building, and return it
 
-use (subject: Subject, input: Input) : return (use: Use)
+use (subject: Subject, attempt: Number, input: Input) : return (use: Use)
   where subject or input is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
   where no result for subject is building or current
   then
     refuse NOT_BUILDING "This result is not being computed."
+  where attempt is not the result's current attempt
+  then
+    refuse STALE_ATTEMPT "This computation attempt is no longer active."
   where a result for subject is building
   then
     add input to its active attempt if none exists and return its use
@@ -96,13 +103,16 @@ use (subject: Subject, input: Input) : return (use: Use)
   then
     add input to its retained uses if none exists and return its use
 
-settle (subject: Subject) : return (result: Result)
+settle (subject: Subject, attempt: Number) : return (result: Result)
   where subject is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
   where no result for subject is building
   then
     refuse NOT_BUILDING "This result is not being computed."
+  where attempt is not the result's current attempt
+  then
+    refuse STALE_ATTEMPT "This computation attempt is no longer active."
   where a result for subject is building
   then
     replace its retained uses atomically with its active attempt's inputs, set it to current,
@@ -131,6 +141,7 @@ drop (subject: Subject) : return (result: Result)
 ```queries
 _state (subject: Subject) : one (state: State)
 _current (subject: Subject) : optional (result: Result)
+_attempt (subject: Subject) : optional (attempt: Number)
 _reason (subject: Subject) : optional (reason: Input)
 _stale () : many (subject: Subject, reason: Input)
 _uses (subject: Subject) : many (input: Input)

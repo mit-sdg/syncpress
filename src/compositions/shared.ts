@@ -1,5 +1,12 @@
-/** Shared names and policy defaults for the batch static-site composition. */
+/** Stable names used by the batch static-site composition. */
 export const CONFIGURATION_PATH = "site.yaml";
+
+export const DIAGNOSTIC_SCOPES = {
+  cataloging: "collection-indexing",
+  configuration: "configuration-assessment",
+  rendering: "page-rendering",
+  settings: "configuration-settings",
+} as const;
 
 export const ROOTS = {
   content: "content",
@@ -18,19 +25,6 @@ export const PAGE_PATTERNS = {
   raster: "**/*.{avif,gif,jpeg,jpg,png,webp}",
 } as const;
 
-export const DEFAULTS = {
-  assetsPath: "assets",
-  basePath: "/",
-  contentPath: "content",
-  imageFormats: ["avif", "webp", "original"],
-  imageWidths: [480, 960, 1440],
-  markdownExtensions: ["tables", "footnotes", "strikethrough", "autolinks"],
-  markdownRaw: true,
-  publicPath: "public",
-  template: "page.html",
-  templatesPath: "templates",
-} as const;
-
 export const PARTS = {
   body: "body",
   excerpt: "excerpt",
@@ -47,28 +41,11 @@ export const PROFILES = {
 export const PATHS = {
   buildPublish: ["build", "publish"],
   buildRoute: ["build", "route"],
-  buildTemplate: ["build", "template"],
-  collectionMatch: ["match"],
-  collectionSortBy: ["sort", "by"],
-  collectionSortOrder: ["sort", "order"],
-  collectionWhereContains: ["where", "contains"],
-  collectionWhereEquals: ["where", "equals"],
-  collectionWhereExists: ["where", "exists"],
-  defaults: ["defaults"],
-  defaultMatch: ["match"],
-  defaultValues: ["values"],
-  imagesFormats: ["images", "formats"],
-  imagesWidths: ["images", "widths"],
-  markdownExtensions: ["markdown", "extensions"],
-  markdownExcerptSeparator: ["markdown", "excerptSeparator"],
-  markdownRaw: ["markdown", "raw"],
-  pathsAssets: ["paths", "assets"],
-  pathsContent: ["paths", "content"],
-  pathsPublic: ["paths", "public"],
-  pathsTemplates: ["paths", "templates"],
-  site: ["site"],
-  siteBasePath: ["site", "basePath"],
-  siteOrigin: ["site", "origin"],
 } as const;
 
 export const MAX_PAGE_LAYER_RANK = Number.MAX_SAFE_INTEGER;
+
+/** Templating capability granted to collection-card excerpts by this composition. */
+export const TRUSTED_COLLECTION_EXCERPTS = {
+  wildcard: ["collections", "*", "*", "excerpt"],
+} as const;

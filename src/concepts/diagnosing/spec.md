@@ -17,41 +17,43 @@ check clean; clearing leaves no problems at all.
 
 ## Text And Locations
 
-Text is a well-formed Unicode string. Codes, messages, sources, diagnostic
+Text is a well-formed Unicode string. Scopes, codes, messages, sources, diagnostic
 identities, and relation notes must be Text. Empty Text and control characters
 are valid; Diagnosing stores and compares these values but does not interpret
 their vocabulary. Actions refuse malformed Text before changing state. Lookup
 queries given malformed Text answer no row.
 
-A diagnostic source is optional. Omission and explicit undefined both mean that
-the problem has no source. A line is optional and requires a source. A column is
+A diagnostic scope is optional and identifies the check that owns replacement
+of the diagnostic. A diagnostic source is also optional. Omission and explicit
+undefined mean that the problem has no source. A line is optional and requires a source. A column is
 optional and requires a line. Present lines and columns are one-based positive
 safe integers. A related location always has a source and has the same optional
 line and column rules.
 
-Query rows always have own `source`, `line`, and `column` properties when those
+Query rows always have own `scope`, `source`, `line`, and `column` properties when those
 fields are declared. A missing value is returned as undefined. This lets a row
 remain visible while a caller chooses whether to display each location detail.
 
 ## Identity And Lifecycle
 
-A diagnostic is keyed by its severity, code, optional source, optional line, and
-optional column. Its opaque identity is a deterministic, collision-safe encoding
+A diagnostic is keyed by its optional scope, severity, code, optional source,
+optional line, and optional column. Its opaque identity is a deterministic, collision-safe encoding
 of that tuple, so punctuation and control characters cannot make two keys
-collide. The identity is stable across concept instances, source retraction, and
+collide. The identity is stable across concept instances, scope-and-source retraction, and
 later reporting of the same key.
 
 Reporting an existing key returns its identity without changing its first
 message or its related locations. To replace what a check previously reported,
-a caller first retracts that source and reports the current problems. Retracting
-a missing source does the same for diagnostics with no source. Repeated
+a caller first retracts that scope and source and reports the current problems.
+Retracting a missing source does the same for diagnostics with no source in that
+scope. Repeated
 retraction is an idempotent no-op.
 
 A related location is keyed by its diagnostic, source, optional line, optional
 column, and note. Repeating it returns the same stable identity; another note or
 location remains a separate relation. Removing a diagnostic also removes all of
 its relations. A relation's source does not make its diagnostic belong to that
-source: source retraction uses only each diagnostic's own optional source.
+source: retraction uses only each diagnostic's own optional scope and source.
 
 `clear` removes every diagnostic and relation and counts diagnostics, not
 relations. Reporting a cleared key reuses its stable identity but stores the new
@@ -63,6 +65,7 @@ checked again.
 
 ```state
 a set of Diagnostics with
+  an optional scope Scope
   a severity Severity                 -- error or warning
   a code Code
   a message Text
@@ -78,24 +81,24 @@ a set of Relations with
   a note Text
 ```
 
-At most one diagnostic exists per severity, code, source, line, and column. At
+At most one diagnostic exists per scope, severity, code, source, line, and column. At
 most one relation exists per diagnostic, source, line, column, and note. No
 relation exists without its diagnostic.
 
 ## Actions
 
 ```actions
-report (severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber) : return (diagnostic: Diagnostic)
+report (scope: OptionalScope, severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber) : return (diagnostic: Diagnostic)
   where severity is neither error nor warning
   then
     refuse UNKNOWN_SEVERITY "A diagnostic is an error or a warning."
-  where code, message, or a present source is not Text
+  where a present scope, code, message, or a present source is not Text
   then
-    refuse INVALID_TEXT "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."
+    refuse INVALID_TEXT "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."
   where a position is not a positive safe integer, has no source, or has a column without a line
   then
     refuse INVALID_LOCATION "A location needs a source; line and column must be positive safe integers, and a column needs a line."
-  where a diagnostic already has severity, code, source, line, and column
+  where a diagnostic already has scope, severity, code, source, line, and column
   then
     retain its first message and relations and return that diagnostic
   where no diagnostic has that key
@@ -105,7 +108,7 @@ report (severity: Severity, code: Code, message: Text, source: OptionalSource, l
 relate (diagnostic: Diagnostic, source: Source, line: OptionalNumber, column: OptionalNumber, note: Text) : return (relation: Relation)
   where diagnostic, source, or note is not Text
   then
-    refuse INVALID_TEXT "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."
+    refuse INVALID_TEXT "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."
   where diagnostic not in diagnostics
   then
     refuse DIAGNOSTIC_NOT_FOUND "There is no such diagnostic."
@@ -119,14 +122,14 @@ relate (diagnostic: Diagnostic, source: Source, line: OptionalNumber, column: Op
   then
     add it and return its stable identity
 
-retract (source: OptionalSource) : return (source: OptionalSource, count: Number)
-  where a present source is not Text
+retract (scope: OptionalScope, source: OptionalSource) : return (scope: OptionalScope, source: OptionalSource, count: Number)
+  where a present scope or source is not Text
   then
-    refuse INVALID_TEXT "Codes, messages, sources, diagnostic identities, and notes must be well-formed text."
-  where source is Text or missing
+    refuse INVALID_TEXT "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."
+  where scope and source are Text or missing
   then
-    remove every diagnostic with that optional source and all of its relations
-    return source and how many diagnostics were removed
+    remove every diagnostic with that optional scope and source and all of its relations
+    return scope, source, and how many diagnostics were removed
 
 clear () : return (count: Number)
   then
@@ -137,17 +140,19 @@ clear () : return (count: Number)
 ## Queries
 
 ```queries
-_all () : many (diagnostic: Diagnostic, severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
-_errors () : many (diagnostic: Diagnostic, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
-_for (source: OptionalSource) : many (diagnostic: Diagnostic, severity: Severity, code: Code, message: Text, line: OptionalNumber, column: OptionalNumber)
+_all () : many (diagnostic: Diagnostic, scope: OptionalScope, severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
+_errors () : many (diagnostic: Diagnostic, scope: OptionalScope, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
+_for (source: OptionalSource) : many (diagnostic: Diagnostic, scope: OptionalScope, severity: Severity, code: Code, message: Text, line: OptionalNumber, column: OptionalNumber)
 _related (diagnostic: Diagnostic) : many (source: Source, line: OptionalNumber, column: OptionalNumber, note: Text)
 _clean () : one (clean: Flag)
 ```
 
 ## Ordering And Cleanliness
 
-`_all` orders errors before warnings. Within one severity, a missing source comes
-before a present source; present sources use ascending UTF-8 byte order. Within
+`_all` orders errors before warnings. Within one severity, a missing scope comes
+before a present scope; present scopes use ascending UTF-8 byte order. Scope is
+followed by source, with a missing source before a present source and present
+sources using ascending UTF-8 byte order. Within
 one source, a missing line comes before a present line and lines rise
 numerically. Within one line, a missing column comes before a present column and
 columns rise numerically. Codes finally use ascending UTF-8 byte order. Because

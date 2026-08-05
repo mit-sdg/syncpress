@@ -1,7 +1,25 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { DependingConcept, InvalidText, NotBuilding } from "./depending.ts";
+import {
+  AttemptExhausted,
+  DependingConcept as StrictDependingConcept,
+  InvalidText,
+  NotBuilding,
+  StaleAttempt,
+} from "./depending.ts";
 import { depending as dependingRegistration } from "./registry.ts";
+
+class DependingConcept extends StrictDependingConcept {
+  use(input: { subject: unknown; attempt?: unknown; input: unknown }) {
+    const attempt = input.attempt ?? this._attempt({ subject: input.subject })[0]?.attempt;
+    return super.use({ ...input, attempt });
+  }
+
+  settle(input: { subject: unknown; attempt?: unknown }) {
+    const attempt = input.attempt ?? this._attempt({ subject: input.subject })[0]?.attempt;
+    return super.settle({ ...input, attempt });
+  }
+}
 
 function finish(depending: DependingConcept, subject: string, inputs: readonly string[]) {
   const begun = depending.begin({ subject });
@@ -22,7 +40,7 @@ test("its principle: only related results become stale and settlement replaces r
   expect(depending.touch({ input: "rates" })).toEqual({ input: "rates", count: 0 });
   expect(depending._reason({ subject: "summary" })).toEqual([{ reason: "notes" }]);
 
-  expect(depending.begin({ subject: "summary" })).toEqual({ result: original.result });
+  expect(depending.begin({ subject: "summary" })).toEqual({ result: original.result, attempt: 2 });
   expect(depending._uses({ subject: "summary" })).toEqual([{ input: "notes" }, { input: "rates" }]);
   expect(depending._reason({ subject: "summary" })).toEqual([{ reason: "notes" }]);
   depending.use({ subject: "summary", input: "revised-notes" });
@@ -128,7 +146,7 @@ test("building results are invalidated and stale reasons survive retry and settl
   expect(depending._current({ subject: "unfinished" })).toEqual([]);
   expect(() => depending.settle({ subject: "unfinished" })).toThrow(NotBuilding);
 
-  expect(depending.begin({ subject: "unfinished" })).toEqual(begun);
+  expect(depending.begin({ subject: "unfinished" })).toEqual({ result: begun.result, attempt: 2 });
   expect(depending._state({ subject: "unfinished" })).toEqual({ state: "building" });
   expect(depending._reason({ subject: "unfinished" })).toEqual([{ reason: "source" }]);
   depending.use({ subject: "unfinished", input: "source" });
@@ -165,7 +183,7 @@ test("result and use identities are stable, collision-safe, and keyed by their f
   expect(depending.use({ subject: "a:b", input: "c" })).toEqual(firstUse);
   depending.settle({ subject: "a:b" });
 
-  expect(depending.drop({ subject: "a:b" })).toEqual(first);
+  expect(depending.drop({ subject: "a:b" })).toEqual({ result: first.result });
   expect(depending.begin({ subject: "a:b" })).toEqual(first);
   const another = new DependingConcept();
   expect(another.begin({ subject: "a:b" })).toEqual(first);
@@ -248,17 +266,25 @@ test("actions reject malformed runtime text atomically and lookup queries stay t
 });
 
 test("the registry exposes every refusal with its normative message", async () => {
-  expect(dependingRegistration.refusals).toEqual({ INVALID_TEXT: InvalidText, NOT_BUILDING: NotBuilding });
+  expect(dependingRegistration.refusals).toEqual({
+    ATTEMPT_EXHAUSTED: AttemptExhausted,
+    INVALID_TEXT: InvalidText,
+    NOT_BUILDING: NotBuilding,
+    STALE_ATTEMPT: StaleAttempt,
+  });
   expect(
     dependingRegistration.specification.actions.flatMap(({ refusals }) =>
       refusals.map(({ code, message }) => [code, message]),
     ),
   ).toEqual([
     ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
+    ["ATTEMPT_EXHAUSTED", "No further computation attempt can be represented."],
     ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
     ["NOT_BUILDING", "This result is not being computed."],
+    ["STALE_ATTEMPT", "This computation attempt is no longer active."],
     ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
     ["NOT_BUILDING", "This result is not being computed."],
+    ["STALE_ATTEMPT", "This computation attempt is no longer active."],
     ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
     ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
   ]);
@@ -269,9 +295,21 @@ test("the registry exposes every refusal with its normative message", async () =
     error: "INVALID_TEXT",
     detail: "Subjects and inputs must be well-formed text.",
   });
-  expect(await app.concepts.Depending.use({ subject: "missing", input: "input" })).toEqual({
+  expect(await app.concepts.Depending.use({ subject: "missing", attempt: 1, input: "input" })).toEqual({
     error: "NOT_BUILDING",
     detail: "This result is not being computed.",
   });
   await app.whenIdle();
+});
+
+test("stale attempts cannot mutate a replacement computation", () => {
+  const depending = new StrictDependingConcept();
+  const first = depending.begin({ subject: "page" });
+  const second = depending.begin({ subject: "page" });
+
+  expect(() => depending.use({ subject: "page", attempt: first.attempt, input: "stale" })).toThrow(StaleAttempt);
+  depending.use({ subject: "page", attempt: second.attempt, input: "current" });
+  expect(() => depending.settle({ subject: "page", attempt: first.attempt })).toThrow(StaleAttempt);
+  depending.settle({ subject: "page", attempt: second.attempt });
+  expect(depending._uses({ subject: "page" })).toEqual([{ input: "current" }]);
 });

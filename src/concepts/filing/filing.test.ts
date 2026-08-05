@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
+import { syncpressComputations } from "../../computations.ts";
 import {
   FileNotFound,
   FilingConcept,
+  InvalidEncoding,
   InvalidPath,
   PathLeavesRoot,
   RootNotFound,
@@ -71,7 +73,6 @@ test("places copied bytes, reports exact changes, and preserves address identity
   expect(filing._under({ root, prefix: "posts" })).toEqual([
     { file: first.file, path: "posts/page.md", digest: changed.digest },
   ]);
-
   expect(filing.discard({ file: first.file })).toEqual({ root, path: "posts/page.md", name: "page.md" });
   expect(filing._file({ file: first.file })).toEqual([]);
   expect(filing._at({ root, path: "posts/page.md" })).toEqual([]);
@@ -103,6 +104,18 @@ test("reads strict UTF-8 text without consuming a BOM or exposing mutable bytes"
   expect(filing._text({ file: "file:missing" })).toEqual([]);
   expect(filing._text({ file: "\ud800" })).toEqual([]);
   expect(filing._text({ file: 1 as unknown as string })).toEqual([]);
+});
+
+test("places canonical Base64 staging payloads as exact bytes", () => {
+  const filing = new FilingConcept();
+  const { root } = filing.open({ name: "content" });
+  const bytes = Uint8Array.from([0, 1, 127, 128, 255]);
+  const placed = filing.placeBase64({ root, path: "binary.bin", encoded: Buffer.from(bytes).toString("base64") });
+
+  expect(filing._file({ file: placed.file })[0]?.content).toEqual(bytes);
+  for (const encoded of ["not base64", "AA", 1]) {
+    expect(() => filing.placeBase64({ root, path: "invalid.bin", encoded: encoded as string })).toThrow(InvalidEncoding);
+  }
 });
 
 test("strict UTF-8 text reads reject every malformed sequence without changing bytes", () => {
@@ -160,25 +173,23 @@ test("refuses unknown roots, escaping paths, noncanonical paths, and non-byte co
 });
 
 test("path helpers share one canonical directory grammar", () => {
-  const filing = new FilingConcept();
-
-  expect(filing._join({ prefix: "", name: "page.md" })).toEqual([{ path: "page.md" }]);
-  expect(filing._join({ prefix: "posts/design", name: "page.md" })).toEqual([
-    { path: "posts/design/page.md" },
-  ]);
-  expect(filing._directory({ path: "page.md" })).toEqual([{ prefix: "" }]);
-  expect(filing._directory({ path: "posts/design/page.md" })).toEqual([{ prefix: "posts/design" }]);
-  expect(filing._name({ path: "posts/design/page.md" })).toEqual([{ name: "page.md" }]);
+  expect(syncpressComputations.joinPath({ prefix: "", name: "page.md" })).toBe("page.md");
+  expect(syncpressComputations.joinPath({ prefix: "posts/design", name: "page.md" })).toBe("posts/design/page.md");
+  expect(syncpressComputations.directoryPath({ path: "page.md" })).toBe("");
+  expect(syncpressComputations.directoryPath({ path: "posts/design/page.md" })).toBe("posts/design");
+  expect(syncpressComputations.pathName({ path: "posts/design/page.md" })).toBe("page.md");
+  expect(syncpressComputations.relativePath({ path: "posts/design/page.md", prefix: "posts" })).toBe("design/page.md");
+  expect(syncpressComputations.relativePath({ path: "other/page.md", prefix: "posts" })).toBeNull();
 
   for (const prefix of ["posts/", "./posts", "posts\\design"]) {
-    expect(filing._join({ prefix, name: "page.md" })).toEqual([]);
+    expect(syncpressComputations.joinPath({ prefix, name: "page.md" })).toBeNull();
   }
   for (const name of ["", ".", "..", "nested/page.md", "bad\\name"]) {
-    expect(filing._join({ prefix: "posts", name })).toEqual([]);
+    expect(syncpressComputations.joinPath({ prefix: "posts", name })).toBeNull();
   }
   for (const path of ["", "./page.md", "posts//page.md", "../page.md"]) {
-    expect(filing._directory({ path })).toEqual([]);
-    expect(filing._name({ path })).toEqual([]);
+    expect(syncpressComputations.directoryPath({ path })).toBeNull();
+    expect(syncpressComputations.pathName({ path })).toBeNull();
   }
 });
 

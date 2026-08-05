@@ -8,50 +8,62 @@ meaning.
 
 ## Principle
 
-Ada assesses a configuration that selects `public-dist`, enables a deployment
-marker, and defines one redirect. The resulting policy is valid and has no
-problems. She changes the returned policy, but a later read remains unchanged.
-She then assesses a replacement with an escaping output path and a redirect
-cycle. Both source-located problems become current and none of the earlier
-deployment policy remains. Repeating that source replaces nothing and adds no
-duplicate problem.
+Ada assesses a configuration that selects `public-dist`, defines site data,
+source defaults, a collection, Markdown and image settings, enables a deployment
+marker, and defines one redirect. The complete admitted policy is normalized and
+has no problems. She changes the returned policy, but a later read remains
+unchanged. She then assesses a replacement with an escaping output path and a
+redirect cycle. The action refuses after atomically replacing the assessment;
+both source-located problems become current and none of the earlier policy is
+admitted. Repeating that source adds no duplicate problem.
 
 ## State
 
 ```state
 an optional Assessment with
   a source Text
-  a policy Policy
+  a policy Policy, including all effective project paths
   an ordered sequence of Problems
 ```
 
 Governing is an application-specific schema adapter rather than a reusable
-domain mechanism. The source is authoritative input; the interpreted policy is
-authoritative for publication. `Configuring` may independently retain the
-generic YAML tree, but Governing copies no Configuring state and never refreshes
-from it. Each `assess` atomically replaces the interpretation and all problems.
+domain mechanism. The source is authoritative input and the complete interpreted
+policy is authoritative for publication. No peer reparses or interprets the
+configuration. Each `assess` atomically replaces the interpretation and all
+problems, including when the action then refuses invalid policy.
 
 ## Actions
 
 ```actions
-assess (source: Text) : return (policy: Policy, valid: Flag)
+assess (source: Text) : return (policy: Policy, sources: Values)
   then
     replace the current assessment with the parsed Syncpress policy and every policy problem
-    return a copy of the policy and whether it has no problems
+  where the replacement has problems
+  then
+    refuse INVALID_CONFIGURATION "The assessed site configuration is invalid."
+  where the replacement has no problems
+  then
+    return a copy of its policy and the content, templates, and public source plan
 ```
 
 ## Queries
 
 ```queries
-_policy () : optional (policy: Policy, valid: Flag)
+_policy () : optional (policy: Policy)
+_paths () : optional (content: Path, templates: Path, public: Path, assets: Path, output: Path)
+_site () : optional (site: Values, base: Address)
+_origin () : optional (origin: Origin)
+_markdown () : optional (extensions: Values, raw: Flag, separator: Text)
+_images () : optional (widths: Values, formats: Values)
+_defaults () : many (index: Number, text: Text, values: Values)
+_collections () : many (name: Name, match: Text, direction: Direction, sort: OptionalField, condition: OptionalCondition)
 _deployment () : optional (nojekyll: Flag, requireNotFound: Flag, sitemap: Flag)
 _publishing () : optional (policy: Policy)
 _problems () : many (code: Code, message: Text, line: Number, column: Number)
 ```
 
 Problems retain parser discovery order. Actions and queries return deep copies.
-Invalid product policy is assessment data rather than a refusal so callers can
-report every problem together. `_deployment` and `_publishing` answer no row for
-an invalid assessment, so partial policy never acquires operational meaning.
-Governing reports malformed YAML defensively when called directly; Configuring
-remains authoritative for the application's complete normalized YAML subset.
+Invalid product policy is retained assessment evidence and an
+`INVALID_CONFIGURATION` refusal, so callers receive a stable outcome while
+reactions can report every problem. Every policy query answers no row for an
+invalid assessment, so partial policy never acquires operational meaning.

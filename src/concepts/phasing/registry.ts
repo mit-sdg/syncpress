@@ -6,8 +6,9 @@ import {
   NoPhases,
   PhaseRepeated,
   PhasingConcept,
+  SequenceActive,
   SequenceNotFound,
-  UnknownMode,
+  StaleAttempt,
 } from "./phasing.ts";
 import spec from "./spec.md" with { type: "text" };
 
@@ -20,7 +21,8 @@ export const phasing = registerConcept({
     NO_PHASES: NoPhases,
     PHASE_REPEATED: PhaseRepeated,
     SEQUENCE_NOT_FOUND: SequenceNotFound,
-    UNKNOWN_MODE: UnknownMode,
+    SEQUENCE_ACTIVE: SequenceActive,
     JOB_NOT_RUNNING: JobNotRunning,
+    STALE_ATTEMPT: StaleAttempt,
   },
 });

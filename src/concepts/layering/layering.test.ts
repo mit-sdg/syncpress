@@ -53,6 +53,11 @@ test("its principle: a deployment override refines tool defaults and remains exp
   expect(layering._origin({ subject: "tool", path: ["endpoint", "host"] })).toEqual([
     { rank: 10, layer: layerID("tool", 10) },
   ]);
+  expect(layering._leafOrigins({ subject: "tool" })).toContainEqual({
+    path: ["endpoint", "host"],
+    rank: 10,
+    layer: layerID("tool", 10),
+  });
 
   layering.withdraw({ subject: "tool", rank: 20 });
   expect(layering._value({ subject: "tool", path: ["output"] })).toEqual([{ value: "preview" }]);
@@ -208,6 +213,10 @@ test("provenance follows the resolved tree through merge, ancestor replacement, 
   expect(layering._origin({ subject: "s", path: ["a", "b"] })).toEqual([{ rank: 1, layer: layerID("s", 1) }]);
   expect(layering._origin({ subject: "s", path: ["a", "kept"] })).toEqual([{ rank: 0, layer: layerID("s", 0) }]);
   expect(layering._origin({ subject: "s", path: ["other"] })).toEqual([{ rank: 0, layer: layerID("s", 0) }]);
+  expect(layering._leafOrigins({ subject: "s" }).map(({ path }) => path)).toEqual([
+    ["a", "b"],
+    ["a", "kept"],
+  ]);
 
   layering.contribute({ subject: "s", rank: 2, values: { a: null } });
   expect(layering._value({ subject: "s", path: ["a", "b"] })).toEqual([]);

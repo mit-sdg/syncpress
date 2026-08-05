@@ -1,11 +1,12 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { PATHS, ROOTS } from "./shared.ts";
+import { DerivedAddress } from "./calculations.ts";
+import { PATHS, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 
-const { Diagnosing, Documenting, Filing, Layering, Phasing, Rendering, Routing } = conceptRefs;
+const { Diagnosing, Documenting, Filing, Layering, Phasing, Routing } = conceptRefs;
 
 export const ExplicitRoutesClaim = reaction(({ page, root, address }) =>
-  when(Phasing.advance({}).responds({ phase: "route" }))
+  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "route", transitioned: true }))
     .where(
       Documenting._all({}).is({ subject: page }),
       Filing._named({ name: ROOTS.content }).is({ root }),
@@ -17,20 +18,20 @@ export const ExplicitRoutesClaim = reaction(({ page, root, address }) =>
 );
 
 export const DerivedRoutesClaim = reaction(({ page, root, path, address }) =>
-  when(Phasing.advance({}).responds({ phase: "route" }))
+  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "route", transitioned: true }))
     .where(
       Documenting._all({}).is({ subject: page }),
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._file({ file: page }).is({ root, path }),
       Layering._flag({ subject: page, path: PATHS.buildPublish, otherwise: true }).is({ value: true }),
       no(Layering._value({ subject: page, path: PATHS.buildRoute })),
-      Routing._derive({ path }).is({ address }),
+      DerivedAddress({ path }).is({ address }),
     )
     .then(Routing.claim({ owner: page, address })),
 );
 
 export const UnpublishedRoutesRelease = reaction(({ page, root }) =>
-  when(Phasing.advance({}).responds({ phase: "route" }))
+  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "route", transitioned: true }))
     .where(
       Documenting._all({}).is({ subject: page }),
       Filing._named({ name: ROOTS.content }).is({ root }),
@@ -44,7 +45,7 @@ export const UnpublishedRoutesRelease = reaction(({ page, root }) =>
 export const RouteCollisionsReport = reaction(({ page, root, path }) =>
   when(Routing.claim({ owner: page }).refuses({ error: "ADDRESS_TAKEN" }))
     .where(
-      earlier(Phasing.advance, {}, { phase: "route" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "route", transitioned: true }),
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._file({ file: page }).is({ root, path }),
     )
@@ -61,7 +62,7 @@ export const RouteCollisionsReport = reaction(({ page, root, path }) =>
 export const InvalidRouteClaimsDiagnose = reaction(({ page, root, path, detail }) =>
   when(Routing.claim({ owner: page }).refuses({ error: "INVALID_ADDRESS", detail }))
     .where(
-      earlier(Phasing.advance, {}, { phase: "route" }),
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "route", transitioned: true }),
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._file({ file: page }).is({ root, path }),
     )
@@ -73,21 +74,4 @@ export const InvalidRouteClaimsDiagnose = reaction(({ page, root, path, detail }
         source: path,
       }),
     ),
-);
-
-/** A successful route starts one observable rendering attempt and selects its source profile. */
-export const ClaimedRoutesBeginRendering = reaction(({ page, path, data }) =>
-  when(Routing.claim({ owner: page }).responds({}))
-    .where(
-      earlier(Phasing.advance, {}, { phase: "route" }),
-      Filing._file({ file: page }).is({ path }),
-      Layering._resolved({ subject: page }).is({ values: data }),
-    )
-    .then(Rendering.begin({ subject: page, path, data })),
-);
-
-export const RenderingBeginningsDiagnose = reaction(({ page, error, detail, path }) =>
-  when(Rendering.begin({ subject: page }).refuses({ error, detail }))
-    .where(Filing._file({ file: page }).is({ path }))
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
 );
