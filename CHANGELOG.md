@@ -22,6 +22,12 @@ refactoring appear when documented behavior changes.
   with every other diagnostic instead of ending the run early, and they still
   leave the previous output destination unchanged.
 
+### Added
+
+- `BuildResult.outputDirectory`: the directory a build published into, with
+  symbolic links resolved. `watchSite` already passed the same value to
+  `onBuild`.
+
 ### Documentation
 
 - Reorganized the README and documentation site around installation, authoring,

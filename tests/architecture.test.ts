@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { BuildResult as DeclaredBuildResult, InspectionResult as DeclaredInspectionResult } from "../types/index.d.ts";
+import type { BuildResult, inspectSite } from "../src/edge/site.ts";
+
+type InspectionResult = Awaited<ReturnType<typeof inspectSite>>;
 
 const root = join(import.meta.dir, "..");
 
@@ -66,4 +70,17 @@ test("composition asks concepts for host work instead of doing it", async () => 
 test("computations import nothing from the host", async () => {
   const source = await readFile(join(root, "src", "computations.ts"), "utf8");
   expect(source).not.toMatch(/from\s+["']node:/);
+});
+
+/**
+ * The published declarations are written by hand, so the compiler is what keeps
+ * them honest: every field the package returns must be one it declares.
+ */
+test("published declarations name exactly the fields the package returns", () => {
+  type SameKeys<Declared, Returned> = [keyof Declared, keyof Returned] extends [keyof Returned, keyof Declared] ? true
+    : never;
+
+  const build: SameKeys<DeclaredBuildResult, BuildResult> = true;
+  const inspect: SameKeys<DeclaredInspectionResult, InspectionResult> = true;
+  expect([build, inspect]).toEqual([true, true]);
 });

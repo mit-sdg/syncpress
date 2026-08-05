@@ -58,6 +58,7 @@ export type SitePolicy = {
 export type BuildResult = {
   pages: number;
   inputFiles: number;
+  outputDirectory: string;
   written: number;
   replaced: number;
   kept: number;

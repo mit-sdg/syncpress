@@ -37,12 +37,12 @@ function buildSite(
 uses `paths.output` from `site.yaml`, or `dist` when that setting is absent. A
 relative destination is resolved from the project directory.
 
-`buildSite` validates and stages the complete project, runs a strict build, and
-reconciles the output only after the build reaches a clean terminal state. The
-result contains route-claim and input counts; written, replaced, retained, and
-removed file counts; the assessed site policy; and diagnostics. The `pages`
-field counts all route claims: authored pages, redirects, and generated
-pagination routes.
+`buildSite` stages the complete project, runs a strict build, and reconciles the
+output only after the build reaches a clean terminal state. The result contains
+route-claim and input counts; written, replaced, retained, and removed file
+counts; the assessed site policy; the output directory it published into, with
+symbolic links resolved; and diagnostics. The `pages` field counts all route
+claims: authored pages, redirects, and generated pagination routes.
 
 ## `inspectSite`
 
