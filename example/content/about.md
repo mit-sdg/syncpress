@@ -48,7 +48,7 @@ The build sequence is declared in [`src/compositions/shared.ts`](https://github.
 settings → read → route → excerpt → collect → render → emit
 ```
 
-The host advances a phase only after the previous announcement reaches quiescence. The barriers make completion facts explicit: every published address exists before collection cards capture URLs, and every collection is ordered before a layout reads it.
+Deferred reactions advance a phase only after the previous announcement's causal flow reaches a settlement frontier. The barriers make completion facts explicit: every published address exists before collection cards capture URLs, and every collection is ordered before a layout reads it.
 
 This batch design gives the composition simple global facts and deterministic ordering. Watch mode creates a fresh application and schedules another strict build after each source change.
 
@@ -95,7 +95,7 @@ This gate is defined in [`src/compositions/endpoints.ts`](https://github.com/mit
 
 [`src/edge/site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/edge/site.ts) owns operating-system work: validating project boundaries, reading directory entries, encoding bytes for the application boundary, waiting for quiescence, and coordinating destination access. The `/site/stage` endpoint declaratively opens Filing roots and places decoded bytes; computations and domain concepts retain path projection, template interpretation, and publication eligibility.
 
-[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The staging, configure, reconcile, summary, and inspection protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts) are the host's only application interface. The generic phase loop remains host-driven because each advance must wait for all reaction fan-out from the preceding barrier to become idle.
+[`src/assembly.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/assembly.ts) binds the vocabulary, fresh implementations, and full-site composition. The host starts the Phasing concept through that assembly, while staging, configuration, reconciliation, summaries, and inspection cross the protocols in generated [`wire.ts`](https://github.com/mit-sdg/syncpress/blob/main/generated/wire.ts). Deferred phase reactions keep the complete build in one causal flow whose root action settles only after the final frontier.
 
 ## Selected composition paths
 

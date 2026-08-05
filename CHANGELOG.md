@@ -5,6 +5,11 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded to sync engine beta 5 and moved phase progression from the host loop
+  into deferred reactions at causal-flow settlement frontiers.
+
 ### Documentation
 
 - Reorganized the README and documentation site around installation, authoring,

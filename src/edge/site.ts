@@ -226,25 +226,6 @@ function normalizeDiagnostics(diagnostics: readonly FormedDiagnostic[]): Diagnos
   }));
 }
 
-async function runPhases(gateway: Gateway, sequence: string): Promise<string> {
-  const started = gatewayValue<SyncpressWire["/site/start"]["output"]>(
-    await gateway.invoke("/site/start", { sequence }),
-    "Could not start the site build",
-  );
-  await gateway.whenIdle();
-
-  let attempt: string | null = started.attempt;
-  while (attempt !== null) {
-    const advanced: SyncpressWire["/site/advance"]["output"] = gatewayValue<SyncpressWire["/site/advance"]["output"]>(
-      await gateway.invoke("/site/advance", { job: started.job, attempt }),
-      "Could not advance the site build",
-    );
-    await gateway.whenIdle();
-    attempt = advanced.attempt;
-  }
-  return started.job;
-}
-
 /** Stage the configuration and engine-authored source plan into a fresh model. */
 async function stageSite(projectDirectory = ".") {
   const siteDirectory = resolve(projectDirectory);
@@ -253,7 +234,7 @@ async function stageSite(projectDirectory = ".") {
 
   const configurationFile = join(siteDirectory, CONFIGURATION_PATH);
   const configuration = await readRequiredFile(configurationFile, CONFIGURATION_PATH);
-  const { gateway } = createSyncpressRuntime();
+  const { gateway, startBuild } = createSyncpressRuntime();
   await stageBytes(gateway, ROOTS.project, CONFIGURATION_PATH, configuration, `Could not stage ${CONFIGURATION_PATH}`);
 
   const assessed = await gateway.invoke("/site/assess", {});
@@ -293,6 +274,7 @@ async function stageSite(projectDirectory = ".") {
 
   return {
     gateway,
+    startBuild,
     inputFiles,
     policy,
     siteDirectory,
@@ -307,6 +289,7 @@ async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string
   const staged = await stageSite(projectDirectory);
   const {
     gateway,
+    startBuild,
     policy,
     siteDirectory,
     canonicalSiteDirectory,
@@ -339,7 +322,7 @@ async function stageAndRunSiteBuild(projectDirectory = ".", destination?: string
       await gateway.invoke("/site/configure", { destination: outputDirectory }),
       "Could not configure the site build",
     );
-    const job = await runPhases(gateway, configured.sequence);
+    const job = await startBuild(configured.sequence);
     return {
       gateway,
       job,
@@ -367,7 +350,6 @@ export async function buildSiteForWatch(
   try {
     await beforeReconcile?.(outputDirectory);
     const reconciled = await gateway.invoke("/site/reconcile", { job });
-    await gateway.whenIdle();
     const summary = await readSiteSummary(gateway) as { pages: number; diagnostics: FormedDiagnostic[] };
     const diagnostics = normalizeDiagnostics(summary.diagnostics);
     if (!reconciled.ok) {
@@ -391,12 +373,12 @@ export async function buildSite(projectDirectory = ".", destination?: string) {
 
 /** Build an isolated application model and report the current provenance for one page or route. */
 export async function inspectSite(projectDirectory: string, target: string) {
-  const { gateway } = await stageSite(projectDirectory);
+  const { gateway, startBuild } = await stageSite(projectDirectory);
   const prepared = gatewayValue<SyncpressWire["/site/prepare"]["output"]>(
     await gateway.invoke("/site/prepare", {}),
     "Could not prepare the site model",
   );
-  await runPhases(gateway, prepared.sequence);
+  await startBuild(prepared.sequence);
 
   const inspected = await gateway.invoke("/site/inspect", { target });
   if (!inspected.ok) {

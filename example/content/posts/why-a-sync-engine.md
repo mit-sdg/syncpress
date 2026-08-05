@@ -28,7 +28,7 @@ Syncpress declares a short phase sequence for the points at which one complete s
 settings → read → route → excerpt → collect → render → emit
 ```
 
-The application waits for the reactions started in one phase to settle before it advances. Collections receive complete route data, and layouts receive fully ordered collections. These barriers reduce parallel execution in exchange for collection order, pagination, feeds, and sitemaps that are independent of reaction timing.
+The composition defers each phase advance until the reactions started by the preceding phase settle. Collections receive complete route data, and layouts receive fully ordered collections. These barriers reduce parallel execution in exchange for collection order, pagination, feeds, and sitemaps that are independent of reaction timing.
 
 ## Finishing is part of the model
 

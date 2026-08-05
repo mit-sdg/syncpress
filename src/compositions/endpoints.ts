@@ -1,5 +1,5 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { no, view, where } from "@mit-sdg/sync-engine/language";
+import { no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts as conceptRefs } from "@syncpress/concept-set";
 import { CONFIGURATION_PATH, PHASES, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 import { InspectionOwner, SiteBuildSummary, SiteInspection } from "./views.ts";
@@ -106,22 +106,20 @@ export const ReadSiteSummary = endpoint("/site/summary", () =>
   receive({}).then(respond({ summary: SiteBuildSummary({}) })),
 );
 
-export const StartSiteBuild = endpoint("/site/start", ({ sequence, job, phase, attempt }) =>
-  receive({ sequence }).then(
-    where(no(Phasing._latest({ sequence })))
-      .then(Phasing.start({ sequence }).responds({ job, phase, attempt }))
-      .then(respond({ job, phase, attempt }))
-      .named("start"),
-    where(Phasing._latest({ sequence }))
-      .then(respond({ error: "BUILD_ALREADY_STARTED" }))
-      .named("already-started"),
-  ),
+/** Advance the first phase only after all work caused by its announcement settles. */
+export const AdvanceStartedSiteBuild = reaction(({ sequence, job, attempt }) =>
+  when(Phasing.start({ sequence }).responds({ job, name: PHASE_SEQUENCE, attempt }))
+    .afterFlowSettles()
+    .where(Phasing._running({ sequence }).is({ job, name: PHASE_SEQUENCE, attempt }))
+    .then(Phasing.advance({ job, attempt })),
 );
 
-export const AdvanceSiteBuild = endpoint("/site/advance", ({ job, attempt, phase, nextAttempt, transitioned }) =>
-  receive({ job, attempt })
-    .then(Phasing.advance({ job, attempt }).responds({ phase, attempt: nextAttempt, transitioned }))
-    .then(respond({ phase, attempt: nextAttempt, transitioned })),
+/** Continue each later phase at the next settlement frontier in the same flow. */
+export const AdvanceSiteBuild = reaction(({ job, attempt, nextAttempt }) =>
+  when(Phasing.advance({ job, attempt }).responds({ name: PHASE_SEQUENCE, transitioned: true }))
+    .afterFlowSettles()
+    .where(Phasing._job({ job }).is({ name: PHASE_SEQUENCE, state: "running", attempt: nextAttempt }))
+    .then(Phasing.advance({ job, attempt: nextAttempt })),
 );
 
 /**

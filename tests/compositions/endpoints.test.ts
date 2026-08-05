@@ -103,7 +103,6 @@ test("reassessment retracts only assessment-owned configuration diagnostics", as
     if (!configured.ok) throw new Error(JSON.stringify(configured.error));
     const started = await application.concepts.Phasing.start({ sequence: configured.value.sequence });
     if ("error" in started) throw new Error(started.error);
-    await application.whenIdle();
     expect(await application.concepts.Diagnosing._all()).toContainEqual(expect.objectContaining({
       code: "INVALID_SELECTOR",
       scope: "configuration-settings",
@@ -117,16 +116,8 @@ test("reassessment retracts only assessment-owned configuration diagnostics", as
       scope: "configuration-settings",
     }));
 
-    let attempt: string | null = started.attempt;
-    while (attempt !== null) {
-      const advanced = await application.concepts.Phasing.advance({ job: started.job, attempt });
-      if ("error" in advanced) throw new Error(advanced.error);
-      attempt = advanced.attempt;
-      await application.whenIdle();
-    }
     const restarted = await application.concepts.Phasing.start({ sequence: configured.value.sequence });
     if ("error" in restarted) throw new Error(restarted.error);
-    await application.whenIdle();
     expect(await application.concepts.Diagnosing._all()).not.toContainEqual(expect.objectContaining({
       code: "INVALID_SELECTOR",
       scope: "configuration-settings",
@@ -136,42 +127,18 @@ test("reassessment retracts only assessment-owned configuration diagnostics", as
   }
 });
 
-test("phase endpoints retry exact barriers and reject superseded reconciliation", async () => {
+test("the native build flow settles every phase and rejects superseded reconciliation", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "syncpress-endpoints-"));
   try {
-    const { application, gateway } = createSyncpressRuntime();
+    const { application, gateway, startBuild } = createSyncpressRuntime();
     const project = await application.concepts.Filing.open({ name: "project" });
     if ("error" in project) throw new Error(project.error);
     await application.concepts.Filing.place({ root: project.root, path: "site.yaml", content: bytes("{}\n") });
     expect((await gateway.invoke("/site/assess", {})).ok).toBe(true);
     const configured = await gateway.invoke("/site/configure", { destination: join(temporary, "output") });
     if (!configured.ok) throw new Error(JSON.stringify(configured.error));
-    const started = await gateway.invoke("/site/start", { sequence: configured.value.sequence });
-    if (!started.ok) throw new Error(JSON.stringify(started.error));
-    await application.whenIdle();
-
-    const settingsAttempt = started.value.attempt;
-    const firstAdvance = await gateway.invoke("/site/advance", { job: started.value.job, attempt: settingsAttempt });
-    if (!firstAdvance.ok) throw new Error(JSON.stringify(firstAdvance.error));
-    expect(firstAdvance.value).toMatchObject({ phase: "read", transitioned: true });
-    const retry = await gateway.invoke("/site/advance", { job: started.value.job, attempt: settingsAttempt });
-    expect(retry).toEqual({ ok: true, value: { ...firstAdvance.value, transitioned: false } });
-    expect(await gateway.invoke("/site/start", { sequence: configured.value.sequence })).toMatchObject({
-      ok: false,
-      error: { kind: "domain", value: "BUILD_ALREADY_STARTED" },
-    });
-
-    let attempt = firstAdvance.value.attempt;
-    while (attempt !== null) {
-      const advanced = await gateway.invoke("/site/advance", { job: started.value.job, attempt });
-      if (!advanced.ok) throw new Error(JSON.stringify(advanced.error));
-      attempt = advanced.value.attempt;
-      await application.whenIdle();
-    }
-    expect(await gateway.invoke("/site/start", { sequence: configured.value.sequence })).toMatchObject({
-      ok: false,
-      error: { kind: "domain", value: "BUILD_ALREADY_STARTED" },
-    });
+    const job = await startBuild(configured.value.sequence);
+    expect(await application.concepts.Phasing._outcome({ job })).toEqual([{ state: "finished" }]);
     const unrelatedSequence = await application.concepts.Phasing.declare({ name: "unrelated", phases: ["other"] });
     if ("error" in unrelatedSequence) throw new Error(unrelatedSequence.error);
     const unrelated = await application.concepts.Phasing.start({ sequence: unrelatedSequence.sequence });
@@ -183,7 +150,7 @@ test("phase endpoints retry exact barriers and reject superseded reconciliation"
     });
     const replacement = await application.concepts.Phasing.start({ sequence: configured.value.sequence });
     if ("error" in replacement) throw new Error(replacement.error);
-    expect(await gateway.invoke("/site/reconcile", { job: started.value.job })).toMatchObject({
+    expect(await gateway.invoke("/site/reconcile", { job })).toMatchObject({
       ok: false,
       error: { kind: "domain", value: "BUILD_SUPERSEDED" },
     });
