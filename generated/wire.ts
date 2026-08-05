@@ -13,6 +13,95 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type AppWideError = never;
 
 export type SyncpressWire = {
+  "/cli/announce": {
+    input: {
+      "files": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["files"]>>;
+      "kept": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["kept"]>>;
+      "pages": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["pages"]>>;
+      "removed": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["removed"]>>;
+      "replaced": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["replaced"]>>;
+      "written": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["written"]>>;
+    };
+    output: {
+      "text": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>>, ["text"]>>;
+    };
+    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
+  };
+  "/cli/hold": {
+    input: Record<string, never>;
+    output: {
+      "reason": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Attending"]["hold"]>>, ["reason"]>>;
+    };
+    error: { error: AppWideError };
+  };
+  "/cli/interpret": {
+    input: {
+      "arguments": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>[0], ["arguments"]>>;
+    };
+    output: {
+      "destination": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["destination"]>>;
+      "directory": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["directory"]>>;
+      "name": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["name"]>>;
+      "port": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["port"]>>;
+      "target": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["target"]>>;
+    };
+    error: { error: AppWideError | "INVALID_ARGUMENTS" | "INVALID_INPUT" | "INVALID_USAGE" };
+  };
+  "/cli/misuse": {
+    input: Record<string, never>;
+    output: {
+      "misuse": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["_misuse"]>>>, ["misuse"]>>;
+    };
+    error: { error: AppWideError };
+  };
+  "/cli/say": {
+    input: {
+      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["say"]>[0], ["text"]>>;
+    };
+    output: Record<string, never>;
+    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
+  };
+  "/cli/usage": {
+    input: Record<string, never>;
+    output: Record<string, never>;
+    error: { error: AppWideError | "INVALID_REPORT" };
+  };
+  "/cli/warn": {
+    input: {
+      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["warn"]>[0], ["text"]>>;
+    };
+    output: Record<string, never>;
+    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
+  };
+  "/serve/close": {
+    input: {
+      "server": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["close"]>[0], ["server"]>>;
+    };
+    output: Record<string, never>;
+    error: { error: AppWideError | "INVALID_INPUT" | "SERVER_NOT_FOUND" };
+  };
+  "/serve/open": {
+    input: {
+      "host": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["open"]>[0], ["host"]>>;
+      "port": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["open"]>[0], ["port"]>>;
+    };
+    output: {
+      "host": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["open"]>[0], ["host"]>>;
+      "port": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Serving"]["open"]>>, ["port"]>>;
+      "server": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Serving"]["open"]>>, ["server"]>>;
+    };
+    error: { error: AppWideError | "ADDRESS_UNAVAILABLE" | "INVALID_INPUT" | "INVALID_SERVER" };
+  };
+  "/serve/publish": {
+    input: {
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["serve"]>[0], ["directory"]>>;
+      "server": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["serve"]>[0], ["server"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["refresh"]>[0], ["server"]>]>>;
+    };
+    output: {
+      "readers": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Serving"]["refresh"]>>, ["readers"]>>;
+    };
+    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_SERVER" | "SERVER_NOT_OPEN" };
+  };
   "/site/build": {
     input: {
       "destination"?: Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["request"]>[0], ["path"]>>;
@@ -170,5 +259,34 @@ export type SyncpressWire = {
       };
     };
     error: { error: AppWideError };
+  };
+  "/watch/attend": {
+    input: {
+      "watch": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>[0], ["watch"]>>;
+      "within": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>[0], ["within"]>>;
+    };
+    output: {
+      "changed": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>>, ["changed"]>>;
+      "watching": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>>, ["watching"]>>;
+    };
+    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_WATCH" | "WATCH_NOT_FOUND" };
+  };
+  "/watch/close": {
+    input: {
+      "watch": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["close"]>[0], ["watch"]>>;
+    };
+    output: Record<string, never>;
+    error: { error: AppWideError | "INVALID_INPUT" | "WATCH_NOT_FOUND" };
+  };
+  "/watch/open": {
+    input: {
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["observe"]>[0], ["directory"]>>;
+      "output": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["disregard"]>[0], ["prefix"]>>;
+      "settling": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["observe"]>[0], ["settling"]>>;
+    };
+    output: {
+      "watch": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["disregard"]>[0], ["watch"]>>;
+    };
+    error: { error: AppWideError | "DIRECTORY_MISSING" | "DIRECTORY_UNOBSERVABLE" | "DIRECTORY_UNSUPPORTED" | "INVALID_INPUT" | "INVALID_WATCH" | "WATCH_NOT_OPEN" };
   };
 };

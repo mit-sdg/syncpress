@@ -17,6 +17,12 @@ const STALE_ATTEMPT = "This producer attempt is no longer active.";
 const DESTINATION_NOT_DIRECTED = "No destination has been directed.";
 const RECONCILIATION_FAILED = "The intended destination tree could not be installed.";
 
+/** Where reconciliation stages one destination's work, as a path prefix its siblings share. */
+function stagingPrefix(destination: string): string {
+  const resolved = resolve(destination);
+  return join(dirname(resolved), `.${basename(resolved)}.emitting-`);
+}
+
 export class InvalidDestination extends Error {
   constructor() {
     super(INVALID_DESTINATION);
@@ -528,6 +534,10 @@ export class EmittingConcept {
       .map(([path, intent]) => ({ path, digest: intent.digest }));
   }
 
+  _staging({ destination }: { destination: string }): { prefix: string } {
+    return { prefix: isText(destination) && destination !== "" ? stagingPrefix(destination) : "" };
+  }
+
   _orphans(): { path: string }[] {
     const intended = this.#intended();
     return [...this.#emitted.keys()]
@@ -626,7 +636,7 @@ export class EmittingConcept {
   async #install(destination: string, snapshot: Snapshot, intended: Map<string, Intent>): Promise<void> {
     const parent = dirname(destination);
     await mkdir(parent, { recursive: true });
-    const transaction = await mkdtemp(join(parent, `.${basename(destination)}.emitting-`));
+    const transaction = await mkdtemp(stagingPrefix(destination));
     const staged = join(transaction, "next");
     const previous = join(transaction, "previous");
     let preserveTransaction = false;

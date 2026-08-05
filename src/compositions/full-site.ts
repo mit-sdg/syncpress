@@ -4,6 +4,7 @@
  * exports below, while PHASES in shared.ts determines execution order.
  */
 export * from "./endpoints.ts";
+export * from "./commanding.ts";
 export * from "./calculations.ts";
 export * from "./staging.ts";
 export * from "./settings.ts";
@@ -15,4 +16,6 @@ export * from "./render.ts";
 export * from "./references.ts";
 export * from "./images.ts";
 export * from "./deployment.ts";
+export * from "./serving.ts";
 export * from "./views.ts";
+export * from "./watching.ts";

@@ -7,6 +7,25 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
+### Attending
+
+**Purpose.** Hold a process open until the operator running it asks it to stop, so a
+long-running command ends on request instead of being killed mid-work.
+
+**Principle.** Ada starts a hold. Nothing returns while she leaves the process running.
+She presses Ctrl-C; the hold ends and reports that it was interrupted. The
+process is free to finish its own work before exiting. A later hold waits again,
+because ending one hold does not end the ability to hold another.
+
+Actions:
+
+- `hold (…)`
+
+Queries (standing questions the state answers):
+
+- `_hold (hold)` — promises at most one row
+- `_holding (…)` — promises exactly one row
+
 ### Cataloging
 
 **Purpose.** Admit projected items into named catalogs under declared conditions and keep
@@ -36,6 +55,37 @@ Queries (standing questions the state answers):
 - `_named (name)` — promises at most one row
 - `_position (catalog, item)` — promises at most one row
 - `_record (…)` — promises exactly one row
+
+### Commanding
+
+**Purpose.** Interpret one operator's command line into a checked request, and answer that
+operator on their own streams, so every misuse is refused the same way and every
+report — including the one line a finished run is worth — reaches the same
+place.
+
+**Principle.** Ada runs the tool with no arguments and gets the help request, whose answer is
+the usage text. She runs `build ./site out` and gets a build request rooted at
+`./site` publishing into `out`. She runs `dev --port 8080` and gets a develop
+request on port 8080 with the default directory. She runs `inspect /posts/first/`
+and gets an inspect request for that target. She runs `build a b c` and is
+refused, with the usage text attached. Reporting a line puts it on the operator's
+ordinary output; summarizing a run puts one counted sentence there; warning them
+puts it on their error output, and all three are remembered in the order they
+were said.
+
+Actions:
+
+- `interpret (arguments)` — may refuse `INVALID_ARGUMENTS`, `INVALID_USAGE`
+- `say (text)` — may refuse `INVALID_REPORT`
+- `summarize (files, kept, pages, removed, replaced, written)` — may refuse `INVALID_REPORT`
+- `warn (text)` — may refuse `INVALID_REPORT`
+
+Queries (standing questions the state answers):
+
+- `_misuse (…)` — promises exactly one row
+- `_reports (…)` — promises any number of rows
+- `_request (request)` — promises at most one row
+- `_usage (…)` — promises exactly one row
 
 ### Converting
 
@@ -258,6 +308,7 @@ Queries (standing questions the state answers):
 - `_orphans (…)` — promises any number of rows
 - `_pending (…)` — promises any number of rows
 - `_producers (path)` — promises any number of rows
+- `_staging (destination)` — promises exactly one row
 
 ### Filing
 
@@ -554,6 +605,33 @@ Queries (standing questions the state answers):
 - `_labelled (label)` — promises at most one row
 - `_survey (survey)` — promises at most one row
 
+### Serving
+
+**Purpose.** Answer host requests from one directory of already-published files, never
+revealing anything outside it, and tell connected readers when to look again.
+
+**Principle.** Ada opens a server on a loopback address and port 0; it reports the port the
+host actually gave it. Until she points it at a directory it tells every reader
+the site is unavailable. She points it at a published output directory, and a
+request for `/` answers that directory's `index.html` with a small script that
+listens for reload notices. A request for a missing path answers not found. A
+request that climbs out of the directory, or reaches it through a symbolic link
+that leaves it, answers forbidden without reading the file. After a rebuild she
+refreshes the server, and every listening reader is told to reload. Closing the
+server ends the listeners and stops answering.
+
+Actions:
+
+- `close (server)` — may refuse `SERVER_NOT_FOUND`
+- `open (host, port)` — may refuse `ADDRESS_UNAVAILABLE`, `INVALID_SERVER`
+- `refresh (server)` — may refuse `SERVER_NOT_OPEN`
+- `serve (directory, server)` — may refuse `INVALID_SERVER`, `SERVER_NOT_OPEN`
+
+Queries (standing questions the state answers):
+
+- `_readers (server)` — promises exactly one row
+- `_server (server)` — promises at most one row
+
 ### Templating
 
 **Purpose.** Fill a reusable Liquid pattern with supplied values, so one layout and its named
@@ -620,6 +698,33 @@ Queries (standing questions the state answers):
 - `_original (subject)` — promises at most one row
 - `_rendition (rendition)` — promises at most one row
 - `_renditions (original)` — promises any number of rows
+
+### Watching
+
+**Purpose.** Report settled bursts of change under a host directory, so work happens once per
+burst instead of once per event, and never in response to paths the watcher was
+told to disregard.
+
+**Principle.** Ada observes `/srv/site`, letting a burst settle after 75 milliseconds, and
+tells the watch to disregard `/srv/site/dist`. She attends the watch and waits.
+Saving three files in quick succession reports one settled change, not three.
+Attending again waits, because that burst was already reported. Files written
+under `/srv/site/dist` report nothing at all. A burst that settles while nobody
+is attending is still reported by the next attend. Closing the watch releases
+whoever is attending and stops the observation for good.
+
+Actions:
+
+- `attend (watch, within)` — may refuse `INVALID_WATCH`, `WATCH_NOT_FOUND`
+- `close (watch)` — may refuse `WATCH_NOT_FOUND`
+- `disregard (prefix, watch)` — may refuse `INVALID_WATCH`, `WATCH_NOT_OPEN`
+- `observe (directory, settling)` — may refuse `DIRECTORY_MISSING`, `DIRECTORY_UNOBSERVABLE`, `DIRECTORY_UNSUPPORTED`, `INVALID_WATCH`
+
+Queries (standing questions the state answers):
+
+- `_disregarded (watch)` — promises any number of rows
+- `_open (…)` — promises any number of rows
+- `_watch (watch)` — promises at most one row
 
 ## Views
 
@@ -1175,6 +1280,54 @@ then
   Phasing.advance (attempt, job)
 ```
 
+### fullSite.AnnounceBuild
+
+```reaction
+when RequestBoundary.request (files, kept, pages, path: "/cli/announce", removed, replaced, requestId, written)
+then
+  Commanding.summarize (files, kept, pages, removed, replaced, written)
+```
+
+### fullSite.AnnounceBuild#2
+
+```reaction
+when Commanding.summarize (files, kept, pages, removed, replaced, written, text), asked by fullSite.AnnounceBuild
+where
+  earlier, RequestBoundary.request (files, kept, pages, path: "/cli/announce", removed, replaced, requestId, written)
+then
+  RequestBoundary.respond (requestId, text)
+```
+
+### fullSite.AnnounceMisuse
+
+```reaction
+when RequestBoundary.request (path: "/cli/misuse", requestId)
+where
+  Commanding._misuse () has (misuse)
+then
+  RequestBoundary.respond (misuse, requestId)
+```
+
+### fullSite.AnnounceUsage
+
+```reaction
+when RequestBoundary.request (path: "/cli/usage", requestId)
+where
+  Commanding._usage () has (usage)
+then
+  Commanding.say (text: usage)
+```
+
+### fullSite.AnnounceUsage#2
+
+```reaction
+when Commanding.say (text: usage), asked by fullSite.AnnounceUsage
+where
+  earlier, RequestBoundary.request (path: "/cli/usage", requestId)
+then
+  RequestBoundary.respond (requestId)
+```
+
 ### fullSite.AssessedConfigurationProblemsDiagnose
 
 ```reaction
@@ -1183,6 +1336,24 @@ where
   Governing._problems () has (code, column, line, message)
 then
   Diagnosing.report (code, column, line, message, scope: "configuration-assessment", severity: "error", source: "site.yaml")
+```
+
+### fullSite.AttendSiteWatch
+
+```reaction
+when RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
+then
+  Watching.attend (watch, within)
+```
+
+### fullSite.AttendSiteWatch#2
+
+```reaction
+when Watching.attend (watch, within, changed, watching), asked by fullSite.AttendSiteWatch
+where
+  earlier, RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
+then
+  RequestBoundary.respond (changed, requestId, watching)
 ```
 
 ### fullSite.BegunFeedsIntend
@@ -1555,6 +1726,42 @@ where
   patternHasResult (matched: true, path, pattern)
 then
   Layering.contribute (rank: index, subject, values)
+```
+
+### fullSite.CloseSiteServer
+
+```reaction
+when RequestBoundary.request (path: "/serve/close", requestId, server)
+then
+  Serving.close (server)
+```
+
+### fullSite.CloseSiteServer#2
+
+```reaction
+when Serving.close (server), asked by fullSite.CloseSiteServer
+where
+  earlier, RequestBoundary.request (path: "/serve/close", requestId, server)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### fullSite.CloseSiteWatch
+
+```reaction
+when RequestBoundary.request (path: "/watch/close", requestId, watch)
+then
+  Watching.close (watch)
+```
+
+### fullSite.CloseSiteWatch#2
+
+```reaction
+when Watching.close (watch), asked by fullSite.CloseSiteWatch
+where
+  earlier, RequestBoundary.request (path: "/watch/close", requestId, watch)
+then
+  RequestBoundary.respond (requestId)
 ```
 
 ### fullSite.CommittedDeploymentArtifactsComplete
@@ -2128,6 +2335,24 @@ then
   Locating.admit (name: "settings", path: "site.yaml")
 ```
 
+### fullSite.HoldUntilStopped
+
+```reaction
+when RequestBoundary.request (path: "/cli/hold", requestId)
+then
+  Attending.hold ()
+```
+
+### fullSite.HoldUntilStopped#2
+
+```reaction
+when Attending.hold (reason), asked by fullSite.HoldUntilStopped
+where
+  earlier, RequestBoundary.request (path: "/cli/hold", requestId)
+then
+  RequestBoundary.respond (reason, requestId)
+```
+
 ### fullSite.IncludeDefinitionFailuresDiagnose
 
 ```reaction
@@ -2237,6 +2462,24 @@ where
   Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
 then
   Emitting.commit (attempt: emissionAttempt, producer: page)
+```
+
+### fullSite.InterpretCommandLine
+
+```reaction
+when RequestBoundary.request (arguments: args, path: "/cli/interpret", requestId)
+then
+  Commanding.interpret (arguments: args)
+```
+
+### fullSite.InterpretCommandLine#2
+
+```reaction
+when Commanding.interpret (arguments: args, destination, directory, name, port, target), asked by fullSite.InterpretCommandLine
+where
+  earlier, RequestBoundary.request (arguments: args, path: "/cli/interpret", requestId)
+then
+  RequestBoundary.respond (destination, directory, name, port, requestId, target)
 ```
 
 ### fullSite.InvalidBodyReferencesDiagnose
@@ -2523,6 +2766,62 @@ then
   Referencing.answer (form: "address", reference, value: raw)
 ```
 
+### fullSite.OpenSiteServer
+
+```reaction
+when RequestBoundary.request (host, path: "/serve/open", port, requestId)
+then
+  Serving.open (host, port)
+```
+
+### fullSite.OpenSiteServer#2
+
+```reaction
+when Serving.open (host, port, result.port: bound, server), asked by fullSite.OpenSiteServer
+where
+  earlier, RequestBoundary.request (host, path: "/serve/open", port, requestId)
+then
+  RequestBoundary.respond (host, port: bound, requestId, server)
+```
+
+### fullSite.OpenSiteWatch
+
+```reaction
+when RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
+then
+  Watching.observe (directory, settling)
+```
+
+### fullSite.OpenSiteWatch#2
+
+```reaction
+when Watching.observe (directory, settling, watch), asked by fullSite.OpenSiteWatch
+where
+  earlier, RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
+then
+  Watching.disregard (prefix: output, watch)
+```
+
+### fullSite.OpenSiteWatch#3
+
+```reaction
+when Watching.disregard (prefix: output, watch), asked by fullSite.OpenSiteWatch#2
+where
+  Emitting._staging (destination: output) has (prefix)
+then
+  Watching.disregard (prefix, watch)
+```
+
+### fullSite.OpenSiteWatch#4
+
+```reaction
+when Watching.disregard (prefix, watch), asked by fullSite.OpenSiteWatch#3
+where
+  earlier, RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
+then
+  RequestBoundary.respond (requestId, watch)
+```
+
 ### fullSite.OpenedProjectFilesConfiguration
 
 ```reaction
@@ -2754,6 +3053,32 @@ where
   Filing._file (file) has (content)
 then
   Emitting.intend (content, medium: "application/octet-stream", path, producer: file)
+```
+
+### fullSite.PublishSiteOutput
+
+```reaction
+when RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
+then
+  Serving.serve (directory, server)
+```
+
+### fullSite.PublishSiteOutput#2
+
+```reaction
+when Serving.serve (directory, server), asked by fullSite.PublishSiteOutput
+then
+  Serving.refresh (server)
+```
+
+### fullSite.PublishSiteOutput#3
+
+```reaction
+when Serving.refresh (server, readers), asked by fullSite.PublishSiteOutput#2
+where
+  earlier, RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
+then
+  RequestBoundary.respond (readers, requestId)
 ```
 
 ### fullSite.RasterAdmissionsDiagnose
@@ -3046,6 +3371,24 @@ where
   view "routed deployment work (work)" with (work) has (address, owner)
 then
   Routing.claim (address, owner)
+```
+
+### fullSite.SayToOperator
+
+```reaction
+when RequestBoundary.request (path: "/cli/say", requestId, text)
+then
+  Commanding.say (text)
+```
+
+### fullSite.SayToOperator#2
+
+```reaction
+when Commanding.say (text), asked by fullSite.SayToOperator
+where
+  earlier, RequestBoundary.request (path: "/cli/say", requestId, text)
+then
+  RequestBoundary.respond (requestId)
 ```
 
 ### fullSite.SettingsClearRoutingOrigin
@@ -3515,6 +3858,24 @@ then
   Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: root)
 ```
 
+### fullSite.WarnOperator
+
+```reaction
+when RequestBoundary.request (path: "/cli/warn", requestId, text)
+then
+  Commanding.warn (text)
+```
+
+### fullSite.WarnOperator#2
+
+```reaction
+when Commanding.warn (text), asked by fullSite.WarnOperator
+where
+  earlier, RequestBoundary.request (path: "/cli/warn", requestId, text)
+then
+  RequestBoundary.respond (requestId)
+```
+
 ## Endpoint input contracts
 
 Before recording an action ask, the boundary rejects a body that is not an
@@ -3522,5 +3883,15 @@ object or lacks a required key. The response uses `INVALID_INPUT` and names
 the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
+- `/cli/announce` — requires `files`, `kept`, `pages`, `removed`, `replaced`, `written`
+- `/cli/interpret` — requires `arguments`
+- `/cli/say` — requires `text`
+- `/cli/warn` — requires `text`
+- `/serve/close` — requires `server`
+- `/serve/open` — requires `host`, `port`
+- `/serve/publish` — requires `directory`, `server`
 - `/site/build` — requires `directory`; fills `destination` with null when absent
 - `/site/inspect` — requires `directory`, `target`
+- `/watch/attend` — requires `watch`, `within`
+- `/watch/close` — requires `watch`
+- `/watch/open` — requires `directory`, `output`, `settling`

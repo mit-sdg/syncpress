@@ -269,6 +269,7 @@ _attempt (producer: Producer) : optional (attempt: Number)
 _open (producer: Producer) : optional (attempt: Number)
 _pending () : many (path: Path, digest: Digest)
 _orphans () : many (path: Path)
+_staging (destination: Path) : one (prefix: Path)
 ```
 
 `_intent` and `_byProducer` read active intents only. `_intent` has at most one
@@ -279,6 +280,10 @@ reservation does it report staged producers. `_pending` lists active artifacts
 whose emitted entry is absent, non-regular, or byte-different.
 `_orphans` lists recorded destination entries with no active intent. Unknown or
 invalid identities and paths make optional and many queries answer no rows.
+`_staging` reports the path prefix reconciliation stages a destination's work
+under, whether or not that destination is the directed one, so an observer can
+tell Emitting's own transactions apart from anyone else's writing. It answers an
+empty prefix for a destination that could never be directed.
 
 Emitting owns artifact bytes, collision-safe destination paths, producer
 attempts, and exact destination reconciliation. It does not decide what a

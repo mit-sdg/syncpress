@@ -1,84 +1,73 @@
-import { resolve } from "node:path";
+import type { SyncpressWire } from "../../generated/wire.ts";
+import { createSyncpressRuntime, type Gateway } from "./application.ts";
 import { serveSite } from "./server.ts";
 import { buildSite, inspectSite, type BuildResult } from "./site.ts";
 import { watchSite } from "./watch.ts";
 
-const HELP = `Usage:
-  syncpress build [site-directory] [output-directory]
-  syncpress build --watch [site-directory] [output-directory]
-  syncpress dev [--port PORT] [site-directory] [output-directory]
-  syncpress inspect <page-or-route> [site-directory]
-
-Build the configured site rooted at <site-directory>, defaulting to the current
-directory. Without an explicit output directory, paths.output (or dist) is used.
-`;
-
-function printBuild(result: BuildResult): void {
-  console.log(
-    `Built ${result.pages} ${result.pages === 1 ? "page" : "pages"} from ${result.inputFiles} ` +
-      `${result.inputFiles === 1 ? "input file" : "input files"} ` +
-      `(${result.written} written, ${result.replaced} replaced, ${result.kept} kept, ${result.removed} removed).`,
-  );
+function answer<T>(result: { ok: true; value: T } | { ok: false; error: unknown }): T {
+  if (result.ok) return result.value;
+  const error = result.error as { kind: string; value?: unknown; detail?: string; code?: string };
+  throw new Error(error.kind === "domain" ? String(error.value) : error.detail ?? String(error.code));
 }
 
-async function waitForInterrupt(close: () => Promise<void>): Promise<void> {
-  await new Promise<void>((resolveSignal) => {
-    const stop = (): void => {
-      process.off("SIGINT", stop);
-      process.off("SIGTERM", stop);
-      resolveSignal();
-    };
-    process.once("SIGINT", stop);
-    process.once("SIGTERM", stop);
-  });
-  await close();
+/** One console session: the operator's grammar, streams, and stop request. */
+function session() {
+  const { gateway }: { gateway: Gateway } = createSyncpressRuntime();
+  return {
+    /** Misuse is the operator's problem, so it is reported in the words Commanding owns. */
+    async interpret(args: string[]): Promise<SyncpressWire["/cli/interpret"]["output"]> {
+      const interpreted = await gateway.invoke("/cli/interpret", { arguments: args });
+      if (interpreted.ok) return interpreted.value;
+      if (interpreted.error.kind === "domain" && interpreted.error.value === "INVALID_USAGE") {
+        throw new Error(answer(await gateway.invoke("/cli/misuse", {})).misuse);
+      }
+      return answer(interpreted);
+    },
+    usage: async () => answer(await gateway.invoke("/cli/usage", {})),
+    announce: async ({ pages, inputFiles, written, replaced, kept, removed }: BuildResult) =>
+      answer(await gateway.invoke("/cli/announce", { pages, files: inputFiles, written, replaced, kept, removed })),
+    warn: async (error: unknown) =>
+      answer(await gateway.invoke("/cli/warn", { text: error instanceof Error ? error.message : String(error) })),
+    say: async (text: string) => answer(await gateway.invoke("/cli/say", { text })),
+    held: async () => answer(await gateway.invoke("/cli/hold", {}, { timeoutMs: 2_147_483_647 })),
+  };
 }
 
+/** Interpret one command line and run what it asks for until it is done or stopped. */
 export async function runCli(args = process.argv.slice(2)): Promise<void> {
-  if (args.length === 0 || (args.length === 1 && ["--help", "-h", "help"].includes(args[0]!))) {
-    console.log(HELP);
+  const console_ = session();
+  const request = await console_.interpret(args);
+
+  if (request.name === "help") {
+    await console_.usage();
     return;
   }
 
-  if (args[0] === "inspect" && (args.length === 2 || args.length === 3)) {
-    console.log(JSON.stringify(await inspectSite(args[2] ?? ".", args[1]!), null, 2));
+  if (request.name === "inspect") {
+    await console_.say(JSON.stringify(await inspectSite(request.directory, request.target!), null, 2));
     return;
   }
 
-  if (args[0] === "dev") {
-    const rest = args.slice(1);
-    let port = 3000;
-    if (rest[0] === "--port") {
-      const requested = Number(rest[1]);
-      if (!Number.isSafeInteger(requested) || requested < 1 || requested > 65_535) throw new Error(`Invalid usage.\n\n${HELP}`);
-      port = requested;
-      rest.splice(0, 2);
-    }
-    if (rest.length > 2) throw new Error(`Invalid usage.\n\n${HELP}`);
-    const server = await serveSite(rest[0] ?? ".", rest[1], {
-      port,
-      onError(error) {
-        console.error(error instanceof Error ? error.message : String(error));
-      },
+  if (request.name === "build") {
+    await console_.announce(await buildSite(request.directory, request.destination ?? undefined));
+    return;
+  }
+
+  if (request.name === "develop") {
+    const server = await serveSite(request.directory, request.destination ?? undefined, {
+      port: request.port ?? undefined,
+      onError: (error) => void console_.warn(error),
     });
-    console.log(`Serving ${resolve(rest[0] ?? ".")} at http://${server.host}:${server.port}/`);
-    await waitForInterrupt(() => server.close());
+    await console_.say(`Serving ${request.directory} at http://${server.host}:${server.port}/`);
+    await console_.held();
+    await server.close();
     return;
   }
 
-  if (args[0] !== "build") throw new Error(`Invalid usage.\n\n${HELP}`);
-  if (args[1] === "--watch") {
-    if (args.length > 4) throw new Error(`Invalid usage.\n\n${HELP}`);
-    const watcher = await watchSite(args[2] ?? ".", args[3], {
-      onBuild: printBuild,
-      onError(error) {
-        console.error(error instanceof Error ? error.message : String(error));
-      },
-    });
-    await waitForInterrupt(() => watcher.close());
-    return;
-  }
-  if (args.length > 3) throw new Error(`Invalid usage.\n\n${HELP}`);
-
-  printBuild(await buildSite(args[1] ?? ".", args[2]));
+  const watcher = await watchSite(request.directory, request.destination ?? undefined, {
+    onBuild: (result) => void console_.announce(result),
+    onError: (error) => void console_.warn(error),
+  });
+  await console_.held();
+  await watcher.close();
 }

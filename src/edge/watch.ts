@@ -1,97 +1,61 @@
-import { watch } from "node:fs/promises";
-import { basename, dirname, relative, resolve, sep } from "node:path";
-import { buildSite, containsPath, type BuildResult } from "./site.ts";
+import { resolve } from "node:path";
+import { createSyncpressRuntime, type Gateway } from "./application.ts";
+import { buildSite, type BuildResult } from "./site.ts";
 
 export type SiteWatcher = { close(): Promise<void> };
 
-function isOutputTransactionPath(output: string, candidate: string): boolean {
-  const parent = dirname(output);
-  if (!containsPath(parent, candidate)) return false;
-  const [first] = relative(parent, candidate).split(sep);
-  return first?.startsWith(`.${basename(output)}.emitting-`) ?? false;
+/** How long a burst of change settles before it counts as one edit. */
+const SETTLING_MS = 75;
+
+/** How long one attend waits, and so how long closing a watch can take. */
+const ATTEND_MS = 500;
+
+function answer<T>(result: { ok: true; value: T } | { ok: false; error: unknown }, context: string): T {
+  if (!result.ok) throw new Error(`${context}: ${JSON.stringify(result.error)}`);
+  return result.value;
 }
 
-/** Rebuild a project after filesystem changes while retaining the last reconciled output on failures. */
+/** Rebuild a project after each settled change, keeping the last reconciled output on failures. */
 export async function watchSite(
   projectDirectory = ".",
   destination?: string,
   options: { onBuild?: (result: BuildResult, outputDirectory: string) => void; onError?: (error: unknown) => void } = {},
 ): Promise<SiteWatcher> {
-  const siteDirectory = resolve(projectDirectory);
-  const initial = await buildSite(siteDirectory, destination);
-  let output = initial.outputDirectory;
-  options.onBuild?.(initial, output);
-  let rebuildingOutput: string | undefined;
-  const controller = new AbortController();
-  let closed = false;
-  let activeBuild: Promise<void> | undefined;
-  let queued = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const directory = resolve(projectDirectory);
+  const initial = await buildSite(directory, destination);
+  options.onBuild?.(initial, initial.outputDirectory);
 
-  const rebuild = async (): Promise<void> => {
-    if (closed) return;
-    try {
-      rebuildingOutput = output;
-      const built = await buildSite(siteDirectory, destination);
-      output = built.outputDirectory;
-      options.onBuild?.(built, output);
-    } catch (error) {
-      options.onError?.(error);
-    } finally {
-      rebuildingOutput = undefined;
-    }
-  };
-  const startRebuild = (): void => {
-    if (closed) return;
-    if (activeBuild !== undefined) {
-      queued = true;
-      return;
-    }
-    const running = rebuild();
-    activeBuild = running;
-    void running.finally(() => {
-      if (activeBuild === running) activeBuild = undefined;
-      if (!closed && queued) {
-        queued = false;
-        startRebuild();
+  const { gateway }: { gateway: Gateway } = createSyncpressRuntime();
+  const { watch } = answer(
+    await gateway.invoke("/watch/open", { directory, settling: SETTLING_MS, output: initial.outputDirectory }),
+    "Could not watch the site directory",
+  );
+
+  let closing = false;
+  const attending = (async (): Promise<void> => {
+    while (!closing) {
+      const { changed, watching } = answer(
+        await gateway.invoke("/watch/attend", { watch, within: ATTEND_MS }),
+        "Could not watch the site directory",
+      );
+      if (!watching) return;
+      if (!changed) continue;
+
+      try {
+        const built = await buildSite(directory, destination);
+        options.onBuild?.(built, built.outputDirectory);
+      } catch (error) {
+        if (!closing) options.onError?.(error);
       }
-    });
-  };
-  const schedule = (): void => {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = undefined;
-      startRebuild();
-    }, 75);
-  };
-  const watcher = watch(siteDirectory, { recursive: true, signal: controller.signal });
-  const task = (async (): Promise<void> => {
-    try {
-      for await (const event of watcher) {
-        if (closed) break;
-        const filename = event.filename === null ? undefined : resolve(siteDirectory, event.filename.toString());
-        if (
-          filename !== undefined &&
-          (containsPath(output, filename) ||
-            (rebuildingOutput !== undefined && isOutputTransactionPath(rebuildingOutput, filename)))
-        ) {
-          continue;
-        }
-        schedule();
-      }
-    } catch (error) {
-      if (!closed && (error as { name?: string }).name !== "AbortError") options.onError?.(error);
     }
   })();
 
   return {
     async close(): Promise<void> {
-      if (closed) return;
-      closed = true;
-      if (timer !== undefined) clearTimeout(timer);
-      controller.abort();
-      await task;
-      await activeBuild;
+      if (closing) return;
+      closing = true;
+      await gateway.invoke("/watch/close", { watch });
+      await attending;
     },
   };
 }

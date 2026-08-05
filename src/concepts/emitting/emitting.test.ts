@@ -453,6 +453,13 @@ test("stale attempts cannot stage, commit, or abort a replacement", () => {
   expect(emitting._byProducer({ producer: "page" })).toHaveLength(1);
 });
 
+test("reports where reconciliation stages one destination's work", () => {
+  const emitting = new EmittingConcept();
+  const { prefix } = emitting._staging({ destination: "/srv/site/dist" });
+  expect(prefix).toBe("/srv/site/.dist.emitting-");
+  expect(emitting._staging({ destination: "" })).toEqual({ prefix: "" });
+});
+
 test("registry exposes every refusal, query promise, and normative message", async () => {
   expect(emittingRegistration.refusals).toEqual({
     INVALID_CLAIM: InvalidClaim,
@@ -478,6 +485,7 @@ test("registry exposes every refusal, query promise, and normative message", asy
     ["_open", "optional"],
     ["_pending", "many"],
     ["_orphans", "many"],
+    ["_staging", "one"],
   ]);
   expect(emittingRegistration.specification.actions.map(({ name }) => name)).toEqual([
     "direct",

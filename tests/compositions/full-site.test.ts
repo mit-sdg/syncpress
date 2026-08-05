@@ -10,7 +10,7 @@ const goldenPath = resolve(import.meta.dir, "../golden/example-site.json");
 
 type Golden = { files: Record<string, string> };
 
-/** Tests that build the complete example site more than once need more than one default timeout. */
+/** Every test here builds the complete example site at least once, which outlasts the default timeout. */
 const BUILD_TEST_TIMEOUT_MS = 30_000;
 
 async function copyExample(destination: string): Promise<void> {
@@ -121,7 +121,7 @@ test("renders without an origin and does not invent a canonical URL", async () =
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("collection cards preserve conditions, optional excerpts, and missing sort keys", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-collection-cards-"));
@@ -163,7 +163,7 @@ test("collection cards preserve conditions, optional excerpts, and missing sort 
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("uses paths.output when no explicit destination is supplied", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-default-output-"));
@@ -176,7 +176,7 @@ test("uses paths.output when no explicit destination is supplied", async () => {
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("rejects a configured output symlink that escapes the project", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-output-link-site-"));
@@ -191,7 +191,7 @@ test("rejects a configured output symlink that escapes the project", async () =>
     await rm(project, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("generates a feed for a portable output path that is not a route", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-nested-feed-site-"));
@@ -209,7 +209,7 @@ test("generates a feed for a portable output path that is not a route", async ()
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("normalizes XML-invalid feed metadata to well-formed XML text", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-xml-feed-site-"));
@@ -229,7 +229,7 @@ test("normalizes XML-invalid feed metadata to well-formed XML text", async () =>
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("generates an empty sitemap for an otherwise empty site", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-empty-sitemap-site-"));
@@ -249,7 +249,7 @@ test("generates an empty sitemap for an otherwise empty site", async () => {
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("rejects feed dates that would be invalid or host-timezone dependent", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-feed-date-site-"));
@@ -263,7 +263,7 @@ test("rejects feed dates that would be invalid or host-timezone dependent", asyn
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("generated route collisions retain route diagnostics and finish deployment work", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-deployment-route-collision-"));
@@ -283,7 +283,7 @@ test("generated route collisions retain route diagnostics and finish deployment 
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("invalid pagination work diagnoses and terminates without an incomplete queue", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-pagination-template-"));
@@ -300,7 +300,7 @@ test("invalid pagination work diagnoses and terminates without an incomplete que
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("reports multiple location-aware configuration errors before staging sources", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-policy-"));
@@ -329,7 +329,7 @@ test("reports multiple location-aware configuration errors before staging source
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("rejects a non-UTF-8 configuration without waiting for endpoint timeout", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-binary-policy-"));
@@ -340,7 +340,7 @@ test("rejects a non-UTF-8 configuration without waiting for endpoint timeout", a
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("reports a missing rendering profile after clearing prior diagnostics", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-missing-profile-"));
@@ -361,7 +361,7 @@ test("reports a missing rendering profile after clearing prior diagnostics", asy
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("inspect reports route ownership, template provenance, collection membership, and dependencies", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-inspect-site-"));
@@ -418,7 +418,7 @@ test("the development server serves reconciled output with a live-reload client"
     await rm(destination, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("watch ignores its own reconciliation transactions", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-watch-site-"));
@@ -473,7 +473,7 @@ test("a missing local reference reports a diagnostic and preserves the prior des
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("malformed front matter blocks publication without replacing prior output", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-malformed-site-"));
@@ -490,7 +490,7 @@ test("malformed front matter blocks publication without replacing prior output",
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("body Liquid failures report their original source coordinate after front matter", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-located-liquid-site-"));
@@ -507,7 +507,7 @@ test("body Liquid failures report their original source coordinate after front m
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("a link to an unpublished document is not copied as an asset", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-unpublished-site-"));
@@ -525,7 +525,7 @@ test("a link to an unpublished document is not copied as an asset", async () => 
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("two different local assets cannot silently claim one beside-page output path", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-asset-collision-"));
@@ -547,7 +547,7 @@ test("two different local assets cannot silently claim one beside-page output pa
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("an invalid asset output prefix fails before source staging", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-assets-site-"));
@@ -562,7 +562,7 @@ test("an invalid asset output prefix fails before source staging", async () => {
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("duplicate include and layout names are rejected by template ownership", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-duplicate-template-site-"));
@@ -575,7 +575,7 @@ test("duplicate include and layout names are rejected by template ownership", as
   } finally {
     await rm(project, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
 
 test("a configured root cannot escape through an intermediate symbolic link", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-linked-root-site-"));
@@ -596,4 +596,4 @@ test("a configured root cannot escape through an intermediate symbolic link", as
     await rm(project, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
   }
-});
+}, BUILD_TEST_TIMEOUT_MS);
