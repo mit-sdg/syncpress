@@ -177,53 +177,28 @@ export const UndirectablePublicationDiagnoses = reaction(({ destination, error, 
 
 /* Escaping and overlapping locations are configuration errors, not host failures. */
 
-export const EscapingContentRootDiagnoses = reaction(({ directory, place }) =>
-  when(Locating.admit({ name: ROOTS.content, path: directory }).responds({ place }))
-    .where(no(Locating._place({ place }).is({ contained: true, resolved: true })))
-    .then(
-      Diagnosing.report({
-        ...staged,
-        code: "SOURCE_OUTSIDE_SITE",
-        message: "Configured paths.content must stay inside the site directory after resolving symbolic links.",
-      }),
-    ),
-);
+/**
+ * One rule, stated once for each configured location it governs: a location
+ * that does not stay inside the site once symbolic links are resolved cannot be
+ * read from or written to, whatever the operator meant by it.
+ */
+const escapesSite = (place: string, key: string, code: string) =>
+  reaction(({ directory, admitted }) =>
+    when(Locating.admit({ name: place, path: directory }).responds({ place: admitted }))
+      .where(no(Locating._place({ place: admitted }).is({ contained: true, resolved: true })))
+      .then(
+        Diagnosing.report({
+          ...staged,
+          code,
+          message: `Configured paths.${key} must stay inside the site directory after resolving symbolic links.`,
+        }),
+      ),
+  );
 
-export const EscapingTemplateRootDiagnoses = reaction(({ directory, place }) =>
-  when(Locating.admit({ name: ROOTS.templates, path: directory }).responds({ place }))
-    .where(no(Locating._place({ place }).is({ contained: true, resolved: true })))
-    .then(
-      Diagnosing.report({
-        ...staged,
-        code: "SOURCE_OUTSIDE_SITE",
-        message: "Configured paths.templates must stay inside the site directory after resolving symbolic links.",
-      }),
-    ),
-);
-
-export const EscapingPublicRootDiagnoses = reaction(({ directory, place }) =>
-  when(Locating.admit({ name: ROOTS.public, path: directory }).responds({ place }))
-    .where(no(Locating._place({ place }).is({ contained: true, resolved: true })))
-    .then(
-      Diagnosing.report({
-        ...staged,
-        code: "SOURCE_OUTSIDE_SITE",
-        message: "Configured paths.public must stay inside the site directory after resolving symbolic links.",
-      }),
-    ),
-);
-
-export const EscapingConfiguredOutputDiagnoses = reaction(({ directory, place }) =>
-  when(Locating.admit({ name: PLACES.output, path: directory }).responds({ place }))
-    .where(no(Locating._place({ place }).is({ contained: true, resolved: true })))
-    .then(
-      Diagnosing.report({
-        ...staged,
-        code: "OUTPUT_OUTSIDE_SITE",
-        message: "Configured paths.output must stay inside the site directory after resolving symbolic links.",
-      }),
-    ),
-);
+export const EscapingContentRootDiagnoses = escapesSite(ROOTS.content, "content", "SOURCE_OUTSIDE_SITE");
+export const EscapingTemplateRootDiagnoses = escapesSite(ROOTS.templates, "templates", "SOURCE_OUTSIDE_SITE");
+export const EscapingPublicRootDiagnoses = escapesSite(ROOTS.public, "public", "SOURCE_OUTSIDE_SITE");
+export const EscapingConfiguredOutputDiagnoses = escapesSite(PLACES.output, "output", "OUTPUT_OUTSIDE_SITE");
 
 export const OutputOverlappingSourceRootDiagnoses = reaction(({ publication, root, source }) =>
   when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "settings", transitioned: true }))

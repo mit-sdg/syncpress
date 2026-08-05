@@ -2115,9 +2115,9 @@ then
 ### fullSite.EscapingConfiguredOutputDiagnoses
 
 ```reaction
-when Locating.admit (name: "output", path: directory, place)
+when Locating.admit (name: "output", path: directory, place: admitted)
 where
-  no Locating._place (place) has (contained: true, resolved: true)
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
   Diagnosing.report (code: "OUTPUT_OUTSIDE_SITE", message: "Configured paths.output must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
 ```
@@ -2125,9 +2125,9 @@ then
 ### fullSite.EscapingContentRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "content", path: directory, place)
+when Locating.admit (name: "content", path: directory, place: admitted)
 where
-  no Locating._place (place) has (contained: true, resolved: true)
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
   Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.content must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
 ```
@@ -2135,9 +2135,9 @@ then
 ### fullSite.EscapingPublicRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "public", path: directory, place)
+when Locating.admit (name: "public", path: directory, place: admitted)
 where
-  no Locating._place (place) has (contained: true, resolved: true)
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
   Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.public must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
 ```
@@ -2145,9 +2145,9 @@ then
 ### fullSite.EscapingTemplateRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "templates", path: directory, place)
+when Locating.admit (name: "templates", path: directory, place: admitted)
 where
-  no Locating._place (place) has (contained: true, resolved: true)
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
   Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.templates must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
 ```

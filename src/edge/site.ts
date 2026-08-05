@@ -20,12 +20,15 @@ type Summary = {
   diagnostics: FormedDiagnostic[];
 };
 
+/** The wire answers an absent value as null; this package's own API answers it as undefined. */
+const absent = <T>(value: T | null): T | undefined => value ?? undefined;
+
 function normalizeDiagnostics(diagnostics: readonly FormedDiagnostic[]): Diagnostic[] {
   return diagnostics.map(({ source, line, column, ...diagnostic }) => ({
     ...diagnostic,
-    source: source ?? undefined,
-    line: line ?? undefined,
-    column: column ?? undefined,
+    source: absent(source),
+    line: absent(line),
+    column: absent(column),
   }));
 }
 
@@ -87,20 +90,20 @@ export async function inspectSite(projectDirectory: string, target: string) {
     : inspection.template;
   const diagnostics = inspection.diagnostics.map(({ related, source: origin, line, column, ...diagnostic }) => ({
     ...diagnostic,
-    source: origin ?? undefined,
-    line: line ?? undefined,
-    column: column ?? undefined,
+    source: absent(origin),
+    line: absent(line),
+    column: absent(column),
     related: related.map(({ line: relatedLine, column: relatedColumn, ...relation }) => ({
       ...relation,
-      line: relatedLine ?? undefined,
-      column: relatedColumn ?? undefined,
+      line: absent(relatedLine),
+      column: absent(relatedColumn),
     })),
   }));
 
   return {
     target,
     owner,
-    route: inspection.route.address ?? undefined,
+    route: absent(inspection.route.address),
     source: source === undefined ? undefined : { path: source.path!, digest: source.digest! },
     template: template === undefined ? undefined : { name: template.name!, digest: template.digest!, tree: template.tree },
     layers: inspection.layers,
@@ -109,14 +112,14 @@ export async function inspectSite(projectDirectory: string, target: string) {
       ? undefined
       : {
           ...inspection.rendering,
-          body: inspection.rendering.body ?? undefined,
-          layout: inspection.rendering.layout ?? undefined,
+          body: absent(inspection.rendering.body),
+          layout: absent(inspection.rendering.layout),
         },
     renderings: inspection.renderings,
     memberships: inspection.memberships,
     dependencies: {
       state: [{ state: inspection.dependencies.state }],
-      reason: inspection.dependencies.reason ?? undefined,
+      reason: absent(inspection.dependencies.reason),
       inputs: inspection.dependencies.inputs,
     },
     outputs: inspection.outputs,

@@ -1,4 +1,4 @@
-import { answer, createSyncpressRuntime, type Gateway } from "./application.ts";
+import { answer, createSyncpressRuntime, reason, type Gateway } from "./application.ts";
 import { watchSite, type SiteWatcher } from "./watch.ts";
 
 export type DevelopmentServer = { host: string; port: number; close(): Promise<void> };
@@ -18,14 +18,15 @@ export async function serveSite(
     "Could not serve the site",
   );
 
-  const publish = (directory: string): void => {
-    void gateway.invoke("/serve/publish", { server: opened.server, directory });
+  const publish = async (directory: string): Promise<void> => {
+    const published = await gateway.invoke("/serve/publish", { server: opened.server, directory });
+    if (!published.ok) options.onError?.(new Error(`Could not serve the site: ${reason(published.error)}`));
   };
 
   let watcher: SiteWatcher;
   try {
     watcher = await watchSite(projectDirectory, destination, {
-      onBuild: (_result, outputDirectory) => publish(outputDirectory),
+      onBuild: (_result, outputDirectory) => void publish(outputDirectory),
       onError: options.onError,
     });
   } catch (error) {
