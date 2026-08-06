@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
-import { buildSite, inspectSite, serveSite, watchSite } from "../../src/edge.ts";
+import { buildSite, inspectSite, serveSite, watchSite } from "../../src/syncpress.ts";
 
 const exampleDirectory = resolve(import.meta.dir, "../../example");
 const goldenPath = resolve(import.meta.dir, "../golden/example-site.json");

@@ -1,142 +1,88 @@
 import { describe, expect, test } from "bun:test";
-import { CommandingConcept, InvalidArguments, InvalidReport, InvalidUsage } from "./commanding.ts";
+import {
+  CommandingConcept,
+  InvalidArguments,
+  InvalidCommand,
+  InvalidExitCode,
+  InvalidStream,
+  InvalidText,
+} from "./commanding.ts";
 import { commanding as registration } from "./registry.ts";
 
-function recorded() {
+function recorded(arguments_: readonly string[] = []) {
   const written: [string, string][] = [];
-  return { written, commanding: new CommandingConcept((stream, text) => written.push([stream, text])) };
+  const exits: number[] = [];
+  const commanding = new CommandingConcept({
+    arguments: () => arguments_,
+    write: (stream, text) => written.push([stream, text]),
+    exit: (code) => exits.push(code),
+  });
+  return { commanding, exits, written };
 }
 
 describe("Commanding", () => {
-  test("its principle: every supported command line reads as one checked request", () => {
-    const { commanding } = recorded();
+  test("its principle: an invocation can be read, answered, and assigned an outcome", () => {
+    const { commanding, exits, written } = recorded(["publish", "notes"]);
 
-    expect(commanding.interpret({ arguments: [] })).toMatchObject({ name: "help", directory: "." });
-    expect(commanding.interpret({ arguments: ["--help"] })).toMatchObject({ name: "help" });
-    expect(commanding.interpret({ arguments: ["build", "./site", "out"] })).toMatchObject({
-      name: "build",
-      directory: "./site",
-      destination: "out",
-      port: null,
-      target: null,
+    expect(commanding.capture({ arguments: null })).toEqual({ words: ["publish", "notes"] });
+    expect(commanding.capture({ arguments: ["inspect", "entry"] })).toEqual({ words: ["inspect", "entry"] });
+    expect(commanding.recognize({ name: "publish", operands: ["notes"] })).toEqual({
+      name: "publish",
+      operands: ["notes"],
     });
-    expect(commanding.interpret({ arguments: ["build", "--watch"] })).toMatchObject({
-      name: "watch",
-      directory: ".",
-      destination: null,
-    });
-    expect(commanding.interpret({ arguments: ["dev", "--port", "8080"] })).toMatchObject({
-      name: "develop",
-      directory: ".",
-      port: 8080,
-    });
-    expect(commanding.interpret({ arguments: ["dev"] })).toMatchObject({ name: "develop", port: 3000 });
-    expect(commanding.interpret({ arguments: ["inspect", "/posts/first/"] })).toMatchObject({
-      name: "inspect",
-      target: "/posts/first/",
-      directory: ".",
-    });
-    expect(commanding.interpret({ arguments: ["inspect", "/posts/first/", "./site"] })).toMatchObject({
-      directory: "./site",
-    });
-  });
+    commanding.write({ stream: "output", text: "Published notes." });
+    commanding.write({ stream: "error", text: "One entry was skipped." });
+    expect(commanding.exit({ code: 2 })).toEqual({ code: 2 });
 
-  test("anything outside the grammar is refused with the usage text", () => {
-    const { commanding } = recorded();
-    for (
-      const args of [
-        ["build", "a", "b", "c"],
-        ["publish"],
-        ["inspect"],
-        ["inspect", "a", "b", "c"],
-        ["dev", "--port", "0"],
-        ["dev", "--port", "70000"],
-        ["dev", "--port", "eight"],
-        ["dev", "a", "b", "c"],
-        ["--help", "extra"],
-      ]
-    ) {
-      expect(() => commanding.interpret({ arguments: args })).toThrow(InvalidUsage);
-    }
-    expect(() => commanding.interpret({ arguments: ["build", 1] as unknown as string[] })).toThrow(InvalidArguments);
-    expect(commanding._misuse().misuse).toStartWith("Invalid usage.\n\n");
-    expect(commanding._misuse().misuse).toContain(commanding._usage().usage);
-  });
-
-  test("reports reach the operator's streams in the order they were said", () => {
-    const { commanding, written } = recorded();
-
-    commanding.say({ text: "first" });
-    commanding.warn({ text: "second" });
-    const summarized = commanding.summarize({ pages: 1, files: 1, written: 0, replaced: 0, kept: 1, removed: 0 });
-
-    expect(summarized.text).toBe("Built 1 page from 1 input file (0 written, 0 replaced, 1 kept, 0 removed).");
-    expect(commanding.summarize({ pages: 2, files: 3, written: 3, replaced: 0, kept: 0, removed: 1 }).text).toBe(
-      "Built 2 pages from 3 input files (3 written, 0 replaced, 0 kept, 1 removed).",
-    );
     expect(written).toEqual([
-      ["output", "first"],
-      ["error", "second"],
-      ["output", summarized.text],
-      ["output", "Built 2 pages from 3 input files (3 written, 0 replaced, 0 kept, 1 removed)."],
+      ["output", "Published notes."],
+      ["error", "One entry was skipped."],
     ]);
-    commanding.announce({ directory: "./site", host: "127.0.0.1", port: 3000 });
-    expect(written.at(-1)).toEqual(["output", "Serving ./site at http://127.0.0.1:3000/"]);
-    expect(() => commanding.announce({ directory: "./site", host: "127.0.0.1", port: 0 })).toThrow(InvalidReport);
-
-    expect(() => commanding.say({ text: 1 as unknown as string })).toThrow(InvalidReport);
-    expect(() => commanding.summarize({ pages: -1, files: 0, written: 0, replaced: 0, kept: 0, removed: 0 }))
-      .toThrow(InvalidReport);
+    expect(exits).toEqual([2]);
   });
 
-  test("a process hold releases its listeners on the operator's stop request", async () => {
-    let stop: ((reason: "interrupt" | "terminate") => void) | undefined;
-    let listening = 0;
-    const commanding = new CommandingConcept(
-      () => {},
-      (ended) => {
-        stop = ended;
-        listening += 1;
-        return () => {
-          listening -= 1;
-        };
-      },
-    );
-
-    const holding = commanding.hold();
-    await Promise.resolve();
-    expect(commanding._holding()).toEqual({ holding: 1 });
-    expect(listening).toBe(1);
-    stop!("interrupt");
-    const held = await holding;
-    expect(commanding._hold({ hold: held.hold })).toEqual([{ state: "released", reason: "interrupt" }]);
-    expect(commanding._holding()).toEqual({ holding: 0 });
-    expect(listening).toBe(0);
-  });
-
-  test("sets a validated process exit status", () => {
+  test("captures only ordinary dense text lists and returns a copy", () => {
     const { commanding } = recorded();
-    const previous = process.exitCode;
-    try {
-      expect(commanding.exit({ code: 1 })).toEqual({ code: 1 });
-      expect(process.exitCode).toBe(1);
-      expect(() => commanding.exit({ code: 256 })).toThrow(InvalidReport);
-    } finally {
-      process.exitCode = previous;
+    const words = ["build"];
+    const captured = commanding.capture({ arguments: words });
+    words.push("later");
+    expect(captured).toEqual({ words: ["build"] });
+
+    const sparse = new Array<string>(1);
+    const extra = ["build"] as string[] & { option?: string };
+    extra.option = "watch";
+    for (const value of [sparse, extra, ["build", 1]]) {
+      expect(() => commanding.capture({ arguments: value as string[] })).toThrow(InvalidArguments);
     }
   });
 
-  test("registry exposes every refusal and query promise", () => {
+  test("validates stream names and text before writing", () => {
+    const { commanding, written } = recorded();
+    expect(() => commanding.write({ stream: "log", text: "hello" })).toThrow(InvalidStream);
+    expect(() => commanding.write({ stream: "output", text: "\ud800" })).toThrow(InvalidText);
+    expect(written).toEqual([]);
+  });
+
+  test("recognizes only named commands with ordinary text operands", () => {
+    const { commanding } = recorded();
+    expect(() => commanding.recognize({ name: "", operands: [] })).toThrow(InvalidCommand);
+    expect(() => commanding.recognize({ name: "build", operands: [1] as unknown as string[] })).toThrow(InvalidCommand);
+  });
+
+  test("validates exit status before changing the environment", () => {
+    const { commanding, exits } = recorded();
+    for (const code of [-1, 1.5, 256]) expect(() => commanding.exit({ code })).toThrow(InvalidExitCode);
+    expect(exits).toEqual([]);
+  });
+
+  test("registry exposes the generic refusals and no state queries", () => {
     expect(Object.keys(registration.refusals ?? {}).sort()).toEqual([
       "INVALID_ARGUMENTS",
-      "INVALID_REPORT",
-      "INVALID_USAGE",
+      "INVALID_COMMAND",
+      "INVALID_EXIT_CODE",
+      "INVALID_STREAM",
+      "INVALID_TEXT",
     ]);
-    expect(registration.specification.queries.map(({ name, promise }) => [name, promise])).toEqual([
-      ["_hold", "optional"],
-      ["_holding", "one"],
-      ["_usage", "one"],
-      ["_misuse", "one"],
-    ]);
+    expect(registration.specification.queries).toEqual([]);
   });
 });

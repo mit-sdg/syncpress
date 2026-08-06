@@ -12,9 +12,10 @@ refactoring appear when documented behavior changes.
 - Moved every remaining host interaction into a semantic concept. Filing now
   replaces complete host-backed trees atomically; Locating observes a run's path
   plan; Watching owns change observation and failure; Serving owns preview
-  publication and HTTP safety; Commanding owns arguments, streams, signals, and
-  exit status; and Emitting serializes destination reconciliation. Build and
-  inspection sequencing remains declarative sync-engine composition.
+  publication and HTTP safety; generic Commanding owns command-line invocation,
+  streams, and exit status; Attending owns process stop holds; and Emitting
+  serializes destination reconciliation. Syncpress grammar, report wording,
+  build sequencing, and package sessions remain application composition.
 - `syncpress dev` now names the site directory as it was written on the command
   line rather than as an absolute path.
 - Report project problems as build diagnostics. A missing site directory, an

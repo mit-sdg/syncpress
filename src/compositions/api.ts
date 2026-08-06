@@ -1,4 +1,6 @@
-import { answer, BATCH_TIMEOUT_MS, createSyncpressRuntime, reason, type Gateway } from "./application.ts";
+import { createGateway } from "@mit-sdg/sync-engine/boundary";
+import type { SyncpressWire } from "../../generated/wire.ts";
+import { assembleSyncpress } from "../assembly.ts";
 
 type Diagnostic = {
   severity: "error" | "warning";
@@ -19,8 +21,29 @@ type Summary = {
   diagnosis: { text: string };
   diagnostics: FormedDiagnostic[];
 };
+type GatewayError =
+  | { kind: "domain"; value: unknown }
+  | { kind: "framework"; code: string; detail?: string };
+type Answer<T> = { ok: true; value: T } | { ok: false; error: GatewayError };
 
-/** The wire answers an absent value as null; this package's own API answers it as undefined. */
+export function createSyncpressRuntime() {
+  const application = assembleSyncpress();
+  return { application, gateway: createGateway<SyncpressWire>({ application }) };
+}
+
+export type Gateway = ReturnType<typeof createSyncpressRuntime>["gateway"];
+export const BATCH_TIMEOUT_MS = 2_147_483_647;
+
+export function reason(error: GatewayError): string {
+  if (error.kind !== "domain") return error.detail ?? error.code;
+  return typeof error.value === "string" ? error.value : JSON.stringify(error.value);
+}
+
+export function answer<T>(result: Answer<T>, context: string): T {
+  if (!result.ok) throw new Error(`${context}: ${reason(result.error)}`);
+  return result.value;
+}
+
 const absent = <T>(value: T | null): T | undefined => value ?? undefined;
 
 function normalizeDiagnostics(diagnostics: readonly FormedDiagnostic[]): Diagnostic[] {
@@ -37,14 +60,12 @@ async function readSummary(gateway: Gateway): Promise<Summary> {
   return read.summary as unknown as Summary;
 }
 
-/** The failure to raise: the answer the application gave, and every diagnostic that explains it. */
 async function refusal(gateway: Gateway, context: string, detail: string): Promise<Error> {
   await gateway.whenIdle();
   const { diagnosis } = await readSummary(gateway);
   return new Error(`${context}: ${detail}\n\nDiagnostics:\n${diagnosis.text}`);
 }
 
-/** Build the project rooted at one host directory into one reconciled output tree. */
 export async function buildSite(projectDirectory = ".", destination?: string) {
   const { gateway } = createSyncpressRuntime();
   const built = await gateway.invoke(
@@ -68,7 +89,6 @@ export async function buildSite(projectDirectory = ".", destination?: string) {
   };
 }
 
-/** Report the current provenance of one page or route without publishing anything. */
 export async function inspectSite(projectDirectory: string, target: string) {
   const { gateway } = createSyncpressRuntime();
   const inspected = await gateway.invoke(

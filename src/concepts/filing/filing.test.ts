@@ -3,7 +3,7 @@ import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { syncpressComputations } from "../../computations.ts";
+import { syncpressComputations } from "../../compositions/computations.ts";
 import {
   FileNotFound,
   FilingConcept,
@@ -238,7 +238,6 @@ test("path helpers share one canonical directory grammar", () => {
   expect(syncpressComputations.joinPath({ prefix: "posts/design", name: "page.md" })).toBe("posts/design/page.md");
   expect(syncpressComputations.directoryPath({ path: "page.md" })).toBe("");
   expect(syncpressComputations.directoryPath({ path: "posts/design/page.md" })).toBe("posts/design");
-  expect(syncpressComputations.pathName({ path: "posts/design/page.md" })).toBe("page.md");
   expect(syncpressComputations.relativePath({ path: "posts/design/page.md", prefix: "posts" })).toBe("design/page.md");
   expect(syncpressComputations.relativePath({ path: "other/page.md", prefix: "posts" })).toBeNull();
 
@@ -250,7 +249,6 @@ test("path helpers share one canonical directory grammar", () => {
   }
   for (const path of ["", "./page.md", "posts//page.md", "../page.md"]) {
     expect(syncpressComputations.directoryPath({ path })).toBeNull();
-    expect(syncpressComputations.pathName({ path })).toBeNull();
   }
 });
 

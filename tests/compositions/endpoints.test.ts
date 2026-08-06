@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSyncpressRuntime } from "../../src/edge/application.ts";
+import { createSyncpressRuntime } from "../../src/compositions/api.ts";
 
 const BATCH_TIMEOUT_MS = 60_000;
 
@@ -167,4 +167,20 @@ test("inspection answers a missing target without publishing anything", async ()
 
 test("the summary of an application that has built nothing is empty", async () => {
   expect(await runtime().summary()).toMatchObject({ pages: 0, files: 0, diagnostics: [] });
+});
+
+test("command composition maps Syncpress grammar onto generic command selections", async () => {
+  const { gateway } = createSyncpressRuntime();
+  expect(await gateway.invoke("/cli/interpret", { arguments: ["build", "./site", "out"] })).toEqual({
+    ok: true,
+    value: { name: "build", operands: ["./site", "out"] },
+  });
+  expect(await gateway.invoke("/cli/interpret", { arguments: ["dev", "--port", "8080"] })).toEqual({
+    ok: true,
+    value: { name: "develop", operands: [".", "8080"] },
+  });
+  expect(await gateway.invoke("/cli/interpret", { arguments: ["unknown"] })).toEqual({
+    ok: false,
+    error: { kind: "domain", value: "INVALID_USAGE" },
+  });
 });

@@ -1,5 +1,6 @@
 import picomatch from "picomatch";
 import { basename, dirname, join, resolve as resolveNative } from "node:path";
+import { syncpressCommandComputations } from "./command-line.ts";
 
 type AddressKind = "relative" | "absolute" | "external" | "fragment";
 type ParsedAddress = { address: string; segments: string[]; directory: boolean };
@@ -83,12 +84,6 @@ function directoryPath(path: unknown): string | undefined {
   if (typeof path !== "string" || pathStatus(path) !== "canonical") return undefined;
   const separator = path.lastIndexOf("/");
   return separator === -1 ? "" : path.slice(0, separator);
-}
-
-function pathName(path: unknown): string | undefined {
-  return typeof path === "string" && pathStatus(path) === "canonical"
-    ? path.slice(path.lastIndexOf("/") + 1)
-    : undefined;
 }
 
 function encodeSegment(segment: string): string {
@@ -235,7 +230,6 @@ export const syncpressComputations = {
   relativePath: ({ path, prefix }: { path: unknown; prefix: unknown }) => optional(relativePath(path, prefix)),
   joinPath: ({ prefix, name }: { prefix: unknown; name: unknown }) => optional(joinPath(prefix, name)),
   directoryPath: ({ path }: { path: unknown }) => optional(directoryPath(path)),
-  pathName: ({ path }: { path: unknown }) => optional(pathName(path)),
   patternHasResult: ({ pattern, path, matched }: { pattern: unknown; path: unknown; matched: unknown }) => {
     if (typeof pattern !== "string" || typeof path !== "string" || typeof matched !== "boolean") return false;
     try {
@@ -244,4 +238,5 @@ export const syncpressComputations = {
       return false;
     }
   },
+  ...syncpressCommandComputations,
 };

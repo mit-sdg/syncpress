@@ -3,7 +3,7 @@ import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { lstat, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publicationTransactionPrefix } from "../../computations.ts";
+import { publicationTransactionPrefix } from "../../compositions/computations.ts";
 import {
   AttemptExhausted,
   DestinationNotDirected,

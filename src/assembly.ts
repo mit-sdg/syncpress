@@ -10,5 +10,3 @@ export function assembleSyncpress() {
     composition: { fullSite },
   });
 }
-
-export type SyncpressApplication = ReturnType<typeof assembleSyncpress>;

@@ -13,81 +13,47 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type AppWideError = never;
 
 export type SyncpressWire = {
-  "/cli/announce": {
-    input: {
-      "files": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["files"]>>;
-      "kept": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["kept"]>>;
-      "pages": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["pages"]>>;
-      "removed": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["removed"]>>;
-      "replaced": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["replaced"]>>;
-      "written": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>[0], ["written"]>>;
-    };
-    output: {
-      "text": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["summarize"]>>, ["text"]>>;
-    };
-    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
-  };
   "/cli/exit": {
     input: {
       "code": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["exit"]>[0], ["code"]>>;
     };
     output: Record<string, never>;
-    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
+    error: { error: AppWideError | "INVALID_EXIT_CODE" | "INVALID_INPUT" };
   };
   "/cli/hold": {
     input: Record<string, never>;
     output: {
-      "reason": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["hold"]>>, ["reason"]>>;
+      "reason": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Attending"]["hold"]>>, ["reason"]>>;
     };
     error: { error: AppWideError };
   };
   "/cli/interpret": {
     input: {
-      "arguments": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>[0], ["arguments"]>>;
+      "arguments": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["capture"]>[0], ["arguments"]>>;
     };
     output: {
-      "destination": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["destination"]>>;
-      "directory": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["directory"]>>;
-      "name": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["name"]>>;
-      "port": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["port"]>>;
-      "target": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["interpret"]>>, ["target"]>>;
+      "name": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["recognize"]>[0], ["name"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["recognize"]>>, ["name"]>]>>;
+      "operands": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["recognize"]>[0], ["operands"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["recognize"]>>, ["operands"]>]>>;
     };
-    error: { error: AppWideError | "INVALID_ARGUMENTS" | "INVALID_INPUT" | "INVALID_USAGE" };
+    error: { error: AppWideError | "INVALID_ARGUMENTS" | "INVALID_COMMAND" | "INVALID_INPUT" | "INVALID_USAGE" };
   };
   "/cli/misuse": {
     input: Record<string, never>;
-    output: {
-      "misuse": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["_misuse"]>>>, ["misuse"]>>;
-    };
-    error: { error: AppWideError };
-  };
-  "/cli/say": {
-    input: {
-      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["say"]>[0], ["text"]>>;
-    };
     output: Record<string, never>;
-    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
-  };
-  "/cli/serving": {
-    input: {
-      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["announce"]>[0], ["directory"]>>;
-      "host": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["announce"]>[0], ["host"]>>;
-      "port": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["announce"]>[0], ["port"]>>;
-    };
-    output: Record<string, never>;
-    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
+    error: { error: AppWideError | "INVALID_STREAM" | "INVALID_TEXT" };
   };
   "/cli/usage": {
     input: Record<string, never>;
     output: Record<string, never>;
-    error: { error: AppWideError | "INVALID_REPORT" };
+    error: { error: AppWideError | "INVALID_STREAM" | "INVALID_TEXT" };
   };
-  "/cli/warn": {
+  "/cli/write": {
     input: {
-      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["warn"]>[0], ["text"]>>;
+      "stream": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["write"]>[0], ["stream"]>>;
+      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["write"]>[0], ["text"]>>;
     };
     output: Record<string, never>;
-    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_REPORT" };
+    error: { error: AppWideError | "INVALID_INPUT" | "INVALID_STREAM" | "INVALID_TEXT" };
   };
   "/serve/close": {
     input: {

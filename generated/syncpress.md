@@ -7,6 +7,25 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
+### Attending
+
+**Purpose.** Hold long-running work until its operator asks the process to stop, so the work
+can clean up instead of being terminated mid-transition.
+
+**Principle.** Ada starts a hold. It remains pending while she leaves the process alone. She
+requests an interrupt; the hold is released and returns `interrupt`, and no
+process listener remains. A later hold waits independently and returns
+`terminate` when she makes that request.
+
+Actions:
+
+- `hold (…)`
+
+Queries (standing questions the state answers):
+
+- `_hold (hold)` — promises at most one row
+- `_holding (…)` — promises exactly one row
+
 ### Cataloging
 
 **Purpose.** Admit projected items into named catalogs under declared conditions and keep
@@ -39,38 +58,24 @@ Queries (standing questions the state answers):
 
 ### Commanding
 
-**Purpose.** Own one Syncpress operator interaction from process arguments through reports
-and a stop request, so grammar, streams, signals, and exit status cannot drift
-across unrelated boundary adapters.
+**Purpose.** Expose one command-line invocation's words, application-selected command,
+operator streams, and eventual exit status so an application can interact with
+it without consulting ambient process state or hiding grammar in the host
+boundary.
 
-**Principle.** Ada runs the tool with no arguments and gets the help request, whose answer is
-the usage text. She runs `build ./site out` and gets a build request rooted at
-`./site` publishing into `out`. She runs `dev --port 8080` and gets a develop
-request on port 8080 with the default directory. She runs `inspect /posts/first/`
-and gets an inspect request for that target. She runs `build a b c` and is
-refused, with the usage text attached. Reporting a line puts it on the operator's
-ordinary output; summarizing a run puts one counted sentence there; announcing a
-served directory puts its address there; and warning them puts it on their error
-output. A hold ends
-when she interrupts the process, and a failed command records a nonzero process
-exit status.
+**Principle.** Ada invokes a tool with the words `publish notes`. Capturing the invocation
+returns those exact words. Her application recognizes them as command `publish`
+with operand `notes`; Commanding returns that selection without choosing it. The
+tool writes a completion line to her ordinary output and a warning to her error
+output, then selects exit status 2. Supplying an explicit word list instead makes
+the same interaction available to an embedding host.
 
 Actions:
 
-- `announce (directory, host, port)` — may refuse `INVALID_REPORT`
-- `exit (code)` — may refuse `INVALID_REPORT`
-- `hold (…)`
-- `interpret (arguments)` — may refuse `INVALID_ARGUMENTS`, `INVALID_USAGE`
-- `say (text)` — may refuse `INVALID_REPORT`
-- `summarize (files, kept, pages, removed, replaced, written)` — may refuse `INVALID_REPORT`
-- `warn (text)` — may refuse `INVALID_REPORT`
-
-Queries (standing questions the state answers):
-
-- `_hold (hold)` — promises at most one row
-- `_holding (…)` — promises exactly one row
-- `_misuse (…)` — promises exactly one row
-- `_usage (…)` — promises exactly one row
+- `capture (arguments)` — may refuse `INVALID_ARGUMENTS`
+- `exit (code)` — may refuse `INVALID_EXIT_CODE`
+- `recognize (name, operands)` — may refuse `INVALID_COMMAND`
+- `write (stream, text)` — may refuse `INVALID_STREAM`, `INVALID_TEXT`
 
 ### Converting
 
@@ -878,6 +883,24 @@ sitemap page — inputs (); outputs (owner, address, url); bindings () — answe
 ```
 
 ```view
+the Syncpress command represented by words (words) — inputs (words); outputs (name, operands); bindings () — answers at most one (name, operands)
+  where
+    syncpressCommandValid (words)
+    name is syncpressCommandName (words)
+    operands is syncpressCommandOperands (words)
+```
+
+```view
+the Syncpress misuse report — inputs (); outputs (text); bindings () — answers exactly one (text)
+  where text is syncpressMisuse
+```
+
+```view
+the Syncpress usage report — inputs (); outputs (text); bindings () — answers exactly one (text)
+  where text is syncpressUsage
+```
+
+```view
 the inspection owner of target (target) — inputs (target); outputs (owner); bindings (root) — answers at most one (owner)
   where Routing._owner (address: target) has (owner)
   where
@@ -1261,48 +1284,22 @@ then
   Phasing.advance (attempt, job)
 ```
 
-### fullSite.AnnounceBuild
-
-```reaction
-when RequestBoundary.request (files, kept, pages, path: "/cli/announce", removed, replaced, requestId, written)
-then
-  Commanding.summarize (files, kept, pages, removed, replaced, written)
-```
-
-### fullSite.AnnounceBuild#2
-
-```reaction
-when Commanding.summarize (files, kept, pages, removed, replaced, written, text), asked by fullSite.AnnounceBuild
-where
-  earlier, RequestBoundary.request (files, kept, pages, path: "/cli/announce", removed, replaced, requestId, written)
-then
-  RequestBoundary.respond (requestId, text)
-```
-
 ### fullSite.AnnounceMisuse
 
 ```reaction
 when RequestBoundary.request (path: "/cli/misuse", requestId)
 where
-  Commanding._misuse () has (misuse)
+  view "the Syncpress misuse report" has (text)
 then
-  RequestBoundary.respond (misuse, requestId)
+  Commanding.write (stream: "error", text)
 ```
 
-### fullSite.AnnounceServer
+### fullSite.AnnounceMisuse#2
 
 ```reaction
-when RequestBoundary.request (directory, host, path: "/cli/serving", port, requestId)
-then
-  Commanding.announce (directory, host, port)
-```
-
-### fullSite.AnnounceServer#2
-
-```reaction
-when Commanding.announce (directory, host, port), asked by fullSite.AnnounceServer
+when Commanding.write (stream: "error", text), asked by fullSite.AnnounceMisuse
 where
-  earlier, RequestBoundary.request (directory, host, path: "/cli/serving", port, requestId)
+  earlier, RequestBoundary.request (path: "/cli/misuse", requestId)
 then
   RequestBoundary.respond (requestId)
 ```
@@ -1312,15 +1309,15 @@ then
 ```reaction
 when RequestBoundary.request (path: "/cli/usage", requestId)
 where
-  Commanding._usage () has (usage)
+  view "the Syncpress usage report" has (text)
 then
-  Commanding.say (text: usage)
+  Commanding.write (stream: "output", text)
 ```
 
 ### fullSite.AnnounceUsage#2
 
 ```reaction
-when Commanding.say (text: usage), asked by fullSite.AnnounceUsage
+when Commanding.write (stream: "output", text), asked by fullSite.AnnounceUsage
 where
   earlier, RequestBoundary.request (path: "/cli/usage", requestId)
 then
@@ -2346,13 +2343,13 @@ then
 ```reaction
 when RequestBoundary.request (path: "/cli/hold", requestId)
 then
-  Commanding.hold ()
+  Attending.hold ()
 ```
 
 ### fullSite.HoldUntilStopped#2
 
 ```reaction
-when Commanding.hold (reason), asked by fullSite.HoldUntilStopped
+when Attending.hold (reason), asked by fullSite.HoldUntilStopped
 where
   earlier, RequestBoundary.request (path: "/cli/hold", requestId)
 then
@@ -2476,19 +2473,40 @@ then
 ### fullSite.InterpretCommandLine
 
 ```reaction
-when RequestBoundary.request (arguments: args, path: "/cli/interpret", requestId)
+when RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
 then
-  Commanding.interpret (arguments: args)
+  Commanding.capture (arguments: supplied)
 ```
 
-### fullSite.InterpretCommandLine#2
+### fullSite.InterpretCommandLine:invalid#2
 
 ```reaction
-when Commanding.interpret (arguments: args, destination, directory, name, port, target), asked by fullSite.InterpretCommandLine
+when Commanding.capture (arguments: supplied, words), asked by fullSite.InterpretCommandLine
 where
-  earlier, RequestBoundary.request (arguments: args, path: "/cli/interpret", requestId)
+  no view "the Syncpress command represented by words (words)" with (words)
+  earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
 then
-  RequestBoundary.respond (destination, directory, name, port, requestId, target)
+  RequestBoundary.respond (error: "INVALID_USAGE", requestId)
+```
+
+### fullSite.InterpretCommandLine:recognized#2
+
+```reaction
+when Commanding.capture (arguments: supplied, words), asked by fullSite.InterpretCommandLine
+where
+  view "the Syncpress command represented by words (words)" with (words) has (name, operands)
+then
+  Commanding.recognize (name, operands)
+```
+
+### fullSite.InterpretCommandLine:recognized#3
+
+```reaction
+when Commanding.recognize (name, operands), asked by fullSite.InterpretCommandLine:recognized#2
+where
+  earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
+then
+  RequestBoundary.respond (name, operands, requestId)
 ```
 
 ### fullSite.InvalidBodyReferencesDiagnose
@@ -3346,24 +3364,6 @@ then
   Routing.claim (address, owner)
 ```
 
-### fullSite.SayToOperator
-
-```reaction
-when RequestBoundary.request (path: "/cli/say", requestId, text)
-then
-  Commanding.say (text)
-```
-
-### fullSite.SayToOperator#2
-
-```reaction
-when Commanding.say (text), asked by fullSite.SayToOperator
-where
-  earlier, RequestBoundary.request (path: "/cli/say", requestId, text)
-then
-  RequestBoundary.respond (requestId)
-```
-
 ### fullSite.SetCommandLineExit
 
 ```reaction
@@ -3833,20 +3833,20 @@ then
   Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", scope: "page-rendering", severity: "error", source: sourcePath)
 ```
 
-### fullSite.WarnOperator
+### fullSite.WriteCommandLine
 
 ```reaction
-when RequestBoundary.request (path: "/cli/warn", requestId, text)
+when RequestBoundary.request (path: "/cli/write", requestId, stream, text)
 then
-  Commanding.warn (text)
+  Commanding.write (stream, text)
 ```
 
-### fullSite.WarnOperator#2
+### fullSite.WriteCommandLine#2
 
 ```reaction
-when Commanding.warn (text), asked by fullSite.WarnOperator
+when Commanding.write (stream, text), asked by fullSite.WriteCommandLine
 where
-  earlier, RequestBoundary.request (path: "/cli/warn", requestId, text)
+  earlier, RequestBoundary.request (path: "/cli/write", requestId, stream, text)
 then
   RequestBoundary.respond (requestId)
 ```
@@ -3858,12 +3858,9 @@ object or lacks a required key. The response uses `INVALID_INPUT` and names
 the path or missing key. A declared default fills an absent key. Endpoints
 not listed here have no explicit input contract.
 
-- `/cli/announce` — requires `files`, `kept`, `pages`, `removed`, `replaced`, `written`
 - `/cli/exit` — requires `code`
 - `/cli/interpret` — requires `arguments`
-- `/cli/say` — requires `text`
-- `/cli/serving` — requires `directory`, `host`, `port`
-- `/cli/warn` — requires `text`
+- `/cli/write` — requires `stream`, `text`
 - `/serve/close` — requires `server`
 - `/serve/open` — requires `host`, `port`
 - `/serve/publish` — requires `directory`, `server`

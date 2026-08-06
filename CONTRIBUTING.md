@@ -36,15 +36,20 @@ reviewing the resulting diff.
 
 This includes work against the host. The filesystem, the network, the process,
 and the clock are reached only from the concept that owns that interaction, and
-`tests/architecture.test.ts` enforces it: nothing in `src/edge/` may import a
-`node:` module, and neither may composition. A host adapter assembles an
-application and invokes its endpoints; anything else it would have done belongs
-to a concept.
+`tests/architecture.test.ts` enforces it. `src/syncpress.ts` only exports the public
+facade, `src/cli.ts` only starts the executable session, and composition may use
+pure host projections such as `node:path` but no filesystem, network, process,
+stream, signal, console, or timer effect. Those effects belong to concepts.
 
 Host APIs alone do not determine concept boundaries. Keep effects together when
 one purpose, principle, invariant, or lifecycle requires them; use registered
 pure computations for application naming policy; and do not split one operation
 into concepts that only forward paths or bytes through reactions.
+
+Package-facing normalization is in `src/compositions/api.ts`; watch, serving,
+and command sessions are in `src/compositions/sessions.ts`. They invoke typed
+endpoints and coordinate fresh application instances, but never reach the host
+directly.
 
 The repository-only `bun run site ...` command runs `src/cli.ts` directly. For
 example, `bun run site build ./example` builds the documentation fixture.

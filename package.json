@@ -6,7 +6,7 @@
   "exports": {
     ".": {
       "types": "./types/index.d.ts",
-      "import": "./dist/edge.js"
+      "import": "./dist/syncpress.js"
     }
   },
   "bin": {
@@ -30,7 +30,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/edge.ts src/cli.ts --outdir dist --target=node --packages=external --splitting --banner='#!/usr/bin/env node'",
+    "build": "rm -rf dist && bun build src/syncpress.ts src/cli.ts --outdir dist --target=node --packages=external --splitting --banner='#!/usr/bin/env node'",
     "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check --config generated.config.ts && tsc --noEmit",
     "generate": "sync-engine artifacts pin",
     "prepack": "bun run build",

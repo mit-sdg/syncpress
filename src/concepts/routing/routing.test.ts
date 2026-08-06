@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { syncpressComputations } from "../../computations.ts";
+import { syncpressComputations } from "../../compositions/computations.ts";
 import {
   AddressTaken,
   InvalidAddress,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { syncpressComputations } from "../../computations.ts";
+import { syncpressComputations } from "../../compositions/computations.ts";
 import { MalformedPattern, MatchingConcept } from "./matching.ts";
 
 function matched(_matching: MatchingConcept, pattern: string, path: string): boolean {

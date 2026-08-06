@@ -1,7 +1,3 @@
-import { failCli, runCli } from "./edge/cli.ts";
+import { runExecutable } from "./compositions/sessions.ts";
 
-try {
-  await runCli();
-} catch {
-  await failCli();
-}
+await runExecutable();

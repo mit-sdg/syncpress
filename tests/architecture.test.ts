@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BuildResult as DeclaredBuildResult, InspectionResult as DeclaredInspectionResult } from "../types/index.d.ts";
-import type { BuildResult, inspectSite } from "../src/edge/site.ts";
+import type { BuildResult, inspectSite } from "../src/compositions/api.ts";
 
 type InspectionResult = Awaited<ReturnType<typeof inspectSite>>;
 
@@ -38,7 +38,7 @@ test("composition depends only on vocabulary references and value contracts", as
 });
 
 test("host adapters never read concept state or import implementations", async () => {
-  for (const file of await typescriptFiles(join(root, "src", "edge"))) {
+  for (const file of [join(root, "src", "syncpress.ts"), join(root, "src", "cli.ts")]) {
     const source = await readFile(file, "utf8");
     expect(source, file).not.toContain("application.concepts.");
     expect(source, file).not.toContain("@syncpress/concepts/");
@@ -51,7 +51,7 @@ test("host adapters never read concept state or import implementations", async (
  * application and invokes its endpoints.
  */
 test("host adapters reach the host only through concepts", async () => {
-  const adapters = [...await typescriptFiles(join(root, "src", "edge")), join(root, "src", "cli.ts")];
+  const adapters = [join(root, "src", "syncpress.ts"), join(root, "src", "cli.ts")];
   for (const file of adapters) {
     const source = await readFile(file, "utf8");
     expect(source, file).not.toMatch(/from\s+["']node:/);
@@ -63,13 +63,14 @@ test("host adapters reach the host only through concepts", async () => {
 test("composition asks concepts for host work instead of doing it", async () => {
   for (const file of await typescriptFiles(join(root, "src", "compositions"))) {
     const source = await readFile(file, "utf8");
-    expect(source, file).not.toMatch(/from\s+["']node:/);
+    expect(source, file).not.toMatch(/from\s+["']node:(?:fs|http|https|net|process|timers)/);
+    expect(source, file).not.toMatch(/\bprocess\.|\bconsole\.|\bsetTimeout\b|\bsetInterval\b/);
   }
 });
 
 /** Computations may use pure host path projection, but never perform host effects. */
 test("computations perform no host effects", async () => {
-  const source = await readFile(join(root, "src", "computations.ts"), "utf8");
+  const source = await readFile(join(root, "src", "compositions", "computations.ts"), "utf8");
   expect(source).not.toMatch(/from\s+["']node:(?:fs|http|https|net|process|timers)/);
   expect(source).not.toMatch(/\bprocess\.|\bconsole\.|\bsetTimeout\b|\bsetInterval\b/);
 });

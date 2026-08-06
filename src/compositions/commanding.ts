@@ -1,63 +1,69 @@
-/**
- * The operator's side of the command line. One request interprets what they
- * typed; the rest report back to them on their own streams. What a request
- * asks for is carried out by the host adapter that owns a runtime for it.
- */
+/** Syncpress command policy applied to generic process-facing concepts. */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { compute, no, view, where } from "@mit-sdg/sync-engine/language";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
 
-const { Commanding } = conceptRefs;
+const { Attending, Commanding } = conceptRefs;
+
+export const SyncpressCommand = view(
+  "the Syncpress command represented by words (words)",
+  ({ words }, { name, operands }) =>
+    where(
+      computations.syncpressCommandValid({ words }),
+      compute(computations.syncpressCommandName, { words }, name),
+      compute(computations.syncpressCommandOperands, { words }, operands),
+    ),
+).optional();
+
+const SyncpressUsage = view(
+  "the Syncpress usage report",
+  (_input, { text }) => where(compute(computations.syncpressUsage, {}, text)),
+).one();
+
+const SyncpressMisuse = view(
+  "the Syncpress misuse report",
+  (_input, { text }) => where(compute(computations.syncpressMisuse, {}, text)),
+).one();
 
 export const InterpretCommandLine = endpoint(
   "/cli/interpret",
-  ({ args, name, directory, destination, target, port }) =>
-    receive({ arguments: args })
-      .then(Commanding.interpret({ arguments: args }).responds({ name, directory, destination, target, port }))
-      .then(respond({ name, directory, destination, target, port })),
+  ({ supplied, words, name, operands }) =>
+    receive({ arguments: supplied })
+      .then(Commanding.capture({ arguments: supplied }).responds({ words }))
+      .then(
+        where(SyncpressCommand({ words }).is({ name, operands }))
+          .then(Commanding.recognize({ name, operands }).responds({ name, operands }))
+          .then(respond({ name, operands }))
+          .named("recognized"),
+        where(no(SyncpressCommand({ words })))
+          .then(respond({ error: "INVALID_USAGE" }))
+          .named("invalid"),
+      ),
 );
 
-export const AnnounceUsage = endpoint("/cli/usage", ({ usage }) =>
+export const AnnounceUsage = endpoint("/cli/usage", ({ text }) =>
   receive({})
-    .where(Commanding._usage({}).is({ usage }))
-    .then(Commanding.say({ text: usage }).responds({}))
+    .where(SyncpressUsage({}).is({ text }))
+    .then(Commanding.write({ stream: "output", text }).responds({}))
     .then(respond({})),
 );
 
-export const AnnounceMisuse = endpoint("/cli/misuse", ({ misuse }) =>
+export const AnnounceMisuse = endpoint("/cli/misuse", ({ text }) =>
   receive({})
-    .where(Commanding._misuse({}).is({ misuse }))
-    .then(respond({ misuse })),
-);
-
-export const AnnounceBuild = endpoint(
-  "/cli/announce",
-  ({ pages, files, written, replaced, kept, removed, text }) =>
-    receive({ pages, files, written, replaced, kept, removed })
-      .then(Commanding.summarize({ pages, files, written, replaced, kept, removed }).responds({ text }))
-      .then(respond({ text })),
-);
-
-export const SayToOperator = endpoint("/cli/say", ({ text }) =>
-  receive({ text })
-    .then(Commanding.say({ text }).responds({}))
+    .where(SyncpressMisuse({}).is({ text }))
+    .then(Commanding.write({ stream: "error", text }).responds({}))
     .then(respond({})),
 );
 
-export const AnnounceServer = endpoint("/cli/serving", ({ directory, host, port }) =>
-  receive({ directory, host, port })
-    .then(Commanding.announce({ directory, host, port }).responds({}))
-    .then(respond({})),
-);
-
-export const WarnOperator = endpoint("/cli/warn", ({ text }) =>
-  receive({ text })
-    .then(Commanding.warn({ text }).responds({}))
+export const WriteCommandLine = endpoint("/cli/write", ({ stream, text }) =>
+  receive({ stream, text })
+    .then(Commanding.write({ stream, text }).responds({}))
     .then(respond({})),
 );
 
 export const HoldUntilStopped = endpoint("/cli/hold", ({ reason }) =>
   receive({})
-    .then(Commanding.hold({}).responds({ reason }))
+    .then(Attending.hold({}).responds({ reason }))
     .then(respond({ reason })),
 );
 
