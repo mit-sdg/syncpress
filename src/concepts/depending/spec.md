@@ -24,19 +24,28 @@ after settlement extends the retained graph without reopening an attempt; this
 allows independently scheduled tracking reactions to finish after the reaction
 that settles the result.
 
-## Text, Identity, And Reasons
+## Types
+
+```types
+Subject = Text
+  An opaque result key.
+
+Input = Text
+  An opaque dependency key in the same namespace as Subject.
+
+State = "building" | "current" | "stale"
+```
 
 Text is a well-formed Unicode string. Subjects and inputs are opaque Text in one
 shared namespace: an input may also be the subject of a result, which is how
 invalidation travels from one result to another. Depending does not require an
 input to have its own result.
 
-At most one result exists for a subject and at most one use exists for a result
-and input. Result and use identities are deterministic, collision-free encodings
-of their keys. Repeated beginnings, repeated uses, and drop followed by begin
-reuse those identities. Replacing a result's input set keeps its result identity;
-removing one input and adding another removes the old use and returns a different
-use identity.
+Result and use identities are deterministic, collision-free encodings of their
+keys. Repeated beginnings, repeated uses, and drop followed by begin reuse those
+identities. Replacing a result's input set keeps its result identity; removing
+one input and adding another removes the old use and returns a different use
+identity.
 
 A reason is the immediate input through which a result was first reached by the
 touch that made it stale. Direct dependents therefore name the touched input;
@@ -49,23 +58,17 @@ happened. Beginning a current result explicitly clears the previous reason.
 
 ```state
 a set of Results with
-  a unique subject Subject
-  a state State                 -- building, current, or stale
+  a subject Subject
+  a state State
   an optional reason Input
+  an attempt PositiveInteger
+  a settled Flag
+  a provisionalInputs set of Input
 
 a set of Uses with
   a result Result
   an input Input
 ```
-
-A result retains the Uses from its latest successful settlement. While a later
-attempt is building, it also collects a separate set of provisional inputs.
-Until the attempt settles, those provisional inputs are not Uses and do not
-participate in dependency traversal. A result with no successful settlement
-instead exposes the inputs from its most recent attempt as its Uses, so its
-first attempt can be invalidated. Starting another attempt discards that
-unsettled input set. A use received while a result is current is added directly
-to its retained Uses; it does not start or alter an attempt.
 
 ## Actions
 
@@ -138,7 +141,8 @@ touch (input: Input) : return (input: Input, count: Number)
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
   then
-    visit every direct and transitive dependent through uses, including through already-stale results
+    visit every direct and transitive dependent through Uses by shortest path, including through already-stale Results
+    break equal-length paths by the reaching Input lowest in UTF-8 byte order
     set each visited result that is not stale to stale with the reaching input as its reason
     return input and how many results became stale
 
@@ -148,6 +152,7 @@ drop (subject: Subject) : return (result: Result)
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
   then
     remove the result, its retained uses, and its active attempt if present
+    do not mark dependent Results stale
     return the stable result identity whether or not the result was present
 ```
 
@@ -155,30 +160,42 @@ drop (subject: Subject) : return (result: Result)
 
 ```queries
 _state (subject: Subject) : one (state: State)
+  Returns stale for an unknown or non-Text Subject. This virtual answer means no
+  current result exists and does not add a row to _stale. No query row contains
+  a mutable value.
+
 _current (subject: Subject) : optional (result: Result)
+  Returns a row only for a current Result. An unknown or non-Text Subject, or a
+  retained Result in another state, returns no row.
+
 _attempt (subject: Subject) : optional (attempt: Number)
+  Returns the attempt for every retained Result. An unknown or non-Text Subject
+  returns no row.
+
 _reason (subject: Subject) : optional (reason: Input)
+  Returns a row only when the retained Result has a reason. An unknown or
+  non-Text Subject returns no row.
+
 _stale () : many (subject: Subject, reason: Input)
+  Lists only stale Results that have a reason, in ascending UTF-8 byte order by
+  subject.
+
 _uses (subject: Subject) : many (input: Input)
+  Returns the visible input graph. While a replacement is building or stale,
+  this is the retained graph and excludes provisional inputs. Before the first
+  settlement, it is the most recent attempt's inputs. Inputs are in ascending
+  UTF-8 byte order. An unknown or non-Text Subject returns no rows.
+
 _dependents (input: Input) : many (subject: Subject)
+  Uses the same visible graph as _uses; touch follows this graph's transitive
+  closure. Subjects are in ascending UTF-8 byte order. A non-Text Input returns
+  no rows.
 ```
 
-`_state` answers `stale` for an unknown or non-Text subject. This is a virtual
-answer meaning that no current result exists; it does not add a row to `_stale`.
-The other subject lookups answer no row for an unknown or non-Text subject, and
-input lookup answers no rows for a non-Text input. `_current` is present only for
-a current result. `_uses` and `_dependents` show the retained graph while a
-replacement is building or stale; they do not expose its provisional inputs.
-Before first settlement, they show the most recent attempt's inputs. `touch`
-follows the same graph's transitive closure.
+## Contracts
 
-All many queries use ascending UTF-8 byte order: `_stale` by subject, `_uses` by
-input, and `_dependents` by subject. `touch` proceeds by shortest path. If two
-paths of the same length first reach one result, the reaching input lowest in
-UTF-8 byte order becomes its reason. Cycles terminate, diamonds mark each result
-once, and the count includes only results whose state changed to stale.
-
-Depending records relationships and condition, not what a result means, when an
-input should be touched, or how work is redone. `drop` does not itself invalidate
-results that use the dropped subject; a caller that treats removal as a change
-touches that subject separately.
+```contracts
+contract result-and-use-keys
+  At most one Result exists per Subject, and at most one Use exists per Result
+  and Input.
+```

@@ -135,7 +135,7 @@ test("registry refusals, promises, and assembled outcomes match the specificatio
     RENDERING_NOT_FOUND: RenderingNotFound,
     STAGE_NOT_READY: StageNotReady,
   });
-  expect(registration.specification.queries).toEqual([
+  expect(registration.specification.queries.map(({ name, inputs, promise }) => ({ name, inputs, promise }))).toEqual([
     { name: "_attempt", inputs: ["rendering"], promise: "optional" },
     { name: "_active", inputs: ["rendering"], promise: "optional" },
     { name: "_latest", inputs: ["subject"], promise: "optional" },

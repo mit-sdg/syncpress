@@ -13,40 +13,32 @@ again changes nothing, while moving it to a free address keeps the note's claim
 identity. Releasing an address makes it free for someone else. Malformed
 requests leave every existing claim untouched.
 
-## Text And Identities
+## Types
 
-Text is a well-formed Unicode string. An Owner is opaque Text supplied by the
-caller; empty Text and punctuation have no special meaning. Actions refuse a
-non-Text owner before inspecting their other inputs. Queries given a non-Text
-lookup value answer no row.
+```types
+Owner = Text
+  An opaque Text identity supplied by the caller. Empty text and punctuation
+  have no special meaning.
 
-Each owner identifies one stable Claim. The claim identity is an opaque,
-collision-safe, deterministic encoding of the owner, not of its current address.
-Moving, releasing and reclaiming therefore keep the same identity. Distinct
-owners have distinct claim identities even when their text contains delimiters.
+Path = Text
+  A platform-neutral logical path with one or more NFC-normalized Unicode
+  segments separated by `/`. A segment is nonempty, contains only Unicode
+  scalar values, is neither `.` nor `..`, and contains no slash, backslash,
+  NUL, ASCII control character, or DEL. A Path has no leading, trailing, or
+  repeated `/`.
 
-## Paths And Addresses
-
-A Path is a platform-neutral logical path with one or more NFC-normalized Unicode
-segments separated by `/`. A segment is nonempty, contains only Unicode scalar
-values, is neither `.` nor `..`, and contains no slash, backslash, NUL, ASCII
-control character, or DEL. A Path never starts or ends with `/` and has no empty
-segment.
-
-An Address is the canonical URI-path spelling of those same segments. It starts
-with exactly one `/`, contains no query or fragment, and is either `/`, ends in
-`/` as a directory address, or ends in a segment as a file address. A canonical
-encoded segment leaves only ASCII letters, digits, and
-`-._~!$&'()*+,;=:@` literal. Every other character is its UTF-8 bytes written as
-uppercase `%HH`. Percent escapes for literal characters, lowercase escapes,
-malformed UTF-8, raw non-ASCII characters, encoded separators, non-NFC text,
-empty segments, and encoded `.` or `..` segments are not canonical.
-
-The file-style address `/index.html`, and any file-style address ending in
-`/index.html`, is not canonical. Its canonical address is the corresponding
-directory address. Pure application computations share this grammar when they
-derive addresses, project URLs and output paths, and rewrite references;
-Routing owns only the mutable claimed address space.
+Address = Text
+  A canonical URI-path spelling in the same segment grammar. It starts with
+  exactly one `/`, has no query or fragment, and is `/`, a directory address
+  ending in `/`, or a file address ending in a segment. An encoded segment
+  leaves only ASCII letters, digits, and `-._~!$&'()*+,;=:@` literal; every
+  other character is represented by its UTF-8 bytes as uppercase `%HH`.
+  Percent escapes for literal characters, lowercase escapes, malformed UTF-8,
+  raw non-ASCII characters, encoded separators, non-NFC text, empty segments,
+  and encoded `.` or `..` segments are not canonical. `/index.html` and every
+  file address ending in `/index.html` are not canonical; the corresponding
+  directory address is canonical.
+```
 
 ## State
 
@@ -55,8 +47,6 @@ a set of Claims with
   an owner Owner
   an address Address
 ```
-
-At most one claim has an owner, and at most one claim has an address.
 
 ## Actions
 
@@ -91,23 +81,28 @@ release (owner: Owner) : return (claim: Claim, address: Address)
     remove and return it with its address
 ```
 
-Validation and collision checks happen before state changes. In particular, a
-failed move leaves the owner's former address claimed, and a second owner never
-displaces the incumbent.
-
 ## Queries
 
 ```queries
 _address (owner: Owner) : optional (address: Address)
+  Uses the exact Owner. Returns no row when the lookup is not well-formed Text
+  or the Owner has no current claim. Routing query results are Text values and
+  expose no mutable retained buffer.
+
 _owner (address: Address) : optional (owner: Owner)
+  Requires the exact canonical Address spelling. Returns no row when the lookup
+  is not well-formed Text, is noncanonical, or has no claim.
+
 _claims () : many (owner: Owner, address: Address)
+  Returns every current claim in ascending UTF-8 byte order of canonical
+  Address, independent of claim arrival order.
 ```
 
-`_owner` requires the exact canonical spelling and answers no row for an
-unclaimed address. `_address` answers the current canonical claim.
-`_claims` answers all claims in ascending UTF-8 byte order of canonical address,
-independent of claim arrival order.
+## Contracts
 
-Routing owns this address grammar and unique claims. It does not
-decide what an owner means, which things deserve addresses, whether an address
-should be reachable, or what is stored at the corresponding path.
+```contracts
+contract stable-claim-identity on claim, release
+  Each Owner determines one collision-safe Claim identity. Moving, releasing,
+  or reclaiming an Owner does not change it, and distinct Owners have distinct
+  identities.
+```

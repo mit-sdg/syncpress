@@ -17,51 +17,35 @@ forbidden without reading the file. After a rebuild she publishes the
 reconciled directory, and every listening reader is told to reload. Closing the
 server ends the listeners and stops answering.
 
+## Types
+
+```types
+Path = Text
+  A non-empty native host path.
+
+Port = SafeInteger
+  An integer from 0 through 65535 inclusive.
+
+State = "open" | "closing" | "failed" | "closed"
+```
+
 ## State
 
 ```state
 a set of Servers with
   a host Text
-  a port Number
+  a port Port
   a state State
   an optional directory Path
   a set of Readers
+
+a set of Readers
 ```
-
-A server is `open`, `closing`, `failed`, or `closed`. A closed server answers
-nothing and keeps no readers, but keeps its identity so late callers get an
-answer instead of a refusal. Listener and close failures are recorded rather
-than leaving an observably open server with no host listener.
-
-The directory is a native host path. A server with no directory answers every
-request with a service-unavailable status, because it has nothing published to
-show. Pointing a server at another directory replaces the first.
-
-A reader is one open reload listener. Readers arrive and leave on their own;
-every successful `publish`, including publication of the same directory again,
-tells all of them at once and reports how many were told.
-
-## Serving Rules
-
-A server without a published directory answers every request, including the
-reload path, with service unavailable before applying the remaining rules. A
-raw origin-form request path is separated from its query without WHATWG dot
-segment normalization, then decoded once; a malformed encoding is a bad
-request. A decoded path containing a backslash or a `..`
-segment is forbidden without touching the host. What remains is resolved inside
-the directory, and anything at or below it that is a symbolic link, or whose
-resolved location leaves the directory, is forbidden. A path naming a directory
-answers that directory's `index.html`. Anything absent is not found.
-
-An HTML answer carries a reload listener appended to its body and is never
-cached; every other answer carries only the media type its extension implies,
-defaulting to unnamed bytes. Serving reads files at request time and keeps no
-copies, so an answer always reflects what the directory holds now.
 
 ## Actions
 
 ```actions
-open (host: Text, port: Number) : return (server: Server, host: Text, port: Number)
+open (host: Text, port: Port) : return (server: Server, host: Text, port: Port)
   where host is not well-formed, non-empty text, or port is not an integer between 0 and 65535
   then
     refuse INVALID_SERVER "A server needs a host and a port between 0 and 65535."
@@ -73,7 +57,7 @@ open (host: Text, port: Number) : return (server: Server, host: Text, port: Numb
     return it with the address the host actually gave it
 
 publish (server: Server, directory: Path) : return (server: Server, directory: Path, readers: Number)
-  where server is unknown or closed
+  where server is unknown or not open
   then
     refuse SERVER_NOT_OPEN "There is no such open server."
   where directory is not well-formed, non-empty text
@@ -91,6 +75,7 @@ close (server: Server) : return (server: Server)
     refuse SERVER_NOT_FOUND "There is no such server."
   where host closure fails
   then
+    end every Reader, stop answering, and make the Server failed
     refuse SERVER_CLOSE_FAILED "This server could not be closed."
   then
     end every reader, stop answering, and make the server closed
@@ -99,13 +84,34 @@ close (server: Server) : return (server: Server)
 ## Queries
 
 ```queries
-_server (server: Server) : optional (host: Text, port: Number, state: State, directory: OptionalPath)
+_server (server: Server) : optional (host: Text, port: Port, state: State, directory: Path | null)
+  Returns a row for every Server ever opened, including a closed Server. The
+  directory is null until one is set.
+
 _readers (server: Server) : one (readers: Number)
+  Reports the current number of open reload listeners. The count is zero for an
+  unknown or closed Server.
 ```
 
-`_server` answers a row for every server it has ever opened, including closed
-ones, and reports an absent directory until one is set.
+## Contracts
 
-Serving owns listening, request safety, publication replacement, media types,
-reload notices, and server closure. It does not build what it serves, decide
-when publication is warranted, or know why a directory changed.
+```contracts
+contract request-paths
+  Without a published directory, every request is unavailable. Otherwise the
+  raw path is separated from its query and decoded once without WHATWG dot
+  normalization. Malformed encoding is a bad request. A backslash, `..` segment,
+  named symbolic-link component, or resolved path outside the directory is
+  forbidden. A directory names its `index.html`; an absent, unreadable, or
+  non-regular final entry, including a symbolic fallback index, is not found.
+
+contract served-files
+  Serving reads files at request time and retains no copy. HTML receives a
+  no-cache reload script before its closing body tag or at the end; other files
+  receive the media type implied by their extension, or generic bytes.
+
+contract reload-readers on publish, close
+  The reload endpoint retains one Reader per open event stream. Every successful
+  `publish`, including an unchanged directory, tells each current Reader once.
+  Closure or listener failure ends all Readers; an unexpected listener failure
+  also makes the Server failed.
+```

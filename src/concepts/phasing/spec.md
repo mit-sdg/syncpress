@@ -16,41 +16,55 @@ settles review and publish, then may start a replacement job. A job in another
 sequence moves independently. She abandons that job with its current attempt
 and a reason, leaving it failed and unable to move.
 
-## Values
+## Types
+
+```types
+Name = Text
+Phase = Text
+
+Phases = List<Phase>
+  An ordinary dense phase plan.
+
+State = "running" | "finished" | "failed"
+
+PhaseAttempt = identity
+  The opaque identity of one announced phase of one Job.
+```
 
 Text is a well-formed Unicode string. A phase plan is an ordinary dense list of
 Text values with no extra properties. A sequence has at least one phase, and a
 phase occurs at most once in its sequence.
 
-A PhaseAttempt is the opaque identity of one announced phase of one job. The
-result of `advance` contains either the next Phase and its PhaseAttempt or null
-for both. Null means that the job has finished and cannot trigger phase work.
+Sequence and Job values are opaque identities. A Sequence identity is a
+deterministic encoding of its Name and survives redeclaration. A PhaseAttempt is
+a deterministic encoding of its Job and phase index. The result of `advance`
+contains either the next Phase and its PhaseAttempt or `null` for both. `null`
+means that the Job has finished and cannot trigger phase work.
 
 ## State
 
 ```state
 a set of Sequences with
-  a unique name Name
-  an ordered list of distinct Phases
+  a name Name
+  a phases seq of Phase
+  an optional running Job
+  an optional latest Job
 
 a set of Jobs with
   a sequence Sequence
-  a snapshot of its sequence's Phases
-  a current phase Phase
-  a current phase attempt PhaseAttempt
-  a start order Number
-  a state State        -- running, finished, or failed
+  a phases seq of Phase
+  a currentPhase Phase
+  a currentAttempt PhaseAttempt
+  a startOrder Number
+  a state State
   an optional reason Text
-  settled phase attempts and their returned next phase and attempt
+  a settlements set of Settlements
 
-at most one running Job for each Sequence
-at most one latest Job for each Sequence
+a set of Settlements with
+  an attempt PhaseAttempt
+  an optional nextPhase Phase
+  an optional nextAttempt PhaseAttempt
 ```
-
-A sequence identity is a deterministic encoding of its name. Redeclaration
-keeps that identity. A job snapshots the phases when it starts, so changing the
-named sequence affects later jobs but cannot redirect one already running. A
-phase-attempt identity is a deterministic encoding of its job and phase index.
 
 ## Actions
 
@@ -88,16 +102,16 @@ start (sequence: Sequence) : return (job: Job, name: Name, phase: Phase, attempt
     make it the latest job for the sequence
     return the new job, sequence name, first phase, and its exact phase attempt
 
-advance (job: Job, attempt: PhaseAttempt) : return (job: Job, name: Name, phase: PhaseOrNull, attempt: PhaseAttemptOrNull, transitioned: Flag)
-  where job is unknown, finished, or failed and attempt is not an already settled attempt
+advance (job: Job, attempt: PhaseAttempt) : return (job: Job, name: Name, phase: Phase | null, attempt: PhaseAttempt | null, transitioned: Flag)
+  where attempt was already settled for job
+  then
+    return its recorded next phase and attempt with transitioned false
+  where job is unknown, finished, or failed
   then
     refuse JOB_NOT_RUNNING "This job is not running."
   where attempt is not the running job's current attempt
   then
     refuse STALE_ATTEMPT "This phase attempt is not current."
-  where attempt was already settled
-  then
-    return its recorded next phase and attempt with transitioned false
   where attempt is current and a later phase exists
   then
     make the next phase and its attempt current
@@ -126,17 +140,25 @@ abandon (job: Job, attempt: PhaseAttempt, reason: Text) : return (job: Job, reas
 
 ```queries
 _job (job: Job) : optional (sequence: Sequence, name: Name, phase: Phase, attempt: PhaseAttempt, state: State)
+  Returns no row for an unknown or non-Text Job. A terminal Job retains its last
+  announced Phase and PhaseAttempt.
+
 _running (sequence: Sequence) : optional (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt)
+  Returns no row for an unknown or malformed Sequence, or when the Sequence has
+  no running Job.
+
 _latest (sequence: Sequence) : optional (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt, state: State)
-_outcome (job: Job) : optional (state: State, reason: OptionalText)
+  Returns no row for an unknown or malformed Sequence. The latest Job remains
+  present after it finishes or fails.
+
+_outcome (job: Job) : optional (state: State, reason?: Text)
+  Returns no row for an unknown, malformed, or running Job. A finished row omits
+  `reason`; a failed row includes it.
 ```
 
-`_job` is absent for an unknown job. `_running` lists the sequence's running job.
-`_latest` remains present after that job finishes or fails. `_outcome` is absent
-for an unknown or running job; a finished row omits `reason`, while a failed row
-includes it.
+## Contracts
 
-Only a successful `advance` with `transitioned true` announces another phase.
-Retrying a settled attempt is observationally idempotent. Phasing records exact
-barrier settlement but does not run phase work or decide that outside work has
-settled; the caller reports settlement only after that work becomes quiescent.
+```contracts
+contract sequence-name
+  No two Sequences have the same Name.
+```

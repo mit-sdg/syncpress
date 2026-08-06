@@ -16,21 +16,31 @@ her ordinary output and a warning to her error output, then selects exit status
 status are refused. Supplying an explicit word list instead makes the same
 interaction available to an embedding host.
 
-## Values
+## Types
 
-Arguments are an ordinary dense list of well-formed text values with no extra
-properties. A stream is `output` or `error`. An exit code is a safe integer from
-0 through 255.
+```types
+Arguments = List<Text>
+  An ordinary dense list with no extra properties.
 
-Commanding captures and copies arguments once. Each successful write emits one
-operator message; repeating it deliberately emits another message. Selecting an exit status records
-the process outcome but does not terminate it before application cleanup.
+Stream = "output" | "error"
+
+ExitCode = SafeInteger
+  An integer from 0 through 255 inclusive.
+```
+
+## State
+
+```state
+an element Invocation with
+  an optional words Arguments
+  an optional code ExitCode
+```
 
 ## Actions
 
 ```actions
-capture (arguments: OptionalArguments) : return (words: Arguments)
-  where arguments is absent
+capture (arguments: Arguments | null) : return (words: Arguments)
+  where arguments is null
   then
     read the process arguments after its executable and script names
     return a copy
@@ -54,7 +64,7 @@ write (stream: Stream, text: Text) : return (stream: Stream, text: Text)
   then
     write one line to the selected operator stream and return it
 
-exit (code: Number) : return (code: Number, changed: Flag)
+exit (code: ExitCode) : return (code: ExitCode, changed: Flag)
   where code is not a safe integer from 0 through 255
   then
     refuse INVALID_EXIT_CODE "A command exit code must be a safe integer from 0 through 255."
@@ -65,17 +75,16 @@ exit (code: Number) : return (code: Number, changed: Flag)
   then
     return it with changed false
   then
-    set and retain the process exit status and return it with changed true
+    set and retain the process exit status without terminating the process
+    return it with changed true
 ```
 
 ## Queries
 
 ```queries
 _invocation () : optional (words: Arguments)
-_outcome () : optional (code: Number)
-```
+  Returns no row before capture and a copy of the captured words afterward.
 
-Commanding owns access to one command-line process's invocation words, output
-channels, and exit status. It does not define a command grammar, select which
-command the words mean, provide usage text, format
-an application report, own stop policy, or perform the selected work.
+_outcome () : optional (code: ExitCode)
+  Returns no row before an exit status is selected.
+```

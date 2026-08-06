@@ -17,17 +17,52 @@ answer is refused. Scanning again forgets the old answers, and removing the scan
 makes its old reference identities invalid. Primary image sources also carry
 their source-backed authored attributes for application policy to interpret.
 
-## Text And HTML
+## Types
+
+```types
+Subject = Text
+  An application-supplied owner of scanned HTML.
+
+Part = Text
+  A named HTML part within a Subject.
+
+Address = Text
+  One decoded HTML reference value.
+
+Form = "address" | "markup"
+Kind = "link" | "image" | "embed" | "download"
+Role = "hyperlink" | "download" | "base" | "link-resource" | "image" | "image-candidate" | "input-image" | "media-source" | "source-candidate" | "media" | "poster" | "script" | "frame" | "embedded-resource" | "track"
+Attribute = "href" | "src" | "srcset" | "poster"
+
+Tag = Text
+  A canonical lowercase supported HTML element name.
+
+Span = record
+  start: NonnegativeInteger
+  end: NonnegativeInteger
+
+Attributes = Map<Text, Text>
+  Decoded source-backed image attributes keyed by canonical lowercase name in
+  ascending JavaScript string order.
+
+ReferenceRow = record
+  reference: Reference
+  raw: Address
+  kind: Kind
+  role: Role
+  tag: Tag
+  attribute: Attribute
+  element: Element
+  slot: Slot
+  index: NonnegativeInteger
+  label: Text
+  line: PositiveInteger
+  column: PositiveInteger
+  attributes?: Attributes
+```
 
 Text is a well-formed Unicode string. Subjects, parts, identities, scanned HTML,
-and answers must be Text. Empty Text is valid. Queries given a value that is not
-Text answer no row.
-
-`scan` parses its input as an HTML fragment with standard HTML error recovery. It
-does not reject malformed HTML. It discovers only supported elements that have a
-location in the supplied text; parser-created elements have no location and are
-ignored. Rewriting changes the supplied text rather than serializing the recovered
-tree, so text outside answered attributes or replaced elements is preserved.
+and answers must be Text. Empty Text is valid.
 
 Only elements in the HTML namespace and the following element/attribute pairs are
 supported. Element and attribute names are ASCII case-insensitive. The HTML parser
@@ -55,17 +90,13 @@ This is deliberately not a complete inventory of every URL-bearing HTML feature.
 Form actions, citation attributes, ping lists, `srcdoc`, CSS URLs, SVG references,
 and other element/attribute pairs are outside this concept's contract.
 
-Only a primary `img[src]` reference exposes `attributes`. It is a fresh
-null-prototype record of every decoded, parser-retained, source-backed attribute
-value on that element. Referencing records HTML evidence without deciding which
-attributes another mechanism may preserve.
-
-Attribute names are canonical lowercase and records use ascending UTF-8 name
-order. Each query returns a new record, so changing a returned record cannot
-change stored state. Repeated or malformed attributes use the HTML parser's
-effective value, and attributes without a parser source location are omitted.
-No `srcset` candidate, `input[type=image]`, `source`, or other reference exposes
-`attributes`.
+Only a primary `img[src]` reference exposes `attributes`. It contains every
+decoded, parser-retained, source-backed attribute value on that element.
+Referencing records HTML evidence without deciding which attributes another
+mechanism may preserve. Attribute names are canonical lowercase. Repeated or
+malformed attributes use the HTML parser's effective value, and attributes
+without a parser source location are omitted. No `srcset` candidate,
+`input[type=image]`, `source`, or other reference exposes `attributes`.
 
 `raw` is the HTML-decoded attribute value, not its entity spelling in the source.
 For `srcset`, the HTML-decoded value is parsed using the HTML candidate algorithm:
@@ -80,14 +111,74 @@ the valid candidates of that attribute. A non-`srcset` reference has index zero.
 the first source character spelling the URL. An empty or valueless attribute uses
 the insertion position where its value would begin.
 
-## Groups, Answers, And Rewriting
-
 Every source-backed supported element receives an opaque `element` identity. All
 references on that element share it. Every supported attribute containing at
 least one reference receives an opaque `slot` identity. All candidates in one
 `srcset` share it. These identities, together with `tag`, `attribute`, `role`, and
 `index`, let a composition distinguish an `img` primary source from its candidates
 and from candidates on a `source` element without interpreting strings.
+
+A source identity is a collision-safe opaque encoding of its exact subject and
+part and is reused by rescans and remove-then-scan. Subject and part remain
+independent even when they contain punctuation or control characters. Each scan
+has a new revision. Reference, element, and slot identities include that revision,
+so an identity from an earlier scan or from before a drop can never name a later
+record.
+
+`Source`, `Element`, `Slot`, and `Reference` are identities introduced by the
+state declarations. A `Source` is the stable identity of a subject-and-part scan
+slot; it is not diagnostic source text.
+
+## State
+
+```state
+a set of Sources with
+  a subject Subject
+  a part Part
+  a text Text
+  a revision Number
+
+a set of Elements with
+  a source Source
+  a tag Tag
+  a span Span
+
+a set of Slots with
+  an element Element
+  an attribute Attribute
+  a decodedValue Text
+  a span Span
+
+a set of References with
+  a source Source
+  an element Element
+  a slot Slot
+  an index NonnegativeInteger
+  a raw Address
+  a kind Kind
+  a role Role
+  a tag Tag
+  an attribute Attribute
+  a label Text
+  a line PositiveInteger
+  a column PositiveInteger
+  a target Span
+  an elementSpan Span
+  optional attributes Attributes
+  an optional answer Text
+  an optional form Form
+```
+
+## Actions
+
+`scan` parses its input as an HTML fragment with standard HTML error recovery. It
+does not reject malformed HTML. It discovers only supported elements that have a
+location in the supplied text; parser-created elements have no location and are
+ignored. Rewriting changes the supplied text rather than serializing the recovered
+tree, so text outside answered attributes or replaced elements is preserved.
+Scanning always replaces the source text and all of its references and answers.
+`replaced` says whether a source was present. `completed` is true exactly when the
+new scan itself completes immediately because it found no references.
 
 An `address` answer replaces one decoded attribute value, or one URL token inside
 `srcset`. If any address in an attribute changes, the complete decoded attribute
@@ -109,23 +200,6 @@ whose element spans overlap, including two references on the same element; the
 later answer is refused. Address answers inside a replaced element remain answers
 for completion but produce no separate edit.
 
-Referencing records HTML structure but does not resolve URLs, check resources,
-choose image policy, or decide whether trusted markup is appropriate. Those are
-composition decisions.
-
-## Identities And Lifecycle
-
-A source identity is a collision-safe opaque encoding of its exact subject and
-part and is reused by rescans and remove-then-scan. Subject and part remain
-independent even when they contain punctuation or control characters. Each scan
-has a new revision. Reference, element, and slot identities include that revision,
-so an identity from an earlier scan or from before a drop can never name a later
-record.
-
-Scanning always replaces the source text and all of its references and answers.
-`replaced` says whether a source was present. `completed` is true exactly when the
-new scan itself completes immediately because it found no references.
-
 An answer has `changed: true` only when its form or value differs from the stored
 answer. Its `completed` response is a transition flag: it is true exactly when
 this changed answer takes a previously unfinished source to finished. After a
@@ -136,52 +210,6 @@ Scanning again is required before any answers can change.
 `drop` removes a present source and all its references. It is an idempotent no-op
 for an absent source; `dropped`, `count`, and the stable source identity report
 what happened.
-
-## State
-
-```state
-a set of Sources with
-  a subject Subject
-  a part Part
-  a text Text
-  a revision Number
-
-a set of Elements with
-  a source Source
-  a tag Tag
-  a span Span
-
-a set of Slots with
-  an element Element
-  an attribute Attribute
-  a decoded value Text
-  a span Span
-
-a set of References with
-  a source Source
-  an element Element
-  a slot Slot
-  an index Number
-  a raw Address
-  a kind Kind
-  a role Role
-  a tag Tag
-  an attribute Attribute
-  a label Text
-  a line Number
-  a column Number
-  a target Span
-  an element span Span
-  optional attributes Attributes for a primary img src
-  an optional answer Text
-  an optional form Form
-```
-
-At most one source exists per subject and part. Reference order is element source
-order, then attribute source order, then candidate order. `_references` and
-`_unanswered` use that order.
-
-## Actions
 
 ```actions
 scan (subject: Subject, part: Part, text: Text) : return (source: Source, count: Number, replaced: Flag, completed: Flag)
@@ -234,8 +262,33 @@ drop (subject: Subject, part: Part) : return (source: Source, count: Number, dro
 
 ```queries
 _source (source: Source) : optional (subject: Subject, part: Part)
-_reference (reference: Reference) : optional (source: Source, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number, attributes?: Attributes)
-_references (source: Source) : many (reference: Reference, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number, attributes?: Attributes)
-_unanswered (source: Source) : many (reference: Reference, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: Number, label: Text, line: Number, column: Number, attributes?: Attributes)
+  Returns no row while the Source has no current scan. Any query given a non-Text
+  argument returns no row or no rows according to its cardinality.
+
+_reference (reference: Reference) : optional (source: Source, raw: Address, kind: Kind, role: Role, tag: Tag, attribute: Attribute, element: Element, slot: Slot, index: NonnegativeInteger, label: Text, line: PositiveInteger, column: PositiveInteger, attributes?: Attributes)
+  Returns no row for an unknown identity or an identity from an earlier scan
+  revision. In this query, _references, and _unanswered, attributes is present
+  only for a primary img[src] reference. Every returned Attributes map is a fresh
+  null-prototype map in UTF-16 code-unit order; changing it cannot change stored
+  state.
+
+_references (source: Source) : many ReferenceRow
+  Returns every current reference in element source order, then attribute source
+  order, then candidate order. A Source without a current scan returns no rows.
+
+_unanswered (source: Source) : many ReferenceRow
+  Filters the _references sequence to unanswered references without reordering
+  it. A Source without a current scan returns no rows.
+
 _finished (subject: Subject, part: Part) : optional (source: Source, text: Text)
+  Returns no row when the slot has no current scan or while any current reference
+  is unanswered. When present, text is the rewritten scan text. A scan with no
+  references is finished immediately.
+```
+
+## Contracts
+
+```contracts
+contract one-source-per-slot
+  At most one Source exists per Subject and Part.
 ```

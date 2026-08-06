@@ -32,7 +32,8 @@ concept-level Principle tests; `test` runs the complete Bun test suite.
 Add behavior at the concept that owns its invariant. Update that concept's
 specification and implementation, register the concept when necessary, and
 connect the behavior from `src/compositions/`. Regenerate artifacts before
-reviewing the resulting diff.
+reviewing the resulting diff. Concept specifications follow the
+[Syncpress concept specification format](src/concepts/specification.md).
 
 This includes work against the host. The filesystem, the network, the process,
 and the clock are reached only from the concept that owns that interaction, and

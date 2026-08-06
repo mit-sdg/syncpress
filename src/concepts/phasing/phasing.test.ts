@@ -233,7 +233,7 @@ test("registry refusals, query promises, and assembled outcomes match the specif
     JOB_NOT_RUNNING: JobNotRunning,
     STALE_ATTEMPT: StaleAttempt,
   });
-  expect(registration.specification.queries).toEqual([
+  expect(registration.specification.queries.map(({ name, inputs, promise }) => ({ name, inputs, promise }))).toEqual([
     { name: "_job", inputs: ["job"], promise: "optional" },
     { name: "_running", inputs: ["sequence"], promise: "optional" },
     { name: "_latest", inputs: ["sequence"], promise: "optional" },

@@ -12,6 +12,14 @@ requests an interrupt; the hold is released and returns `interrupt`, and no
 process listener remains. A later hold waits independently and returns
 `terminate` when she makes that request.
 
+## Types
+
+```types
+Reason = "interrupt" | "terminate"
+
+State = "holding" | "released"
+```
+
 ## State
 
 ```state
@@ -20,27 +28,24 @@ a set of Holds with
   an optional reason Reason
 ```
 
-A hold starts `holding` and remains retained as `released` after an `interrupt`
-or `terminate` request. Every active hold listens independently; one process
-request releases every active hold whose listener receives it. Listener setup
-failure faults and removes the attempted hold.
-
 ## Actions
 
 ```actions
 hold () : return (hold: Hold, reason: Reason)
   then
-    wait until the operator interrupts or terminates the process
-    release the hold, remove its listeners, and return the request that ended it
+    add a holding Hold and install its independent interrupt and terminate listeners
+    if listener setup faults, remove the attempted Hold and propagate the host failure
+    wait for the first request received by those listeners
+    make the Hold released, remove its listeners, and return the request Reason
 ```
 
 ## Queries
 
 ```queries
-_hold (hold: Hold) : optional (state: State, reason: OptionalReason)
-_holding () : one (holding: Number)
-```
+_hold (hold: Hold) : optional (state: State, reason: Reason | null)
+  Returns no row for an unknown Hold and continues to return a row after
+  release. The reason is null while the Hold is holding.
 
-Attending owns the lifecycle of process stop holds. It does not decide what work
-runs while held, what cleanup follows release, what a command means, or whether
-the process should exit.
+_holding () : one (holding: NonnegativeInteger)
+  Reports the number of Holds in the holding state.
+```

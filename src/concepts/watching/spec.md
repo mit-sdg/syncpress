@@ -16,6 +16,18 @@ under `/srv/site/dist` report nothing at all. A burst that settles while nobody
 is attending is still reported by the next attend. Closing the watch releases
 whoever is attending and stops the observation for good.
 
+## Types
+
+```types
+Duration = PositiveInteger
+  A duration in milliseconds.
+
+Path = Text
+  A non-empty native host path.
+
+State = "open" | "failed" | "closed"
+```
+
 ## State
 
 ```state
@@ -23,27 +35,10 @@ a set of Watches with
   a directory Path
   a settling Duration
   a state State
-  a set of excluded Trees
-  a set of excluded temporary-name Prefixes
+  an excludedTrees set of Paths
+  an excludedPrefixes set of Paths
   a settled Flag
 ```
-
-A directory is a native host path, observed with all of its descendants. A tree
-exclusion ignores exactly that path and its descendants using native
-path-component containment. A temporary-name prefix matches only the first path
-component below its own parent, so `.dist.emitting-*` does not suppress a
-sibling such as `dist-notes`.
-
-A watch is `open`, `failed`, or `closed`. An unexpected host-watcher end makes
-it failed and releases attendance; later attendance refuses rather than
-silently reporting an inert open watch. A closed watch observes nothing and
-keeps its identity so late callers get an answer.
-
-`settled` records one burst that has finished and has not been reported yet.
-Counted changes restart the settling duration; when that duration passes with no
-further counted change, the burst is settled. Further bursts before a report
-collapse into the one already recorded: a report says that something changed
-since the last report, never how much.
 
 ## Actions
 
@@ -62,7 +57,8 @@ observe (directory: Path, settling: Duration, excluded: Path, prefix: Path) : re
   then
     refuse DIRECTORY_UNOBSERVABLE "This directory could not be observed."
   then
-    normalize every exclusion before host observation begins, add an open watch, and return it
+    normalize the directory and fixed exclusions before host observation begins
+    add an open Watch with settled false and return it
 
 attend (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)
   where watch is unknown
@@ -81,7 +77,6 @@ attend (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)
   then
     take that burst and return changed true and watching true
   otherwise
-  then
     wait until a burst settles, the watch closes, or within passes
     return whether a burst is being reported, and whether the watch is still open
 
@@ -93,18 +88,34 @@ close (watch: Watch) : return (watch: Watch)
     stop observing, release whoever is attending, await host observation, and make the watch closed
 ```
 
-`attend` waits for at most `within`, because one concept answers one ask at a
-time: an unbounded wait would leave `close` with no turn. A
-caller that wants prompt closing attends in short spans.
-
 ## Queries
 
 ```queries
 _watch (watch: Watch) : optional (directory: Path, settling: Duration, state: State)
+  Returns no row for an unknown Watch and continues to return a row after
+  failure or closure.
+
 _excluded (watch: Watch) : many (path: Path)
+  Returns no rows when no Paths match. This query and `_open` define no order.
+
 _open () : many (watch: Watch)
+  Returns no rows when no Watches match.
 ```
 
-Watching owns host change observation, burst settling, initial exclusions, and
-the open, failed, and closed lifecycle. It does not decide what a change means,
-what should happen after one, or which paths deserve exclusion.
+## Contracts
+
+```contracts
+contract excluded-changes on observe
+  A tree exclusion ignores its path and descendants by native path components.
+  A prefix exclusion matches only the first component below its own parent.
+
+contract settled-bursts on observe, attend
+  Each counted change restarts the settling Duration. A quiet Duration records
+  one unreported burst; further bursts collapse into it until `attend` reports
+  and consumes it.
+
+contract terminal-watch on attend, close
+  An unexpected host-watcher end makes the Watch failed and releases attendance.
+  A closed Watch observes nothing. Failed and closed Watches retain their
+  identities and never become open again.
+```
