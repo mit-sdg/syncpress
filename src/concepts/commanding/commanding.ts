@@ -82,7 +82,7 @@ export class CommandingConcept {
 
   constructor(private readonly environment: Environment = host) {}
 
-  capture({ arguments: supplied }: { arguments: readonly string[] | null }) {
+  captureArguments({ arguments: supplied }: { arguments: readonly string[] | null }) {
     if (supplied !== null && !isArguments(supplied)) throw new InvalidArguments();
     if (this.#words !== undefined) {
       if (supplied !== null && (supplied.length !== this.#words.length || supplied.some((word, index) => word !== this.#words![index]))) {
@@ -97,14 +97,14 @@ export class CommandingConcept {
     return { words: [...this.#words] };
   }
 
-  write({ stream, text }: { stream: string; text: string }) {
+  writeLine({ stream, text }: { stream: string; text: string }) {
     if (stream !== "output" && stream !== "error") throw new InvalidStream();
     if (!isText(text)) throw new InvalidText();
     this.environment.write(stream, text);
     return { stream, text };
   }
 
-  exit({ code }: { code: number }) {
+  setExitStatus({ code }: { code: number }) {
     if (!Number.isSafeInteger(code) || code < 0 || code > 255) throw new InvalidExitCode();
     if (this.#exitCode !== undefined) {
       if (this.#exitCode !== code) throw new ExitSelected();

@@ -37,7 +37,7 @@ phase occurs at most once in its sequence.
 
 Sequence and Job values are opaque identities. A Sequence identity is a
 deterministic encoding of its Name and survives redeclaration. A PhaseAttempt is
-a deterministic encoding of its Job and phase index. The result of `advance`
+a deterministic encoding of its Job and phase index. The result of `completePhase`
 contains either the next Phase and its PhaseAttempt or `null` for both. `null`
 means that the Job has finished and cannot trigger phase work.
 
@@ -102,7 +102,7 @@ start (sequence: Sequence) : return (job: Job, name: Name, phase: Phase, attempt
     make it the latest job for the sequence
     return the new job, sequence name, first phase, and its exact phase attempt
 
-advance (job: Job, attempt: PhaseAttempt) : return (job: Job, name: Name, phase: Phase | null, attempt: PhaseAttempt | null, transitioned: Flag)
+completePhase (job: Job, attempt: PhaseAttempt) : return (job: Job, name: Name, phase: Phase | null, attempt: PhaseAttempt | null, transitioned: Flag)
   where attempt was already settled for job
   then
     return its recorded next phase and attempt with transitioned false

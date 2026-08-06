@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { DocumentingConcept, DocumentNotFound, MalformedAttributes } from "./documenting.ts";
-import { documenting } from "./registry.ts";
+import { DocumentParsingConcept, DocumentNotFound, MalformedAttributes } from "./document-parsing.ts";
+import { documentParsing } from "./registry.ts";
 
 function one<T>(rows: T[]): T {
   expect(rows).toHaveLength(1);
@@ -9,8 +9,8 @@ function one<T>(rows: T[]): T {
 }
 
 test("its principle: YAML details and the exact authored body stay together but read separately", () => {
-  const documenting = new DocumentingConcept();
-  const parsed = documenting.parse({
+  const documentParsing = new DocumentParsingConcept();
+  const parsed = documentParsing.parseDocument({
     subject: "post",
     text: "---\ntitle: Compiler Design\ntopics: [compilers, semantics]\n---\n# Notes\n",
   });
@@ -20,14 +20,14 @@ test("its principle: YAML details and the exact authored body stay together but 
     attributes: { title: "Compiler Design", topics: ["compilers", "semantics"] },
     body: "# Notes\n",
   });
-  expect(documenting._document({ subject: "post" })).toEqual([
+  expect(documentParsing._document({ subject: "post" })).toEqual([
     { ...parsed, bodyLine: 5 },
   ]);
 
-  const revised = documenting.parse({ subject: "post", text: "---\ntitle: Revised\n---\nNew body" });
+  const revised = documentParsing.parseDocument({ subject: "post", text: "---\ntitle: Revised\n---\nNew body" });
   expect(revised.document).toBe(parsed.document);
-  expect(documenting._document({ subject: "post" })).toEqual([{ ...revised, bodyLine: 4 }]);
-  expect(documenting._all()).toEqual([{ document: parsed.document, subject: "post" }]);
+  expect(documentParsing._document({ subject: "post" })).toEqual([{ ...revised, bodyLine: 4 }]);
+  expect(documentParsing._all()).toEqual([{ document: parsed.document, subject: "post" }]);
 });
 
 test("text without an exact opening fence is entirely body at line one", () => {
@@ -41,45 +41,45 @@ test("text without an exact opening fence is entirely body at line one", () => {
     "\ufeff---\ntitle: after a BOM\n---\nbody",
     "---\rtitle: lone CR\r---\rbody",
   ]) {
-    const documenting = new DocumentingConcept();
-    const parsed = documenting.parse({ subject: "plain", text });
+    const documentParsing = new DocumentParsingConcept();
+    const parsed = documentParsing.parseDocument({ subject: "plain", text });
     expect(parsed.attributes).toEqual({});
     expect(parsed.body).toBe(text);
-    expect(one(documenting._document({ subject: "plain" })).bodyLine).toBe(1);
+    expect(one(documentParsing._document({ subject: "plain" })).bodyLine).toBe(1);
   }
 });
 
 test("LF and CRLF fences preserve body text and produce exact one-based body lines", () => {
-  const crlf = new DocumentingConcept();
-  const parsed = crlf.parse({
+  const crlf = new DocumentParsingConcept();
+  const parsed = crlf.parseDocument({
     subject: "crlf",
     text: "---\r\ntitle: Ada\r\nsummary: Notes\r\n---\r\n\r\nBody\r\n",
   });
   expect(parsed).toMatchObject({ attributes: { title: "Ada", summary: "Notes" }, body: "\r\nBody\r\n" });
   expect(one(crlf._document({ subject: "crlf" })).bodyLine).toBe(5);
 
-  const mixed = new DocumentingConcept();
-  mixed.parse({ subject: "mixed", text: "---\r\ntitle: Ada\n---\r\nBody" });
+  const mixed = new DocumentParsingConcept();
+  mixed.parseDocument({ subject: "mixed", text: "---\r\ntitle: Ada\n---\r\nBody" });
   expect(one(mixed._document({ subject: "mixed" }))).toMatchObject({ body: "Body", bodyLine: 4 });
 
-  const atEnd = new DocumentingConcept();
-  atEnd.parse({ subject: "at-end", text: "---\ntitle: Ada\n---" });
+  const atEnd = new DocumentParsingConcept();
+  atEnd.parseDocument({ subject: "at-end", text: "---\ntitle: Ada\n---" });
   expect(one(atEnd._document({ subject: "at-end" }))).toMatchObject({ body: "", bodyLine: 4 });
 
-  const afterEnding = new DocumentingConcept();
-  afterEnding.parse({ subject: "after-ending", text: "---\ntitle: Ada\n---\n" });
+  const afterEnding = new DocumentParsingConcept();
+  afterEnding.parseDocument({ subject: "after-ending", text: "---\ntitle: Ada\n---\n" });
   expect(one(afterEnding._document({ subject: "after-ending" }))).toMatchObject({ body: "", bodyLine: 4 });
 });
 
 test("only an exact column-zero closing fence closes the header", () => {
-  const documenting = new DocumentingConcept();
-  const parsed = documenting.parse({
+  const documentParsing = new DocumentParsingConcept();
+  const parsed = documentParsing.parseDocument({
     subject: "scalar",
     text: "---\ndescription: |\n  first\n  ---\n  still metadata\n---\nbody",
   });
   expect(parsed.attributes).toEqual({ description: "first\n---\nstill metadata\n" });
   expect(parsed.body).toBe("body");
-  expect(one(documenting._document({ subject: "scalar" })).bodyLine).toBe(7);
+  expect(one(documentParsing._document({ subject: "scalar" })).bodyLine).toBe(7);
 
   for (const text of [
     "---\ntitle: Ada\n ---\nbody",
@@ -87,7 +87,7 @@ test("only an exact column-zero closing fence closes the header", () => {
     "---\ntitle: Ada\n--- # comment\nbody",
     "---\ntitle: Ada\n...\nbody",
   ]) {
-    expect(() => new DocumentingConcept().parse({ subject: "unclosed", text })).toThrow(MalformedAttributes);
+    expect(() => new DocumentParsingConcept().parseDocument({ subject: "unclosed", text })).toThrow(MalformedAttributes);
   }
 });
 
@@ -98,47 +98,47 @@ test("malformed and unclosed front matter refuse with the normative error", () =
     "---\ntitle: [\n---\nbody",
     "---\ntitle: !widget Ada\n---\nbody",
   ]) {
-    const documenting = new DocumentingConcept();
-    expect(() => documenting.parse({ subject: "broken", text })).toThrow(MalformedAttributes);
-    expect(() => documenting.parse({ subject: "broken", text })).toThrow(
+    const documentParsing = new DocumentParsingConcept();
+    expect(() => documentParsing.parseDocument({ subject: "broken", text })).toThrow(MalformedAttributes);
+    expect(() => documentParsing.parseDocument({ subject: "broken", text })).toThrow(
       "The attributes at the top of this document cannot be parsed.",
     );
-    expect(documenting._document({ subject: "broken" })).toEqual([]);
+    expect(documentParsing._document({ subject: "broken" })).toEqual([]);
   }
 });
 
 test("failed replacements are atomic and preserve the previous valid document", () => {
-  const documenting = new DocumentingConcept();
-  const valid = documenting.parse({ subject: "post", text: "---\ntitle: Valid\n---\nOld body" });
-  const before = documenting._document({ subject: "post" });
+  const documentParsing = new DocumentParsingConcept();
+  const valid = documentParsing.parseDocument({ subject: "post", text: "---\ntitle: Valid\n---\nOld body" });
+  const before = documentParsing._document({ subject: "post" });
 
-  expect(() => documenting.parse({ subject: "post", text: "---\ntitle: [\n---\nNew body" })).toThrow(
+  expect(() => documentParsing.parseDocument({ subject: "post", text: "---\ntitle: [\n---\nNew body" })).toThrow(
     MalformedAttributes,
   );
-  expect(documenting._document({ subject: "post" })).toEqual(before);
-  expect(() => documenting.parse({ subject: "post", text: "---\ntitle: Unclosed" })).toThrow(MalformedAttributes);
-  expect(documenting._document({ subject: "post" })).toEqual(before);
-  expect(documenting._all()).toEqual([{ document: valid.document, subject: "post" }]);
+  expect(documentParsing._document({ subject: "post" })).toEqual(before);
+  expect(() => documentParsing.parseDocument({ subject: "post", text: "---\ntitle: Unclosed" })).toThrow(MalformedAttributes);
+  expect(documentParsing._document({ subject: "post" })).toEqual(before);
+  expect(documentParsing._all()).toEqual([{ document: valid.document, subject: "post" }]);
 });
 
 test("empty headers are empty mappings and every non-empty root must be a mapping", () => {
   for (const text of ["---\n---\nbody", "---\n# only a comment\n---\nbody", "---\r\n# comment\r\n---\r\nbody"]) {
-    expect(new DocumentingConcept().parse({ subject: "empty", text }).attributes).toEqual({});
+    expect(new DocumentParsingConcept().parseDocument({ subject: "empty", text }).attributes).toEqual({});
   }
 
   for (const source of ["null", "Ada", "[one, two]", "- one\n- two", "!!set {one: null}"]) {
-    expect(() => new DocumentingConcept().parse({ subject: "root", text: `---\n${source}\n---\nbody` })).toThrow(
+    expect(() => new DocumentParsingConcept().parseDocument({ subject: "root", text: `---\n${source}\n---\nbody` })).toThrow(
       MalformedAttributes,
     );
   }
 
-  expect(new DocumentingConcept().parse({ subject: "map", text: "---\n!!map { title: Ada }\n---\nbody" }).attributes).toEqual({
+  expect(new DocumentParsingConcept().parseDocument({ subject: "map", text: "---\n!!map { title: Ada }\n---\nbody" }).attributes).toEqual({
     title: "Ada",
   });
 });
 
 test("YAML 1.2 Core tags and safe finite numbers form the complete scalar subset", () => {
-  const accepted = new DocumentingConcept().parse({
+  const accepted = new DocumentParsingConcept().parseDocument({
     subject: "values",
     text: `---
 text: !!str 12
@@ -181,14 +181,14 @@ body`,
     "value: 1e400",
   ];
   for (const source of rejected) {
-    expect(() => new DocumentingConcept().parse({ subject: "value", text: `---\n${source}\n---\nbody` })).toThrow(
+    expect(() => new DocumentParsingConcept().parseDocument({ subject: "value", text: `---\n${source}\n---\nbody` })).toThrow(
       MalformedAttributes,
     );
   }
 });
 
 test("mapping keys are unique literal strings and special names stay safe own properties", () => {
-  const accepted = new DocumentingConcept().parse({
+  const accepted = new DocumentParsingConcept().parseDocument({
     subject: "keys",
     text: `---
 "": blank
@@ -217,15 +217,15 @@ body`,
     "name: &name title\n*name: value",
   ];
   for (const source of rejected) {
-    expect(() => new DocumentingConcept().parse({ subject: "keys", text: `---\n${source}\n---\nbody` })).toThrow(
+    expect(() => new DocumentParsingConcept().parseDocument({ subject: "keys", text: `---\n${source}\n---\nbody` })).toThrow(
       MalformedAttributes,
     );
   }
 });
 
 test("aliases expand independently with a deterministic safety limit", () => {
-  const documenting = new DocumentingConcept();
-  const parsed = documenting.parse({
+  const documentParsing = new DocumentParsingConcept();
+  const parsed = documentParsing.parseDocument({
     subject: "aliases",
     text: `---
 base: &base
@@ -253,18 +253,18 @@ copies:
 ${Array.from({ length: count }, () => "  - *value").join("\n")}
 ---
 body`;
-  expect(new DocumentingConcept().parse({ subject: "limit", text: sourceWith(100) }).attributes).toBeDefined();
-  expect(() => new DocumentingConcept().parse({ subject: "limit", text: sourceWith(101) })).toThrow(
+  expect(new DocumentParsingConcept().parseDocument({ subject: "limit", text: sourceWith(100) }).attributes).toBeDefined();
+  expect(() => new DocumentParsingConcept().parseDocument({ subject: "limit", text: sourceWith(101) })).toThrow(
     MalformedAttributes,
   );
   expect(() =>
-    new DocumentingConcept().parse({ subject: "cycle", text: "---\nloop: &loop [*loop]\n---\nbody" }),
+    new DocumentParsingConcept().parseDocument({ subject: "cycle", text: "---\nloop: &loop [*loop]\n---\nbody" }),
   ).toThrow(MalformedAttributes);
 });
 
 test("action and query observations are deep clones of stored attributes", () => {
-  const documenting = new DocumentingConcept();
-  const parsed = documenting.parse({
+  const documentParsing = new DocumentParsingConcept();
+  const parsed = documentParsing.parseDocument({
     subject: "clone",
     text: "---\npage:\n  title: Ada\n  topics: [one, two]\n---\nbody",
   });
@@ -272,56 +272,56 @@ test("action and query observations are deep clones of stored attributes", () =>
   returned.page.title = "Changed";
   returned.page.topics.push("three");
 
-  const observed = one(documenting._document({ subject: "clone" }));
+  const observed = one(documentParsing._document({ subject: "clone" }));
   expect(observed.attributes).toEqual({ page: { title: "Ada", topics: ["one", "two"] } });
   const queried = observed.attributes as { page: { title: string; topics: string[] } };
   queried.page.title = "Changed again";
   queried.page.topics.length = 0;
-  expect(one(documenting._document({ subject: "clone" })).attributes).toEqual({
+  expect(one(documentParsing._document({ subject: "clone" })).attributes).toEqual({
     page: { title: "Ada", topics: ["one", "two"] },
   });
 });
 
 test("identities are stable and collision-safe, and listings have one specified order", () => {
   const subjects = ["z", "a", "A", "a:b", 'a"b', "ä"];
-  const documenting = new DocumentingConcept();
-  for (const subject of [...subjects].reverse()) documenting.parse({ subject, text: subject });
+  const documentParsing = new DocumentParsingConcept();
+  for (const subject of [...subjects].reverse()) documentParsing.parseDocument({ subject, text: subject });
 
-  const listed = documenting._all();
+  const listed = documentParsing._all();
   expect(listed.map(({ subject }) => subject)).toEqual([...subjects].sort());
   expect(new Set(listed.map(({ document }) => document).values()).size).toBe(subjects.length);
   for (const { document, subject } of listed) expect(document).toBe(`document:${JSON.stringify(subject)}`);
 
-  const first = documenting.parse({ subject: "stable", text: "first" });
-  const replaced = documenting.parse({ subject: "stable", text: "second" });
+  const first = documentParsing.parseDocument({ subject: "stable", text: "first" });
+  const replaced = documentParsing.parseDocument({ subject: "stable", text: "second" });
   expect(replaced.document).toBe(first.document);
-  documenting.forget({ subject: "stable" });
-  expect(documenting.parse({ subject: "stable", text: "third" }).document).toBe(first.document);
-  expect(new DocumentingConcept().parse({ subject: "stable", text: "independent" }).document).toBe(first.document);
+  documentParsing.removeDocument({ subject: "stable" });
+  expect(documentParsing.parseDocument({ subject: "stable", text: "third" }).document).toBe(first.document);
+  expect(new DocumentParsingConcept().parseDocument({ subject: "stable", text: "independent" }).document).toBe(first.document);
 });
 
 test("forget removes exactly one document and refuses an absent subject", () => {
-  const documenting = new DocumentingConcept();
-  const parsed = documenting.parse({ subject: "post", text: "body" });
-  documenting.parse({ subject: "other", text: "other" });
+  const documentParsing = new DocumentParsingConcept();
+  const parsed = documentParsing.parseDocument({ subject: "post", text: "body" });
+  documentParsing.parseDocument({ subject: "other", text: "other" });
 
-  expect(documenting.forget({ subject: "post" })).toEqual({ document: parsed.document });
-  expect(documenting._document({ subject: "post" })).toEqual([]);
-  expect(documenting._all().map(({ subject }) => subject)).toEqual(["other"]);
-  expect(() => documenting.forget({ subject: "post" })).toThrow(DocumentNotFound);
-  expect(() => documenting.forget({ subject: "post" })).toThrow("There is no document for this subject.");
+  expect(documentParsing.removeDocument({ subject: "post" })).toEqual({ document: parsed.document });
+  expect(documentParsing._document({ subject: "post" })).toEqual([]);
+  expect(documentParsing._all().map(({ subject }) => subject)).toEqual(["other"]);
+  expect(() => documentParsing.removeDocument({ subject: "post" })).toThrow(DocumentNotFound);
+  expect(() => documentParsing.removeDocument({ subject: "post" })).toThrow("There is no document for this subject.");
 });
 
 test("registry exposes both declared refusals with their normative messages", async () => {
-  const concepts = conceptSet({ Documenting: documenting });
+  const concepts = conceptSet({ DocumentParsing: documentParsing });
   const app = assemble({ vocabulary: concepts.vocabulary, instances: concepts.implementations(), composition: {} });
-  const Documenting = app.concepts.Documenting;
+  const DocumentParsing = app.concepts.DocumentParsing;
 
-  expect(await Documenting.parse({ subject: "broken", text: "---\ntitle: [\n---\nbody" })).toEqual({
+  expect(await DocumentParsing.parseDocument({ subject: "broken", text: "---\ntitle: [\n---\nbody" })).toEqual({
     error: "MALFORMED_ATTRIBUTES",
     detail: "The attributes at the top of this document cannot be parsed.",
   });
-  expect(await Documenting.forget({ subject: "missing" })).toEqual({
+  expect(await DocumentParsing.removeDocument({ subject: "missing" })).toEqual({
     error: "DOCUMENT_NOT_FOUND",
     detail: "There is no document for this subject.",
   });

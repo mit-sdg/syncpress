@@ -43,7 +43,7 @@ a set of Watches with
 ## Actions
 
 ```actions
-observe (directory: Path, settling: Duration, excluded: Path, prefix: Path) : return (watch: Watch)
+open (directory: Path, settling: Duration, excluded: Path, prefix: Path) : return (watch: Watch)
   where directory, excluded, or prefix is malformed, or settling is not a positive safe integer
   then
     refuse INVALID_WATCH "A watch needs a directory and a positive settling duration."
@@ -60,7 +60,7 @@ observe (directory: Path, settling: Duration, excluded: Path, prefix: Path) : re
     normalize the directory and fixed exclusions before host observation begins
     add an open Watch with settled false and return it
 
-attend (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)
+waitForChange (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)
   where watch is unknown
   then
     refuse WATCH_NOT_FOUND "There is no such watch."
@@ -105,16 +105,16 @@ _open () : many (watch: Watch)
 ## Contracts
 
 ```contracts
-contract excluded-changes on observe
+contract excluded-changes on open
   A tree exclusion ignores its path and descendants by native path components.
   A prefix exclusion matches only the first component below its own parent.
 
-contract settled-bursts on observe, attend
+contract settled-bursts on open, waitForChange
   Each counted change restarts the settling Duration. A quiet Duration records
   one unreported burst; further bursts collapse into it until `attend` reports
   and consumes it.
 
-contract terminal-watch on attend, close
+contract terminal-watch on waitForChange, close
   An unexpected host-watcher end makes the Watch failed and releases attendance.
   A closed Watch observes nothing. Failed and closed Watches retain their
   identities and never become open again.

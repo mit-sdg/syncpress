@@ -131,7 +131,7 @@ declare (subject: Subject, alternative: Text, width: PositiveInteger, height: Po
     add the supplied declaration
     return embedding, changed true, and completed true exactly when expects is zero
 
-offer (embedding: Embedding, address: Address, format: Format, width: PositiveInteger, order: NonnegativeInteger) : return (offer: Offer, embedding: Embedding, arrived: Number, changed: Flag, completed: Flag)
+provideCandidate (embedding: Embedding, address: Address, format: Format, width: PositiveInteger, order: NonnegativeInteger) : return (offer: Offer, embedding: Embedding, arrived: Number, changed: Flag, completed: Flag)
   where embedding is not Text
   then
     refuse INVALID_TEXT "Subjects, identities, and alternative text must be well-formed text; alternative text must contain no null character."
@@ -213,7 +213,7 @@ contract embedding-keys
   At most one Embedding exists per Subject, one Offer per Embedding and Address,
   and one candidate per Embedding, Format, and width.
 
-contract stable-identities on declare, offer, withdraw
+contract stable-identities on declare, provideCandidate, withdraw
   An Embedding identity is determined by its Subject, and an Offer identity by
   its Embedding and Address. Replacing or later recreating either key preserves
   its opaque identity.

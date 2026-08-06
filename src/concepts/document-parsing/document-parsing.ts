@@ -193,10 +193,10 @@ function compareText(left: string, right: string): number {
 }
 
 /** Separate strict YAML front matter from a document body without interpreting its attributes. */
-export class DocumentingConcept {
+export class DocumentParsingConcept {
   readonly #documents = new Map<string, DocumentRecord>();
 
-  parse({ subject, text }: { subject: string; text: string }) {
+  parseDocument({ subject, text }: { subject: string; text: string }) {
     const extracted = extractFrontMatter(text);
     const attributes = extracted.source === undefined ? {} : parseAttributes(extracted.source);
     const document = documentIdentity(subject);
@@ -205,7 +205,7 @@ export class DocumentingConcept {
     return { document, attributes: clone(attributes), body: record.body };
   }
 
-  forget({ subject }: { subject: string }) {
+  removeDocument({ subject }: { subject: string }) {
     const record = this.#documents.get(subject);
     if (record === undefined) throw new DocumentNotFound();
     this.#documents.delete(subject);

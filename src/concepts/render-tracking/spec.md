@@ -1,4 +1,4 @@
-# Rendering
+# Render Tracking
 
 ## Purpose
 
@@ -79,7 +79,7 @@ begin (subject: Subject, path: Path, profile: Profile, template: TemplateName, d
     add and remember a started rendering with its selected profile and template
     return the new rendering, subject, profile, and template
 
-settleBody (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)
+completeBody (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)
   where rendering is unknown
   then
     refuse RENDERING_NOT_FOUND "There is no such rendering attempt."
@@ -90,7 +90,7 @@ settleBody (rendering: Rendering) : return (rendering: Rendering, subject: Subje
   then
     return transitioned false
 
-settleLayout (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)
+completeLayout (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)
   where rendering is unknown
   then
     refuse RENDERING_NOT_FOUND "There is no such rendering attempt."

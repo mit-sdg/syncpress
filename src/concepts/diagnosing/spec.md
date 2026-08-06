@@ -95,7 +95,7 @@ report (scope?: Scope, severity: Severity, code: Code, message: Text, source?: D
   then
     add it and return its stable identity
 
-relate (diagnostic: Diagnostic, source: DiagnosticSource, line?: Position, column?: Position, note: Text) : return (relation: Relation)
+addRelatedLocation (diagnostic: Diagnostic, source: DiagnosticSource, line?: Position, column?: Position, note: Text) : return (relation: Relation)
   where diagnostic, source, or note is not Text
   then
     refuse INVALID_TEXT "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."
@@ -112,7 +112,7 @@ relate (diagnostic: Diagnostic, source: DiagnosticSource, line?: Position, colum
   then
     add it and return its stable identity
 
-retract (scope?: Scope, source?: DiagnosticSource) : return (scope: Scope | undefined, source: DiagnosticSource | undefined, count: Number)
+retractGroup (scope?: Scope, source?: DiagnosticSource) : return (scope: Scope | undefined, source: DiagnosticSource | undefined, count: Number)
   where a present scope or source is not Text
   then
     refuse INVALID_TEXT "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."

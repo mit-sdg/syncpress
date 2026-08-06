@@ -22,7 +22,7 @@ producer gives up all of its paths.
 
 ```types
 Root = external
-  A nonempty native host path supplied as Text. `direct` uses one Root as the
+  A nonempty native host path supplied as Text. `configureDestination` uses one Root as the
   destination and another distinct sibling Root as its transaction prefix.
 
 Path = Text
@@ -109,7 +109,7 @@ a set of Emitted with
 ## Actions
 
 ```actions
-direct (destination: Root, prefix: Root) : return (destination: Root, existing: Number)
+configureDestination (destination: Root, prefix: Root) : return (destination: Root, existing: Number)
   where destination or prefix is empty or malformed, destination is the filesystem root or an existing non-directory, or prefix is not a distinct sibling prefix
   then
     refuse INVALID_DESTINATION "A destination must name a directory other than the filesystem root."
@@ -123,7 +123,7 @@ direct (destination: Root, prefix: Root) : return (destination: Root, existing: 
     replace the previously directed destination and transaction prefix only after inspection succeeds
     return destination and the number of recorded entries
 
-begin (producer: Producer) : return (producer: Producer, attempt: Number)
+beginAttempt (producer: Producer) : return (producer: Producer, attempt: Number)
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
@@ -171,7 +171,7 @@ intend (producer: Producer, attempt?: Number, path: Path, content: Content, medi
     keep the intent identity for producer and path
     return intent, path, and digest
 
-commit (producer: Producer, attempt: Number) : return (producer: Producer, dropped: Number)
+commitAttempt (producer: Producer, attempt: Number) : return (producer: Producer, dropped: Number)
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
@@ -187,7 +187,7 @@ commit (producer: Producer, attempt: Number) : return (producer: Producer, dropp
     close the attempt
     return producer and the number of formerly active paths omitted from the stage
 
-abort (producer: Producer, attempt: Number) : return (producer: Producer, discarded: Number)
+abortAttempt (producer: Producer, attempt: Number) : return (producer: Producer, discarded: Number)
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
@@ -203,7 +203,7 @@ abort (producer: Producer, attempt: Number) : return (producer: Producer, discar
     close the attempt without changing its number or any active intent
     return producer and the number of staged paths discarded
 
-retract (producer: Producer) : return (producer: Producer, count: Number)
+retractProducer (producer: Producer) : return (producer: Producer, count: Number)
   where producer is not well-formed text
   then
     refuse INVALID_PRODUCER "A producer identity must be well-formed text."
@@ -276,8 +276,8 @@ contract intent-keys
   Producers may share a Path only when their exact bytes agree. Replacing,
   retracting, or recreating a pair preserves its Intent identity.
 
-contract publication-installation on direct, reconcile
-  `direct` records a destination only after complete inspection. `reconcile`
+contract publication-installation on configureDestination, reconcile
+  `configureDestination` records a destination only after complete inspection. `reconcile`
   prepares a complete sibling tree, serializes same-destination work in a
   process-local FIFO, and installs only after preparation and snapshot checks.
   Separate processes must not share a transaction prefix. Host failure may

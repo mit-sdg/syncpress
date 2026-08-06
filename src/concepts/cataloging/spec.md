@@ -157,7 +157,7 @@ unindex (catalog: Catalog, item: Item) : return (entry: Entry)
   then
     remove and return its entry
 
-remove (name: Name) : return (catalog: Catalog, count: Number)
+removeCatalog (name: Name) : return (catalog: Catalog, count: Number)
   where name is not Text
   then
     refuse INVALID_TEXT "Names, selectors, identities, paths, and tiebreaks must be text."

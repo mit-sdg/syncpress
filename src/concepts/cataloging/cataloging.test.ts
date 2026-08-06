@@ -270,8 +270,8 @@ test("unindex, catalog removal, withdrawal, reset, membership, and positions cov
   expect(cataloging._position({ catalog: first, item: "shared" })).toEqual([{ index: 0 }]);
   expect(cataloging.unindex({ catalog: first, item: "shared" })).toEqual({ entry });
   expect(() => cataloging.unindex({ catalog: first, item: "shared" })).toThrow(NotIncluded);
-  expect(cataloging.remove({ name: "first" })).toEqual({ catalog: first, count: 0 });
-  expect(() => cataloging.remove({ name: "first" })).toThrow(CatalogNotFound);
+  expect(cataloging.removeCatalog({ name: "first" })).toEqual({ catalog: first, count: 0 });
+  expect(() => cataloging.removeCatalog({ name: "first" })).toThrow(CatalogNotFound);
   expect(cataloging.withdraw({ item: "shared" })).toEqual({ item: "shared", count: 1 });
   expect(cataloging.withdraw({ item: "shared" })).toEqual({ item: "shared", count: 0 });
   expect(cataloging.reset()).toEqual({ count: 1 });

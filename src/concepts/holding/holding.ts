@@ -7,7 +7,7 @@ const REQUESTS: readonly (readonly [NodeJS.Signals, Reason])[] = [
 ];
 
 /** Hold work open until the operator asks the process to stop. */
-export class AttendingConcept {
+export class HoldingConcept {
   readonly #holds = new Map<string, Hold>();
   #nextHold = 1;
 
@@ -24,7 +24,7 @@ export class AttendingConcept {
     },
   ) {}
 
-  async hold(): Promise<{ hold: string; reason: Reason }> {
+  async awaitStop(): Promise<{ hold: string; reason: Reason }> {
     const hold = `hold:${this.#nextHold++}`;
     const record: Hold = { released: false, reason: null };
     this.#holds.set(hold, record);

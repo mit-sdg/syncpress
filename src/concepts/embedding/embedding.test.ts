@@ -17,7 +17,7 @@ import {
 import { embedding as registeredEmbedding } from "./registry.ts";
 
 type Declaration = Parameters<EmbeddingConcept["declare"]>[0];
-type Offered = Parameters<EmbeddingConcept["offer"]>[0];
+type Candidate = Parameters<EmbeddingConcept["provideCandidate"]>[0];
 
 const baseDeclaration: Declaration = {
   subject: "reference",
@@ -34,8 +34,8 @@ function declare(concept: EmbeddingConcept, overrides: Partial<Declaration> = {}
   return concept.declare({ ...baseDeclaration, ...overrides });
 }
 
-function offer(concept: EmbeddingConcept, embedding: string, overrides: Partial<Offered> = {}) {
-  return concept.offer({ embedding, address: "/assets/pipeline-480.avif", format: "avif", width: 480, order: 0, ...overrides });
+function provideCandidate(concept: EmbeddingConcept, embedding: string, overrides: Partial<Candidate> = {}) {
+  return concept.provideCandidate({ embedding, address: "/assets/pipeline-480.avif", format: "avif", width: 480, order: 0, ...overrides });
 }
 
 test("zero derived offers complete on declaration with a usable original fallback", () => {
@@ -77,7 +77,7 @@ test("zero derived offers complete on declaration with a usable original fallbac
     height: 16,
     original: "/assets/tiny.png?raw=1&kind=original",
   })).toEqual({ embedding: declaration.embedding, changed: false, completed: false });
-  expect(() => offer(concept, declaration.embedding, { width: 16 })).toThrow(EmbeddingComplete);
+  expect(() => provideCandidate(concept, declaration.embedding, { width: 16 })).toThrow(EmbeddingComplete);
 });
 
 test("out-of-order offers complete once and produce exact escaped responsive markup", () => {
@@ -97,15 +97,15 @@ test("out-of-order offers complete once and produce exact escaped responsive mar
   attributes.title = "changed after declaration";
 
   const offered = [
-    offer(concept, declaration.embedding, { address: "/assets/pipeline-960.png", format: "png", width: 960, order: 5 }),
-    offer(concept, declaration.embedding, { address: "/assets/pipeline-960.webp", format: "webp", width: 960, order: 3 }),
-    offer(concept, declaration.embedding, { address: "/assets/pipeline-960.avif", format: "avif", width: 960, order: 1 }),
-    offer(concept, declaration.embedding, { address: "/assets/pipeline-480.webp", format: "webp", width: 480, order: 2 }),
+    provideCandidate(concept, declaration.embedding, { address: "/assets/pipeline-960.png", format: "png", width: 960, order: 5 }),
+    provideCandidate(concept, declaration.embedding, { address: "/assets/pipeline-960.webp", format: "webp", width: 960, order: 3 }),
+    provideCandidate(concept, declaration.embedding, { address: "/assets/pipeline-960.avif", format: "avif", width: 960, order: 1 }),
+    provideCandidate(concept, declaration.embedding, { address: "/assets/pipeline-480.webp", format: "webp", width: 480, order: 2 }),
   ];
   expect(offered.every(({ changed, completed }) => changed && !completed)).toBe(true);
   expect(concept._markup({ embedding: declaration.embedding })).toEqual([]);
 
-  const completed = offer(concept, declaration.embedding, {
+  const completed = provideCandidate(concept, declaration.embedding, {
     address: "/assets/pipeline-480.avif?quality=80&fast=1",
     format: "avif",
     width: 480,
@@ -125,7 +125,7 @@ test("out-of-order offers complete once and produce exact escaped responsive mar
 });
 
 test("format-order ties and arrival order are deterministic while the declared format remains fallback", () => {
-  const candidates: Omit<Offered, "embedding">[] = [
+  const candidates: Omit<Candidate, "embedding">[] = [
     { address: "/assets/wide-800.webp", format: "webp", width: 800, order: 0 },
     { address: "/assets/wide-800.avif", format: "avif", width: 800, order: 0 },
     { address: "/assets/wide-400.webp", format: "webp", width: 400, order: 0 },
@@ -142,7 +142,7 @@ test("format-order ties and arrival order are deterministic while the declared f
       original: "/assets/wide.jpeg",
       originalFormat: "jpeg",
     });
-    for (const index of arrival) concept.offer({ embedding: declaration.embedding, ...candidates[index]! });
+    for (const index of arrival) concept.provideCandidate({ embedding: declaration.embedding, ...candidates[index]! });
     return concept._markup({ embedding: declaration.embedding })[0]!.markup.replaceAll(`arrival-${arrival.join("")}`, "arrival");
   };
 
@@ -155,28 +155,28 @@ test("format-order ties and arrival order are deterministic while the declared f
 test("identical, corrected, conflicting, final, and excess offers have exact transition behavior", () => {
   const concept = new EmbeddingConcept();
   const declaration = declare(concept, { expects: 2 });
-  const first = offer(concept, declaration.embedding);
+  const first = provideCandidate(concept, declaration.embedding);
   expect(first).toMatchObject({ arrived: 1, changed: true, completed: false });
 
-  expect(offer(concept, declaration.embedding)).toEqual({ ...first, changed: false, completed: false });
-  const corrected = offer(concept, declaration.embedding, { order: 7 });
+  expect(provideCandidate(concept, declaration.embedding)).toEqual({ ...first, changed: false, completed: false });
+  const corrected = provideCandidate(concept, declaration.embedding, { order: 7 });
   expect(corrected).toEqual({ ...first, changed: true, completed: false });
   expect(corrected.offer).toBe(first.offer);
-  expect(() => offer(concept, declaration.embedding, { address: "/assets/other-480.avif", order: 8 })).toThrow(OfferConflict);
-  expect(() => offer(concept, declaration.embedding, { address: "/assets/pipeline.png", format: "webp", width: 600, order: 8 })).toThrow(OfferConflict);
-  expect(() => offer(concept, declaration.embedding, { address: "/assets/other.png", format: "png", width: 1440, order: 8 })).toThrow(OfferConflict);
+  expect(() => provideCandidate(concept, declaration.embedding, { address: "/assets/other-480.avif", order: 8 })).toThrow(OfferConflict);
+  expect(() => provideCandidate(concept, declaration.embedding, { address: "/assets/pipeline.png", format: "webp", width: 600, order: 8 })).toThrow(OfferConflict);
+  expect(() => provideCandidate(concept, declaration.embedding, { address: "/assets/other.png", format: "png", width: 1440, order: 8 })).toThrow(OfferConflict);
   expect(concept._embedding({ embedding: declaration.embedding })[0]).toMatchObject({ arrived: 1, complete: false });
 
-  const final = offer(concept, declaration.embedding, { address: "/assets/pipeline-960.png", format: "png", width: 960, order: 8 });
+  const final = provideCandidate(concept, declaration.embedding, { address: "/assets/pipeline-960.png", format: "png", width: 960, order: 8 });
   expect(final).toMatchObject({ arrived: 2, changed: true, completed: true });
   const completedMarkup = concept._markup({ embedding: declaration.embedding });
-  expect(offer(concept, declaration.embedding, { address: "/assets/pipeline-960.png", format: "png", width: 960, order: 8 })).toEqual({
+  expect(provideCandidate(concept, declaration.embedding, { address: "/assets/pipeline-960.png", format: "png", width: 960, order: 8 })).toEqual({
     ...final,
     changed: false,
     completed: false,
   });
-  expect(() => offer(concept, declaration.embedding, { order: 9 })).toThrow(EmbeddingComplete);
-  expect(() => offer(concept, declaration.embedding, { address: "/assets/excess.webp", format: "webp", width: 960, order: 9 })).toThrow(EmbeddingComplete);
+  expect(() => provideCandidate(concept, declaration.embedding, { order: 9 })).toThrow(EmbeddingComplete);
+  expect(() => provideCandidate(concept, declaration.embedding, { address: "/assets/excess.webp", format: "webp", width: 960, order: 9 })).toThrow(EmbeddingComplete);
   expect(concept._markup({ embedding: declaration.embedding })).toEqual(completedMarkup);
   expect(concept._embedding({ embedding: declaration.embedding })[0]).toMatchObject({ arrived: 2, complete: true });
 });
@@ -184,7 +184,7 @@ test("identical, corrected, conflicting, final, and excess offers have exact tra
 test("redeclaration, withdrawal, and recreation have stable identities and exact lifecycle", () => {
   const concept = new EmbeddingConcept();
   const declaration = declare(concept, { subject: "a:b", expects: 1 });
-  const offered = offer(concept, declaration.embedding);
+  const offered = provideCandidate(concept, declaration.embedding);
   expect(declaration.embedding).toBe('embedding:"a:b"');
   expect(offered.offer).toBe(`offer:${JSON.stringify([declaration.embedding, "/assets/pipeline-480.avif"])}`);
 
@@ -197,7 +197,7 @@ test("redeclaration, withdrawal, and recreation have stable identities and exact
   });
   expect(concept._offers({ embedding: declaration.embedding })).toEqual([]);
   expect(concept._markup({ embedding: declaration.embedding })).toEqual([]);
-  const replacement = offer(concept, declaration.embedding);
+  const replacement = provideCandidate(concept, declaration.embedding);
   expect(replacement.offer).toBe(offered.offer);
   expect(replacement.completed).toBe(true);
 
@@ -206,7 +206,7 @@ test("redeclaration, withdrawal, and recreation have stable identities and exact
   expect(concept._for({ subject: "a:b" })).toEqual([]);
   expect(concept._offers({ embedding: declaration.embedding })).toEqual([]);
   expect(concept._markup({ embedding: declaration.embedding })).toEqual([]);
-  expect(() => offer(concept, declaration.embedding)).toThrow(EmbeddingNotFound);
+  expect(() => provideCandidate(concept, declaration.embedding)).toThrow(EmbeddingNotFound);
   expect(() => concept.withdraw({ subject: 1 })).toThrow(InvalidText);
   expect(() => concept.withdraw({ subject: "a:b" })).toThrow(EmbeddingNotFound);
 
@@ -275,25 +275,25 @@ test("declarations validate every field before changing state", () => {
 test("offers validate identity, address, format, width, and order without changing state", () => {
   const concept = new EmbeddingConcept();
   const declaration = declare(concept, { expects: 1 });
-  expect(() => concept.offer({ embedding: 1, address: "/x.png", format: "png", width: 1, order: 0 })).toThrow(InvalidText);
-  expect(() => concept.offer({ embedding: "missing", address: "unsafe", format: "svg", width: 0, order: -1 })).toThrow(EmbeddingNotFound);
+  expect(() => concept.provideCandidate({ embedding: 1, address: "/x.png", format: "png", width: 1, order: 0 })).toThrow(InvalidText);
+  expect(() => concept.provideCandidate({ embedding: "missing", address: "unsafe", format: "svg", width: 0, order: -1 })).toThrow(EmbeddingNotFound);
 
   for (const address of ["relative.png", "//host/x.png", "/x y.png", "/x,y.png", '/x\" onerror=\"alert(1)']) {
-    expect(() => offer(concept, declaration.embedding, { address })).toThrow(InvalidAddress);
+    expect(() => provideCandidate(concept, declaration.embedding, { address })).toThrow(InvalidAddress);
   }
   for (const format of ["jpg", "SVG", 'x\" onerror=\"alert(1)', 1]) {
-    expect(() => offer(concept, declaration.embedding, { format })).toThrow(InvalidFormat);
+    expect(() => provideCandidate(concept, declaration.embedding, { format })).toThrow(InvalidFormat);
   }
   for (const width of [0, -1, 1.5, 1441, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "480"]) {
-    expect(() => offer(concept, declaration.embedding, { width })).toThrow(InvalidWidth);
+    expect(() => provideCandidate(concept, declaration.embedding, { width })).toThrow(InvalidWidth);
   }
   for (const order of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "0"]) {
-    expect(() => offer(concept, declaration.embedding, { order })).toThrow(InvalidOrder);
+    expect(() => provideCandidate(concept, declaration.embedding, { order })).toThrow(InvalidOrder);
   }
   expect(concept._offers({ embedding: declaration.embedding })).toEqual([]);
   expect(concept._embedding({ embedding: declaration.embedding })[0]).toMatchObject({ arrived: 0, complete: false });
 
-  expect(offer(concept, declaration.embedding, { order: -0 })).toMatchObject({ arrived: 1, changed: true, completed: true });
+  expect(provideCandidate(concept, declaration.embedding, { order: -0 })).toMatchObject({ arrived: 1, changed: true, completed: true });
   expect(concept._offers({ embedding: declaration.embedding })[0]!.order).toBe(0);
 });
 

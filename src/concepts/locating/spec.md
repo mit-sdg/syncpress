@@ -59,7 +59,7 @@ a set of Places with
 ## Actions
 
 ```actions
-request (name: Name, path: Text) : return (name: Name, path: Text)
+recordRequest (name: Name, path: Text) : return (name: Name, path: Text)
   where name or path is not well-formed, non-empty text
   then
     refuse INVALID_LOCATION "A location must be well-formed, non-empty text."
@@ -67,7 +67,7 @@ request (name: Name, path: Text) : return (name: Name, path: Text)
     record path under name, replacing any earlier request with that name
     return name and path
 
-ground (path: Text) : return (status: Status, path?: Path, real?: Path, code?: Code, detail?: Text)
+establishBase (path: Text) : return (status: Status, path?: Path, real?: Path, code?: Code, detail?: Text)
   where path is not well-formed, non-empty text
   then
     refuse INVALID_LOCATION "A location must be well-formed, non-empty text."
@@ -88,7 +88,7 @@ ground (path: Text) : return (status: Status, path?: Path, real?: Path, code?: C
     make path absolute against the process working directory
     replace the Base, discard every admitted Place, and return status grounded with its paths
 
-admit (name: Name, path: Text) : return (status: Status, place?: Place, path?: Path, real?: Path, contained?: Flag, resolved?: Flag, code?: Code, detail?: Text)
+inspectLocation (name: Name, path: Text) : return (status: Status, place?: Place, path?: Path, real?: Path, contained?: Flag, resolved?: Flag, code?: Code, detail?: Text)
   where no base is grounded
   then
     refuse NOT_GROUNDED "No base directory has been grounded."
@@ -136,12 +136,12 @@ _overlapping (place: Place, other: Place) : one (overlapping: Flag)
 ## Contracts
 
 ```contracts
-contract host-observations on ground, admit
+contract host-observations on establishBase, inspectLocation
   Paths and containment flags describe the host when the action runs. They are
-  not capabilities or locks and may become stale immediately. `admit` may
-  observe a missing trailing location; `ground` requires a present directory.
+  not capabilities or locks and may become stale immediately. `inspectLocation` may
+  observe a missing trailing location; `establishBase` requires a present directory.
 
-contract stable-place-identity on ground, admit
+contract stable-place-identity on establishBase, inspectLocation
   Each Name determines one Place identity. Replacing a Place, grounding another
   Base, and later admitting the Name preserve that identity.
 ```

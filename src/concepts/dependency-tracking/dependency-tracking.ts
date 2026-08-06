@@ -77,11 +77,11 @@ function useIdentity(result: string, input: string): string {
 }
 
 /** Track current and stale results in a deterministic dependency graph. */
-export class DependingConcept {
+export class DependencyTrackingConcept {
   readonly #results = new Map<string, ResultRecord>();
   readonly #dependentsByInput = new Map<string, Set<string>>();
 
-  begin({ subject }: { subject: unknown }) {
+  beginAttempt({ subject }: { subject: unknown }) {
     requireText(subject);
     let result = this.#results.get(subject);
     if (result === undefined) {
@@ -106,7 +106,7 @@ export class DependingConcept {
     return { result: result.result, attempt: result.attempt };
   }
 
-  use({ subject, attempt, input }: { subject: unknown; attempt: unknown; input: unknown }) {
+  recordDependency({ subject, attempt, input }: { subject: unknown; attempt: unknown; input: unknown }) {
     requireText(subject);
     requireText(input);
     const result = this.#results.get(subject);
@@ -121,7 +121,7 @@ export class DependingConcept {
     return { use: useIdentity(result.result, input) };
   }
 
-  settle({ subject, attempt }: { subject: unknown; attempt: unknown }) {
+  settleAttempt({ subject, attempt }: { subject: unknown; attempt: unknown }) {
     requireText(subject);
     const result = this.#results.get(subject);
     if (result?.state !== "building") throw new NotBuilding();
@@ -138,7 +138,7 @@ export class DependingConcept {
     return { result: result.result };
   }
 
-  abandon({ subject, attempt }: { subject: unknown; attempt: unknown }) {
+  abandonAttempt({ subject, attempt }: { subject: unknown; attempt: unknown }) {
     requireText(subject);
     const result = this.#results.get(subject);
     if (result?.state !== "building") throw new NotBuilding();
@@ -149,7 +149,7 @@ export class DependingConcept {
     return { result: result.result };
   }
 
-  touch({ input }: { input: unknown }) {
+  invalidate({ input }: { input: unknown }) {
     requireText(input);
     let frontier = [input];
     const expanded = new Set(frontier);
@@ -178,7 +178,7 @@ export class DependingConcept {
     return { input, count };
   }
 
-  drop({ subject }: { subject: unknown }) {
+  removeResult({ subject }: { subject: unknown }) {
     requireText(subject);
     const result = this.#results.get(subject);
     if (result !== undefined) {

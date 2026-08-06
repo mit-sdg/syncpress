@@ -21,7 +21,7 @@ the logical tree.
 
 ```types
 Name = JavaScriptString
-  An opaque Root name. Host-loading actions require nonempty Text; `open`
+  An opaque Root name. Host-loading actions require nonempty Text; `ensureRoot`
   accepts any JavaScriptString.
 
 HostPath = external
@@ -74,7 +74,7 @@ a set of Files with
 ## Actions
 
 ```actions
-loadFile (name: Name, source: HostPath, path: Path) : return (status: Status, root?: Root, file?: File, digest?: Digest, count?: Number, changed?: Flag, code?: Code, detail?: Text)
+replaceTreeFromFile (name: Name, source: HostPath, path: Path) : return (status: Status, root?: Root, file?: File, digest?: Digest, count?: Number, changed?: Flag, code?: Code, detail?: Text)
   where name or source is not well-formed, non-empty text
   then
     refuse INVALID_SOURCE "A host load needs well-formed, non-empty name and source text."
@@ -90,7 +90,7 @@ loadFile (name: Name, source: HostPath, path: Path) : return (status: Status, ro
   then
     replace the named tree with that one file and return status loaded, its identities, digest, count, and change flag
 
-loadTree (name: Name, directory: HostPath) : return (status: Status, root?: Root, count?: Number, changed?: Flag, code?: Code, detail?: Text)
+replaceTreeFromDirectory (name: Name, directory: HostPath) : return (status: Status, root?: Root, count?: Number, changed?: Flag, code?: Code, detail?: Text)
   where name or directory is not well-formed, non-empty text
   then
     refuse INVALID_SOURCE "A host load needs well-formed, non-empty name and source text."
@@ -100,7 +100,7 @@ loadTree (name: Name, directory: HostPath) : return (status: Status, root?: Root
   then
     replace the named tree with every read file and return status loaded, its root, count, and change flag
 
-open (name: Name) : return (root: Root)
+ensureRoot (name: Name) : return (root: Root)
   where some root has name
   then
     return that root
@@ -109,7 +109,7 @@ open (name: Name) : return (root: Root)
     add a new root with name
     return root
 
-place (root: Root, path: Path, content: Bytes) : return (file: File, digest: Digest, changed: Flag)
+putFile (root: Root, path: Path, content: Bytes) : return (file: File, digest: Digest, changed: Flag)
   where root is absent
   then
     refuse ROOT_NOT_FOUND "There is no such root."
@@ -126,7 +126,7 @@ place (root: Root, path: Path, content: Bytes) : return (file: File, digest: Dig
   then
     add a file with copied content and changed true
 
-placeBase64 (root: Root, path: Path, encoded: Text) : return (file: File, digest: Digest, changed: Flag)
+putBase64File (root: Root, path: Path, encoded: Text) : return (file: File, digest: Digest, changed: Flag)
   where encoded is not canonical Base64
   then
     refuse INVALID_ENCODING "Staged file content must use canonical Base64."
@@ -141,7 +141,7 @@ placeBase64 (root: Root, path: Path, encoded: Text) : return (file: File, digest
     refuse INVALID_PATH "A file path must use the canonical portable form."
   where encoded, root, and path are valid
   then
-    decode it to bytes and behave exactly as place with root, path, and those bytes
+    decode it to bytes and behave exactly as putFile with root, path, and those bytes
 
 discard (file: File) : return (root: Root, path: Path, name: Segment)
   where file is absent
@@ -204,12 +204,12 @@ _resolution (file: File, address: Address) : one (status: ResolutionStatus)
 ## Contracts
 
 ```contracts
-contract stable-identities on loadFile, loadTree, open, place, placeBase64, discard
+contract stable-identities on replaceTreeFromFile, replaceTreeFromDirectory, ensureRoot, putFile, putBase64File, discard
   Each Name identifies one stable Root. Within a Root, each Path identifies one
   stable File, including after removal and recreation. Distinct Names and
   distinct `(Root, Path)` pairs have distinct identities.
 
-contract host-load-snapshot on loadFile, loadTree
+contract host-load-snapshot on replaceTreeFromFile, replaceTreeFromDirectory
   A host load reads every candidate byte before replacing its Root. A reported
   problem leaves the preceding Root unchanged. Concurrent host mutation may
   produce a problem or a mixed-time capture; the load is not a filesystem-wide

@@ -110,7 +110,7 @@ export class PhasingConcept {
     return { job, name: plan.name, phase: phases[0]!, attempt: attemptIdentity(job, 0) };
   }
 
-  advance({ job, attempt }: { job: string; attempt: string }) {
+  completePhase({ job, attempt }: { job: string; attempt: string }) {
     const record = isText(job) ? this.#jobs.get(job) : undefined;
     if (record === undefined) throw new JobNotRunning();
     const completed = isText(attempt) ? record.transitions.get(attempt) : undefined;

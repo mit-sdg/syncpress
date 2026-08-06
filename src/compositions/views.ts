@@ -12,9 +12,10 @@ const {
   Layering,
   Locating,
   Referencing,
-  Rendering,
+  RenderTracking,
   Routing,
 } = conceptRefs;
+
 
 /** Wherever this run publishes: an explicit destination, or the configured output. */
 export const PublicationPlace = view("the publication place", (_inputs, { place, destination }) => [
@@ -88,7 +89,7 @@ const PageRenderFacts = former(
   "the page render facts of rendering (rendering)",
   ({ rendering }, { page, data, address, path }) =>
     where(
-      Rendering._active({ rendering }).is({ subject: page }),
+      RenderTracking._active({ rendering }).is({ subject: page }),
       Layering._resolved({ subject: page }).is({ values: data }),
       Routing._address({ owner: page }).is({ address }),
       Filing._file({ file: page }).is({ path }),
@@ -99,7 +100,7 @@ const OriginatedPageRenderFacts = former(
   "the originated page render facts of rendering (rendering)",
   ({ rendering }, { page, address, canonicalUrl }) =>
     where(
-      Rendering._active({ rendering }).is({ subject: page }),
+      RenderTracking._active({ rendering }).is({ subject: page }),
       Routing._address({ owner: page }).is({ address }),
       AbsoluteSiteUrl({ address }).is({ url: canonicalUrl }),
     ).form({ canonicalUrl }),
@@ -109,7 +110,7 @@ const UnoriginatedPageRenderFacts = former(
   "the unoriginated page render facts of rendering (rendering)",
   ({ rendering }, { page, address }) =>
     where(
-      Rendering._active({ rendering }).is({ subject: page }),
+      RenderTracking._active({ rendering }).is({ subject: page }),
       Routing._address({ owner: page }).is({ address }),
       no(AbsoluteSiteUrl({ address })),
     ).form({}),

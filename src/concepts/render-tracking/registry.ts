@@ -2,15 +2,15 @@ import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 import {
   InvalidAttempt,
   InvalidText,
-  RenderingConcept,
+  RenderTrackingConcept,
   RenderingNotFound,
   StaleAttempt,
   StageNotReady,
-} from "./rendering.ts";
+} from "./render-tracking.ts";
 import spec from "./spec.md" with { type: "text" };
 
-export const rendering = registerConcept({
-  class: RenderingConcept,
+export const renderTracking = registerConcept({
+  class: RenderTrackingConcept,
   spec,
   refusals: {
     INVALID_TEXT: InvalidText,

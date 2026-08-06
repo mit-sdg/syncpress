@@ -25,14 +25,14 @@ import { emitting as emittingRegistration } from "./registry.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (content: Uint8Array) => new TextDecoder().decode(content);
-const direct = (emitting: StrictEmittingConcept, destination: string) =>
-  emitting.direct({ destination, prefix: publicationTransactionPrefix(destination) ?? "" });
+const configureDestination = (emitting: StrictEmittingConcept, destination: string) =>
+  emitting.configureDestination({ destination, prefix: publicationTransactionPrefix(destination) ?? "" });
 
 class EmittingConcept extends StrictEmittingConcept {
   readonly #open = new Map<string, number>();
 
-  begin(input: { producer: string }) {
-    const result = super.begin(input);
+  beginAttempt(input: { producer: string }) {
+    const result = super.beginAttempt(input);
     this.#open.set(input.producer, result.attempt);
     return result;
   }
@@ -42,14 +42,14 @@ class EmittingConcept extends StrictEmittingConcept {
     return super.intend({ ...input, ...(attempt === undefined ? {} : { attempt }) });
   }
 
-  commit(input: { producer: string; attempt?: unknown }) {
-    const result = super.commit({ ...input, attempt: input.attempt ?? this.#open.get(input.producer) });
+  commitAttempt(input: { producer: string; attempt?: unknown }) {
+    const result = super.commitAttempt({ ...input, attempt: input.attempt ?? this.#open.get(input.producer) });
     this.#open.delete(input.producer);
     return result;
   }
 
-  abort(input: { producer: string; attempt?: unknown }) {
-    const result = super.abort({ ...input, attempt: input.attempt ?? this.#open.get(input.producer) });
+  abortAttempt(input: { producer: string; attempt?: unknown }) {
+    const result = super.abortAttempt({ ...input, attempt: input.attempt ?? this.#open.get(input.producer) });
     this.#open.delete(input.producer);
     return result;
   }
@@ -63,8 +63,8 @@ test("its principle: complete attempts preserve the last valid artifact set", as
     await writeFile(join(destination, "old.html"), bytes("stale"));
 
     const emitting = new EmittingConcept();
-    expect(await direct(emitting, destination)).toEqual({ destination, existing: 1 });
-    expect(() => emitting.commit({ producer: "missing" })).toThrow(NotBegun);
+    expect(await configureDestination(emitting, destination)).toEqual({ destination, existing: 1 });
+    expect(() => emitting.commitAttempt({ producer: "missing" })).toThrow(NotBegun);
 
     const sharedIntent = emitting.intend({
       producer: "shared",
@@ -74,7 +74,7 @@ test("its principle: complete attempts preserve the last valid artifact set", as
     });
     emitting.intend({ producer: "other", path: "styles.css", content: bytes("main {}"), medium: "text/css" });
 
-    expect(emitting.begin({ producer: "bundle" })).toEqual({ producer: "bundle", attempt: 1 });
+    expect(emitting.beginAttempt({ producer: "bundle" })).toEqual({ producer: "bundle", attempt: 1 });
     const firstIndex = emitting.intend({
       producer: "bundle",
       path: "index.html",
@@ -96,7 +96,7 @@ test("its principle: complete attempts preserve the last valid artifact set", as
     ).toThrow(PathContested);
     expect(emitting._producers({ path: "index.html" })).toEqual([{ producer: "bundle" }]);
 
-    expect(emitting.commit({ producer: "bundle" })).toEqual({ producer: "bundle", dropped: 0 });
+    expect(emitting.commitAttempt({ producer: "bundle" })).toEqual({ producer: "bundle", dropped: 0 });
     expect(emitting._intent({ path: "index.html" })).toEqual([{ digest: firstIndex.digest, medium: "text/html" }]);
     expect(emitting._byProducer({ producer: "bundle" })).toEqual([
       { path: "a.css", digest: stylesheet.digest, medium: "text/css" },
@@ -110,7 +110,7 @@ test("its principle: complete attempts preserve the last valid artifact set", as
     expect(emitting._pending()).toEqual([]);
     expect(emitting._orphans()).toEqual([]);
 
-    expect(emitting.begin({ producer: "bundle" })).toEqual({ producer: "bundle", attempt: 2 });
+    expect(emitting.beginAttempt({ producer: "bundle" })).toEqual({ producer: "bundle", attempt: 2 });
     const secondIndex = emitting.intend({
       producer: "bundle",
       path: "index.html",
@@ -122,15 +122,15 @@ test("its principle: complete attempts preserve the last valid artifact set", as
     expect(await emitting.reconcile()).toEqual({ written: 0, replaced: 0, kept: 3, removed: 0 });
     expect(text(await readFile(join(destination, "index.html")))).toBe("first");
 
-    expect(emitting.commit({ producer: "bundle" })).toEqual({ producer: "bundle", dropped: 1 });
+    expect(emitting.commitAttempt({ producer: "bundle" })).toEqual({ producer: "bundle", dropped: 1 });
     expect(emitting._pending()).toEqual([{ path: "index.html", digest: secondIndex.digest }]);
     expect(emitting._orphans()).toEqual([{ path: "a.css" }]);
     expect(await emitting.reconcile()).toEqual({ written: 0, replaced: 1, kept: 1, removed: 1 });
     expect(text(await readFile(join(destination, "index.html")))).toBe("second");
 
-    expect(emitting.retract({ producer: "shared" })).toEqual({ producer: "shared", count: 1 });
+    expect(emitting.retractProducer({ producer: "shared" })).toEqual({ producer: "shared", count: 1 });
     expect(await emitting.reconcile()).toEqual({ written: 0, replaced: 0, kept: 2, removed: 0 });
-    expect(emitting.retract({ producer: "bundle" })).toEqual({ producer: "bundle", count: 1 });
+    expect(emitting.retractProducer({ producer: "bundle" })).toEqual({ producer: "bundle", count: 1 });
     expect(await emitting.reconcile()).toEqual({ written: 0, replaced: 0, kept: 1, removed: 1 });
   } finally {
     await rm(temporary, { force: true, recursive: true });
@@ -142,7 +142,7 @@ test("attempts are replaceable stages with stable identities and exact retractio
   const oldAsset = emitting.intend({ producer: "owner", path: "asset", content: bytes("old"), medium: "x/test" });
   emitting.intend({ producer: "owner", path: "keep", content: bytes("keep"), medium: "x/test" });
 
-  expect(emitting.begin({ producer: "owner" })).toEqual({ producer: "owner", attempt: 1 });
+  expect(emitting.beginAttempt({ producer: "owner" })).toEqual({ producer: "owner", attempt: 1 });
   const staged = emitting.intend({
     producer: "owner",
     path: "asset/child",
@@ -156,7 +156,7 @@ test("attempts are replaceable stages with stable identities and exact retractio
   ).toThrow(PathContested);
   expect(emitting._producers({ path: "asset/child/deeper" })).toEqual([{ producer: "owner" }]);
 
-  expect(emitting.begin({ producer: "owner" })).toEqual({ producer: "owner", attempt: 2 });
+  expect(emitting.beginAttempt({ producer: "owner" })).toEqual({ producer: "owner", attempt: 2 });
   const replacement = emitting.intend({
     producer: "owner",
     path: "asset/child",
@@ -164,13 +164,13 @@ test("attempts are replaceable stages with stable identities and exact retractio
     medium: "x/test",
   });
   expect(replacement.intent).toBe(staged.intent);
-  expect(emitting.commit({ producer: "owner" })).toEqual({ producer: "owner", dropped: 2 });
+  expect(emitting.commitAttempt({ producer: "owner" })).toEqual({ producer: "owner", dropped: 2 });
   expect(emitting._byProducer({ producer: "owner" }).map(({ path }) => path)).toEqual(["asset/child"]);
-  expect(() => emitting.commit({ producer: "owner" })).toThrow(NotBegun);
+  expect(() => emitting.commitAttempt({ producer: "owner" })).toThrow(NotBegun);
 
-  emitting.begin({ producer: "owner" });
+  emitting.beginAttempt({ producer: "owner" });
   emitting.intend({ producer: "owner", path: "temporary", content: bytes("temp"), medium: "x/test" });
-  expect(emitting.retract({ producer: "owner" })).toEqual({ producer: "owner", count: 2 });
+  expect(emitting.retractProducer({ producer: "owner" })).toEqual({ producer: "owner", count: 2 });
   expect(emitting._attempt({ producer: "owner" })).toEqual([]);
   expect(emitting._byProducer({ producer: "owner" })).toEqual([]);
 
@@ -178,15 +178,15 @@ test("attempts are replaceable stages with stable identities and exact retractio
   expect(emitting.intend({ producer: "direct", path: "one", content: bytes("2"), medium: "x/test" }).intent).toBe(
     direct.intent,
   );
-  expect(() => emitting.commit({ producer: "direct" })).toThrow(NotBegun);
-  emitting.begin({ producer: "direct" });
-  expect(emitting.commit({ producer: "direct" })).toEqual({ producer: "direct", dropped: 1 });
+  expect(() => emitting.commitAttempt({ producer: "direct" })).toThrow(NotBegun);
+  emitting.beginAttempt({ producer: "direct" });
+  expect(emitting.commitAttempt({ producer: "direct" })).toEqual({ producer: "direct", dropped: 1 });
   expect(emitting._byProducer({ producer: "direct" })).toEqual([]);
 });
 
 test("logical claims prevent one transactional producer from silently overwriting another source", () => {
   const emitting = new EmittingConcept();
-  emitting.begin({ producer: "page" });
+  emitting.beginAttempt({ producer: "page" });
   emitting.intend({ producer: "page", claim: "asset:a", path: "download.txt", content: bytes("first"), medium: "text/plain" });
   expect(() =>
     emitting.intend({ producer: "page", claim: "asset:b", path: "download.txt", content: bytes("second"), medium: "text/plain" }),
@@ -206,7 +206,7 @@ test("aborting releases staged reservations without changing active or emitted a
     await mkdir(destination);
 
     const emitting = new EmittingConcept();
-    await direct(emitting, destination);
+    await configureDestination(emitting, destination);
     emitting.intend({ producer: "owner", path: "current.bin", content: bytes("current"), medium: "x/test" });
     emitting.intend({ producer: "owner", path: "kept.bin", content: bytes("kept"), medium: "x/test" });
     await emitting.reconcile();
@@ -214,7 +214,7 @@ test("aborting releases staged reservations without changing active or emitted a
     const active = emitting._byProducer({ producer: "owner" });
     const currentBefore = await stat(join(destination, "current.bin"));
     const entriesBefore = await readdir(destination);
-    expect(emitting.begin({ producer: "owner" })).toEqual({ producer: "owner", attempt: 1 });
+    expect(emitting.beginAttempt({ producer: "owner" })).toEqual({ producer: "owner", attempt: 1 });
     expect(emitting._open({ producer: "owner" })).toEqual([{ attempt: 1 }]);
     emitting.intend({ producer: "owner", path: "current.bin", content: bytes("replacement"), medium: "x/test" });
     emitting.intend({ producer: "owner", path: "reserved.bin", content: bytes("first"), medium: "x/test" });
@@ -224,7 +224,7 @@ test("aborting releases staged reservations without changing active or emitted a
       emitting.intend({ producer: "other", path: "reserved.bin", content: bytes("other"), medium: "x/test" }),
     ).toThrow(PathContested);
     expect(emitting._producers({ path: "reserved.bin" })).toEqual([{ producer: "owner" }]);
-    expect(emitting.abort({ producer: "owner" })).toEqual({ producer: "owner", discarded: 2 });
+    expect(emitting.abortAttempt({ producer: "owner" })).toEqual({ producer: "owner", discarded: 2 });
 
     expect(emitting._attempt({ producer: "owner" })).toEqual([{ attempt: 1 }]);
     expect(emitting._open({ producer: "owner" })).toEqual([]);
@@ -238,18 +238,18 @@ test("aborting releases staged reservations without changing active or emitted a
     expect(await emitting.reconcile()).toEqual({ written: 0, replaced: 0, kept: 2, removed: 0 });
     expect((await stat(join(destination, "current.bin"))).ino).toBe(currentBefore.ino);
 
-    expect(() => emitting.abort({ producer: "owner" })).toThrow(NotBegun);
-    expect(() => emitting.abort({ producer: "missing" })).toThrow(NotBegun);
-    expect(() => emitting.abort({ producer: "\ud800" })).toThrow(InvalidProducer);
+    expect(() => emitting.abortAttempt({ producer: "owner" })).toThrow(NotBegun);
+    expect(() => emitting.abortAttempt({ producer: "missing" })).toThrow(NotBegun);
+    expect(() => emitting.abortAttempt({ producer: "\ud800" })).toThrow(InvalidProducer);
     expect(
       emitting.intend({ producer: "other", path: "reserved.bin", content: bytes("other"), medium: "x/test" }).path,
     ).toBe("reserved.bin");
 
-    expect(emitting.begin({ producer: "owner" })).toEqual({ producer: "owner", attempt: 2 });
+    expect(emitting.beginAttempt({ producer: "owner" })).toEqual({ producer: "owner", attempt: 2 });
     emitting.intend({ producer: "owner", path: "next.bin", content: bytes("next"), medium: "x/test" });
-    expect(emitting.abort({ producer: "owner" })).toEqual({ producer: "owner", discarded: 1 });
-    expect(emitting.begin({ producer: "owner" })).toEqual({ producer: "owner", attempt: 3 });
-    expect(emitting.abort({ producer: "owner" })).toEqual({ producer: "owner", discarded: 0 });
+    expect(emitting.abortAttempt({ producer: "owner" })).toEqual({ producer: "owner", discarded: 1 });
+    expect(emitting.beginAttempt({ producer: "owner" })).toEqual({ producer: "owner", attempt: 3 });
+    expect(emitting.abortAttempt({ producer: "owner" })).toEqual({ producer: "owner", discarded: 0 });
     expect(emitting._attempt({ producer: "owner" })).toEqual([{ attempt: 3 }]);
     expect(emitting._open({ producer: "owner" })).toEqual([]);
   } finally {
@@ -329,7 +329,7 @@ test("copies binary input, removes stale entry kinds and empty directories, and 
     await symlink(outside, join(destination, "assets"));
 
     const emitting = new EmittingConcept();
-    expect(await direct(emitting, destination)).toEqual({ destination, existing: 1 });
+    expect(await configureDestination(emitting, destination)).toEqual({ destination, existing: 1 });
     const input = Buffer.from([0, 255, 1, 128]);
     emitting.intend({ producer: "binary", path: "assets/blob.bin", content: input, medium: "application/octet-stream" });
     input.fill(7);
@@ -358,7 +358,7 @@ test("serializes reconciliation across instances directed at one destination", a
   try {
     const first = new EmittingConcept();
     const second = new EmittingConcept();
-    await Promise.all([direct(first, destination), direct(second, destination)]);
+    await Promise.all([configureDestination(first, destination), configureDestination(second, destination)]);
     first.intend({ producer: "first", path: "first.txt", content: "first", medium: "text/plain" });
     second.intend({ producer: "second", path: "second.txt", content: "second", medium: "text/plain" });
 
@@ -382,7 +382,7 @@ test("inspection order is UTF-8 byte order and independent of insertion order", 
     }
 
     const emitting = new EmittingConcept();
-    await direct(emitting, destination);
+    await configureDestination(emitting, destination);
     const paths = ["\u{10000}.new", "\ue000.new", "z.new"];
     for (const path of paths) {
       emitting.intend({ producer: "owner", path, content: bytes(path), medium: "x/test" });
@@ -430,15 +430,15 @@ test("directing is non-destructive and failed tree preparation leaves the destin
 
     const undirected = new EmittingConcept();
     await expect(undirected.reconcile()).rejects.toBeInstanceOf(DestinationNotDirected);
-    expect(await direct(undirected, missing)).toEqual({ destination: missing, existing: 0 });
+    expect(await configureDestination(undirected, missing)).toEqual({ destination: missing, existing: 0 });
     await expect(lstat(missing)).rejects.toMatchObject({ code: "ENOENT" });
     undirected.intend({ producer: "empty", path: "empty.bin", content: new Uint8Array(), medium: "application/octet-stream" });
     expect(await undirected.reconcile()).toEqual({ written: 1, replaced: 0, kept: 0, removed: 0 });
     expect(await readFile(join(missing, "empty.bin"))).toEqual(Buffer.alloc(0));
 
     const emitting = new EmittingConcept();
-    await direct(emitting, destination);
-    await expect(direct(emitting, invalid)).rejects.toBeInstanceOf(InvalidDestination);
+    await configureDestination(emitting, destination);
+    await expect(configureDestination(emitting, invalid)).rejects.toBeInstanceOf(InvalidDestination);
     emitting.intend({ producer: "short", path: "keep.txt", content: bytes("new"), medium: "text/plain" });
     emitting.intend({
       producer: "long",
@@ -451,11 +451,11 @@ test("directing is non-destructive and failed tree preparation leaves the destin
     expect(text(await readFile(join(destination, "keep.txt")))).toBe("old");
     expect((await readdir(temporary)).filter((name) => name.includes(".emitting-"))).toEqual([]);
 
-    emitting.retract({ producer: "long" });
+    emitting.retractProducer({ producer: "long" });
     expect(await emitting.reconcile()).toEqual({ written: 0, replaced: 1, kept: 0, removed: 0 });
     expect(text(await readFile(join(destination, "keep.txt")))).toBe("new");
 
-    await expect(direct(emitting, join(temporary, "x".repeat(300)))).rejects.toBeInstanceOf(
+    await expect(configureDestination(emitting, join(temporary, "x".repeat(300)))).rejects.toBeInstanceOf(
       DestinationUnavailable,
     );
   } finally {
@@ -463,16 +463,16 @@ test("directing is non-destructive and failed tree preparation leaves the destin
   }
 });
 
-test("stale attempts cannot stage, commit, or abort a replacement", () => {
+test("stale attempts cannot stage, commitAttempt, or abortAttempt a replacement", () => {
   const emitting = new StrictEmittingConcept();
-  const first = emitting.begin({ producer: "page" });
-  const second = emitting.begin({ producer: "page" });
+  const first = emitting.beginAttempt({ producer: "page" });
+  const second = emitting.beginAttempt({ producer: "page" });
 
   expect(() => emitting.intend({ producer: "page", attempt: first.attempt, path: "old", content: "old", medium: "text/plain" })).toThrow(StaleAttempt);
   emitting.intend({ producer: "page", attempt: second.attempt, path: "new", content: "new", medium: "text/plain" });
-  expect(() => emitting.commit({ producer: "page", attempt: first.attempt })).toThrow(StaleAttempt);
-  expect(() => emitting.abort({ producer: "page", attempt: first.attempt })).toThrow(StaleAttempt);
-  emitting.commit({ producer: "page", attempt: second.attempt });
+  expect(() => emitting.commitAttempt({ producer: "page", attempt: first.attempt })).toThrow(StaleAttempt);
+  expect(() => emitting.abortAttempt({ producer: "page", attempt: first.attempt })).toThrow(StaleAttempt);
+  emitting.commitAttempt({ producer: "page", attempt: second.attempt });
   expect(emitting._byProducer({ producer: "page" })).toHaveLength(1);
 });
 
@@ -503,12 +503,12 @@ test("registry exposes every refusal, query promise, and normative message", asy
     ["_orphans", "many"],
   ]);
   expect(emittingRegistration.specification.actions.map(({ name }) => name)).toEqual([
-    "direct",
-    "begin",
+    "configureDestination",
+    "beginAttempt",
     "intend",
-    "commit",
-    "abort",
-    "retract",
+    "commitAttempt",
+    "abortAttempt",
+    "retractProducer",
     "reconcile",
   ]);
 
@@ -517,11 +517,11 @@ test("registry exposes every refusal, query promise, and normative message", asy
   const Emitting = app.concepts.Emitting;
   const reconcile = Emitting.reconcile as unknown as (input: Record<string, never>) => Promise<unknown>;
 
-  expect(await Emitting.direct({ destination: "", prefix: "" })).toEqual({
+  expect(await Emitting.configureDestination({ destination: "", prefix: "" })).toEqual({
     error: "INVALID_DESTINATION",
     detail: "A destination must name a directory other than the filesystem root.",
   });
-  expect(await Emitting.begin({ producer: "\ud800" })).toEqual({
+  expect(await Emitting.beginAttempt({ producer: "\ud800" })).toEqual({
     error: "INVALID_PRODUCER",
     detail: "A producer identity must be well-formed text.",
   });
@@ -557,15 +557,15 @@ test("registry exposes every refusal, query promise, and normative message", asy
     error: "PATH_CONTESTED",
     detail: "This artifact path conflicts with another intended artifact.",
   });
-  expect(await Emitting.commit({ producer: "one", attempt: 1 })).toEqual({
+  expect(await Emitting.commitAttempt({ producer: "one", attempt: 1 })).toEqual({
     error: "NOT_BEGUN",
     detail: "This producer has no open attempt.",
   });
-  expect(await Emitting.abort({ producer: "\ud800", attempt: 1 })).toEqual({
+  expect(await Emitting.abortAttempt({ producer: "\ud800", attempt: 1 })).toEqual({
     error: "INVALID_PRODUCER",
     detail: "A producer identity must be well-formed text.",
   });
-  expect(await Emitting.abort({ producer: "one", attempt: 1 })).toEqual({
+  expect(await Emitting.abortAttempt({ producer: "one", attempt: 1 })).toEqual({
     error: "NOT_BEGUN",
     detail: "This producer has no open attempt.",
   });

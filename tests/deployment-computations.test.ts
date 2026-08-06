@@ -8,7 +8,7 @@ import {
 } from "../src/compositions/deployment-computations.ts";
 
 test("deployment queue transition projection recognizes only active-work returns", () => {
-  for (const action of ["start", "complete", "reject", "rejectOwner", "rejectProducer", "fail", "divide"]) {
+  for (const action of ["start", "complete", "reject", "rejectOwnerWork", "rejectProducerWork", "failWork", "expandPagination"]) {
     expect(deploymentTransitionWork(action, { deployment: "deployment:1", work: "work:1" })).toBe("work:1");
   }
   expect(deploymentTransitionWork("feed", { deployment: "deployment:1", work: "work:1" })).toBeNull();

@@ -376,7 +376,7 @@ export class CatalogingConcept {
     return { entry };
   }
 
-  remove({ name }: { name: unknown }) {
+  removeCatalog({ name }: { name: unknown }) {
     requireText(name);
     const catalog = this.#catalogsByName.get(name);
     if (catalog === undefined) throw new CatalogNotFound();

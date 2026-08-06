@@ -225,7 +225,7 @@ export class TranscodingConcept {
   readonly #renditionsByOriginal = new Map<string, Rendition[]>();
   readonly #renditionsByID = new Map<string, Rendition>();
 
-  async admit({ subject, content }: { subject: string; content: Uint8Array }) {
+  async ingest({ subject, content }: { subject: string; content: Uint8Array }) {
     if (!isText(subject)) throw new InvalidSubject();
     const nextContent = copyBytes(content);
     const nextDigest = digest(nextContent);
@@ -273,7 +273,7 @@ export class TranscodingConcept {
     return this.#admission(record, true);
   }
 
-  async render({ original, widths, formats }: { original: string; widths: number[]; formats: string[] }) {
+  async generateRenditions({ original, widths, formats }: { original: string; widths: number[]; formats: string[] }) {
     const source = this.#originalsByID.get(original);
     if (source === undefined) throw new OriginalNotFound();
     const normalizedWidthList = normalizedWidths(widths);
@@ -293,7 +293,7 @@ export class TranscodingConcept {
     return this.#renderResult(original, renditions, true);
   }
 
-  release({ subject }: { subject: string }) {
+  removeSource({ subject }: { subject: string }) {
     if (!isText(subject)) throw new InvalidSubject();
     const record = this.#originalsBySubject.get(subject);
     if (record === undefined) return { subject, count: 0 };

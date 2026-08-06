@@ -1,4 +1,4 @@
-# Documenting
+# Document Parsing
 
 ## Purpose
 
@@ -81,7 +81,7 @@ a set of Documents with
 ## Actions
 
 ```actions
-parse (subject: Subject, text: Text) : return (document: Document, attributes: Values, body: Text)
+parseDocument (subject: Subject, text: Text) : return (document: Document, attributes: Values, body: Text)
   where text has an unclosed front-matter header or its attributes are outside the normalized YAML subset
   then
     refuse MALFORMED_ATTRIBUTES "The attributes at the top of this document cannot be parsed."
@@ -90,7 +90,7 @@ parse (subject: Subject, text: Text) : return (document: Document, attributes: V
     atomically replace the document values for subject while keeping its stable identity
     return the document, a copy of its attributes, and its body
 
-forget (subject: Subject) : return (document: Document)
+removeDocument (subject: Subject) : return (document: Document)
   where subject has no document
   then
     refuse DOCUMENT_NOT_FOUND "There is no document for this subject."

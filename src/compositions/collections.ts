@@ -7,7 +7,7 @@ const { Cataloging, Diagnosing, Filing, Phasing, Routing } = conceptRefs;
 
 /** Every path-matching page enters each catalog under that catalog's own policy. */
 export const CollectPhaseIndexesPages = reaction(({ page, catalog, path, content }) =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "collect", transitioned: true }))
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "collect", transitioned: true }))
     .where(
       Routing._claims({}).is({ owner: page }),
       Filing._named({ name: ROOTS.content }).is({ root: content }),
@@ -21,7 +21,7 @@ export const CollectPhaseIndexesPages = reaction(({ page, catalog, path, content
 export const CatalogIndexFailuresDiagnose = reaction(({ page, path, error, detail }) =>
   when(Cataloging.index({ item: page, path }).refuses({ error, detail }))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "collect", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "collect", transitioned: true }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({

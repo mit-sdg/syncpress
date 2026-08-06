@@ -77,7 +77,7 @@ Serial deployment reduces parallel generation and makes route and output collisi
 
 That choice is the publication predicate: the finished-and-clean branch asks Emitting to reconcile and returns file counts, while the errored, incomplete, and failed branches return a build error and leave the destination unchanged. Nothing outside the application decides when a build may publish.
 
-Delivering arbitrates that deferred aggregate answer against direct refusals and runtime faults in the same build flow. A direct boundary answer interrupts aggregate delivery; a clean terminal flow settles delivery exactly once before selecting an endpoint branch.
+DeliveryArbitration arbitrates that deferred aggregate answer against direct refusals and runtime faults in the same build flow. A direct boundary answer interrupts aggregate delivery; a clean terminal flow settles delivery exactly once before selecting an endpoint branch.
 
 ## Staging is a phase, not a caller
 

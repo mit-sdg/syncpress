@@ -621,7 +621,7 @@ export class TemplatingConcept {
     return { template: record.template };
   }
 
-  fill({
+  renderSource({
     subject,
     source,
     context,
@@ -663,7 +663,7 @@ export class TemplatingConcept {
     }
   }
 
-  render({
+  renderTemplate({
     template,
     subject,
     context,

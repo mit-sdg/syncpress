@@ -250,7 +250,7 @@ export class ConvertingConcept {
   readonly #conversionsBySubject = new Map<string, Map<string, Conversion>>();
   readonly #conversionsByID = new Map<string, Conversion>();
 
-  declare(input: { name: string; kind: string; extensions: string[]; raw: boolean; separator: string }) {
+  declareProfile(input: { name: string; kind: string; extensions: string[]; raw: boolean; separator: string }) {
     const normalized = normalizeProfile(input);
     const settingsKey = JSON.stringify([
       normalized.name,
@@ -324,7 +324,7 @@ export class ConvertingConcept {
     return { conversion, output };
   }
 
-  release({ subject }: { subject: string }) {
+  removeConversions({ subject }: { subject: string }) {
     if (typeof subject !== "string") throw new InvalidSubject();
     const count = this.#conversionsBySubject.get(subject)?.size ?? 0;
     this.#removeConversions((conversion) => conversion.subject === subject);

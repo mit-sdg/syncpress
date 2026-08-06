@@ -15,7 +15,7 @@ export type AppWideError = never;
 export type SyncpressWire = {
   "/cli/exit": {
     input: {
-      "code": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["exit"]>[0], ["code"]>>;
+      "code": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["setExitStatus"]>[0], ["code"]>>;
     };
     output: Record<string, never>;
     error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "EXIT_SELECTED" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_CLAIM" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DIMENSION" | "INVALID_ENTRIES" | "INVALID_EXIT_CODE" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PREPARATION" | "INVALID_PRODUCER" | "INVALID_REDIRECT" | "INVALID_SUBJECT" | "INVALID_TASK" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "SOURCE_FINISHED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PREPARED" };
@@ -23,16 +23,16 @@ export type SyncpressWire = {
   "/cli/hold": {
     input: Record<string, never>;
     output: {
-      "reason": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Attending"]["hold"]>>, ["reason"]>>;
+      "reason": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Holding"]["awaitStop"]>>, ["reason"]>>;
     };
     error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_CLAIM" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DIMENSION" | "INVALID_ENTRIES" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PREPARATION" | "INVALID_PRODUCER" | "INVALID_REDIRECT" | "INVALID_SUBJECT" | "INVALID_TASK" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "SOURCE_FINISHED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PREPARED" };
   };
   "/cli/interpret": {
     input: {
-      "arguments": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["capture"]>[0], ["arguments"]>>;
+      "arguments": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["captureArguments"]>[0], ["arguments"]>>;
     };
     output: {
-      "words": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["capture"]>>, ["words"]>>;
+      "words": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commanding"]["captureArguments"]>>, ["words"]>>;
     };
     error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "INVALID_ADDRESS" | "INVALID_ARGUMENTS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_CLAIM" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DIMENSION" | "INVALID_ENTRIES" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PREPARATION" | "INVALID_PRODUCER" | "INVALID_REDIRECT" | "INVALID_SUBJECT" | "INVALID_TASK" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_USAGE" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "INVOCATION_CAPTURED" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "SOURCE_FINISHED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PREPARED" };
   };
@@ -48,8 +48,8 @@ export type SyncpressWire = {
   };
   "/cli/write": {
     input: {
-      "stream": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["write"]>[0], ["stream"]>>;
-      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["write"]>[0], ["text"]>>;
+      "stream": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["writeLine"]>[0], ["stream"]>>;
+      "text": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commanding"]["writeLine"]>[0], ["text"]>>;
     };
     output: Record<string, never>;
     error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_CLAIM" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DIMENSION" | "INVALID_ENTRIES" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PREPARATION" | "INVALID_PRODUCER" | "INVALID_REDIRECT" | "INVALID_STREAM" | "INVALID_SUBJECT" | "INVALID_TASK" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "SOURCE_FINISHED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PREPARED" };
@@ -75,18 +75,18 @@ export type SyncpressWire = {
   };
   "/serve/publish": {
     input: {
-      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["publish"]>[0], ["directory"]>>;
-      "server": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["publish"]>[0], ["server"]>>;
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["serveDirectory"]>[0], ["directory"]>>;
+      "server": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Serving"]["serveDirectory"]>[0], ["server"]>>;
     };
     output: {
-      "readers": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Serving"]["publish"]>>, ["readers"]>>;
+      "readers": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Serving"]["serveDirectory"]>>, ["readers"]>>;
     };
     error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_CLAIM" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DIMENSION" | "INVALID_ENTRIES" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PREPARATION" | "INVALID_PRODUCER" | "INVALID_PUBLICATION" | "INVALID_REDIRECT" | "INVALID_SUBJECT" | "INVALID_TASK" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "PUBLICATION_UNAVAILABLE" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "SERVER_NOT_OPEN" | "SOURCE_FINISHED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PREPARED" };
   };
   "/site/build": {
     input: {
-      "destination"?: Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["request"]>[0], ["path"]>>;
-      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["request"]>[0], ["path"]>>;
+      "destination"?: Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["recordRequest"]>[0], ["path"]>>;
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["recordRequest"]>[0], ["path"]>>;
     };
     output: {
       "kept": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["reconcile"]>>, ["kept"]>>;
@@ -137,21 +137,21 @@ export type SyncpressWire = {
   };
   "/site/inspect": {
     input: {
-      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["request"]>[0], ["path"]>>;
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Locating"]["recordRequest"]>[0], ["path"]>>;
       "target": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Routing"]["_owner"]>[0], ["address"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["_at"]>[0], ["path"]>]>>;
     };
     output: {
       "inspection": {
         "claims": {
           "address": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_claims"]>>>, ["address"]>>;
-          "owner": Jsonify<OneOf<[AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_membership"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_position"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Depending"]["_reason"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Depending"]["_state"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Depending"]["_uses"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Emitting"]["_byProducer"]>[0], ["producer"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["_file"]>[0], ["file"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_layers"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_leafOrigins"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Routing"]["_address"]>[0], ["owner"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_all"]>>>, ["subject"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_claims"]>>>, ["owner"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_owner"]>>>, ["owner"]>]>, AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_membership"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_position"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Depending"]["_reason"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Depending"]["_state"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Depending"]["_uses"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Emitting"]["_byProducer"]>[0], ["producer"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["_file"]>[0], ["file"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_layers"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_leafOrigins"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Routing"]["_address"]>[0], ["owner"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Filing"]["_at"]>>>, ["file"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_all"]>>>, ["subject"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_claims"]>>>, ["owner"]>]>]>>;
+          "owner": Jsonify<OneOf<[AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_membership"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_position"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_reason"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_state"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_uses"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Emitting"]["_byProducer"]>[0], ["producer"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["_file"]>[0], ["file"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_layers"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_leafOrigins"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Routing"]["_address"]>[0], ["owner"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_all"]>>>, ["subject"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_claims"]>>>, ["owner"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_owner"]>>>, ["owner"]>]>, AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_membership"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Cataloging"]["_position"]>[0], ["item"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_reason"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_state"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_uses"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Emitting"]["_byProducer"]>[0], ["producer"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Filing"]["_file"]>[0], ["file"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_layers"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Layering"]["_leafOrigins"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>[0], ["subject"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Routing"]["_address"]>[0], ["owner"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Filing"]["_at"]>>>, ["file"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_all"]>>>, ["subject"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_claims"]>>>, ["owner"]>]>]>>;
         }[];
         "dependencies": {
           "inputs": {
-            "input": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Depending"]["_uses"]>>>, ["input"]>>;
+            "input": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_uses"]>>>, ["input"]>>;
           }[];
-          "reason": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Depending"]["_reason"]>>>, ["reason"]>> | null;
-          "state": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Depending"]["_state"]>>>, ["state"]>>;
+          "reason": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_reason"]>>>, ["reason"]>> | null;
+          "state": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["DependencyTracking"]["_state"]>>>, ["state"]>>;
         };
         "diagnostics": {
           "code": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Diagnosing"]["_all"]>>>, ["code"]>>;
@@ -189,24 +189,24 @@ export type SyncpressWire = {
           "path": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Emitting"]["_byProducer"]>>>, ["path"]>>;
         }[];
         "rendering": {
-          "attempt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>>>, ["rendering"]>> | null;
+          "attempt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>>>, ["rendering"]>> | null;
           "body": {
             "source": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Referencing"]["_finished"]>>>, ["source"]>> | null;
           };
           "layout": {
             "source": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Referencing"]["_finished"]>>>, ["source"]>> | null;
           };
-          "path": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>>>, ["path"]>> | null;
-          "profile": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>>>, ["profile"]>> | null;
-          "stage": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>>>, ["stage"]>> | null;
-          "template": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>>>, ["template"]>> | null;
+          "path": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>>>, ["path"]>> | null;
+          "profile": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>>>, ["profile"]>> | null;
+          "stage": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>>>, ["stage"]>> | null;
+          "template": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>>>, ["template"]>> | null;
         };
         "renderings": {
-          "attempt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_all"]>>>, ["rendering"]>>;
-          "path": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_all"]>>>, ["path"]>>;
-          "profile": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_all"]>>>, ["profile"]>>;
-          "stage": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_all"]>>>, ["stage"]>>;
-          "template": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_all"]>>>, ["template"]>>;
+          "attempt": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_all"]>>>, ["rendering"]>>;
+          "path": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_all"]>>>, ["path"]>>;
+          "profile": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_all"]>>>, ["profile"]>>;
+          "stage": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_all"]>>>, ["stage"]>>;
+          "template": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_all"]>>>, ["template"]>>;
         }[];
         "route": {
           "address": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Routing"]["_address"]>>>, ["address"]>> | null;
@@ -217,7 +217,7 @@ export type SyncpressWire = {
         };
         "template": {
           "digest": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Templating"]["_template"]>>>, ["digest"]>> | null;
-          "name": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Templating"]["_template"]>[0], ["name"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Rendering"]["_latest"]>>>, ["template"]>]>> | null;
+          "name": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Templating"]["_template"]>[0], ["name"]>, AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["RenderTracking"]["_latest"]>>>, ["template"]>]>> | null;
           "tree": {
             "used": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Templating"]["_tree"]>>>, ["used"]>>;
           }[];
@@ -252,12 +252,12 @@ export type SyncpressWire = {
   };
   "/watch/attend": {
     input: {
-      "watch": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>[0], ["watch"]>>;
-      "within": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>[0], ["within"]>>;
+      "watch": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["waitForChange"]>[0], ["watch"]>>;
+      "within": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["waitForChange"]>[0], ["within"]>>;
     };
     output: {
-      "changed": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>>, ["changed"]>>;
-      "watching": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["attend"]>>, ["watching"]>>;
+      "changed": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["waitForChange"]>>, ["changed"]>>;
+      "watching": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["waitForChange"]>>, ["watching"]>>;
     };
     error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_CLAIM" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DIMENSION" | "INVALID_ENTRIES" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PREPARATION" | "INVALID_PRODUCER" | "INVALID_REDIRECT" | "INVALID_SUBJECT" | "INVALID_TASK" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_WATCH" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "SOURCE_FINISHED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WATCH_FAILED" | "WATCH_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PREPARED" };
   };
@@ -270,12 +270,12 @@ export type SyncpressWire = {
   };
   "/watch/open": {
     input: {
-      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["observe"]>[0], ["directory"]>>;
-      "output": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["observe"]>[0], ["excluded"]>>;
-      "settling": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["observe"]>[0], ["settling"]>>;
+      "directory": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["open"]>[0], ["directory"]>>;
+      "output": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["open"]>[0], ["excluded"]>>;
+      "settling": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Watching"]["open"]>[0], ["settling"]>>;
     };
     output: {
-      "watch": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["observe"]>>, ["watch"]>>;
+      "watch": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Watching"]["open"]>>, ["watch"]>>;
     };
     error: { error: AppWideError | "ADDRESS_TAKEN" | "ATTEMPT_EXHAUSTED" | "CONVERSION_FAILED" | "DIAGNOSTIC_NOT_FOUND" | "DIRECTORY_MISSING" | "DIRECTORY_UNOBSERVABLE" | "DIRECTORY_UNSUPPORTED" | "EMBEDDING_COMPLETE" | "EMBEDDING_NOT_FOUND" | "INVALID_ADDRESS" | "INVALID_ATTEMPT" | "INVALID_ATTRIBUTES" | "INVALID_CLAIM" | "INVALID_CONTENT" | "INVALID_CONTEXT" | "INVALID_CONVERSION_INPUT" | "INVALID_COUNT" | "INVALID_DIMENSION" | "INVALID_ENTRIES" | "INVALID_FORM" | "INVALID_FORMAT" | "INVALID_INPUT" | "INVALID_LOCATION" | "INVALID_MEDIUM" | "INVALID_ORDER" | "INVALID_OWNER" | "INVALID_PATH" | "INVALID_PREPARATION" | "INVALID_PRODUCER" | "INVALID_REDIRECT" | "INVALID_SUBJECT" | "INVALID_TASK" | "INVALID_TEXT" | "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "INVALID_URLS" | "INVALID_WATCH" | "INVALID_WIDTH" | "INVALID_WIDTHS" | "NOT_BEGUN" | "NOT_BUILDING" | "OFFER_CONFLICT" | "ORIGINAL_NOT_FOUND" | "OVERLAPPING_MARKUP" | "PATH_CONTESTED" | "PATH_LEAVES_DESTINATION" | "PROFILE_NOT_FOUND" | "RECURSIVE_TEMPLATE" | "REFERENCE_NOT_FOUND" | "RENDERING_NOT_FOUND" | "RENDITION_FAILED" | "SOURCE_FINISHED" | "STAGE_NOT_READY" | "STALE_ATTEMPT" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNKNOWN_SEVERITY" | "UNREADABLE_IMAGE" | "UNREPRESENTABLE_ADDRESS" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SOURCE_FORMAT" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND" | "WORK_NOT_ACTIVE" | "WORK_NOT_CURRENT" | "WORK_NOT_PREPARED" };
   };

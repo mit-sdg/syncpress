@@ -16,9 +16,9 @@ error. Asking about the frame reports both the fragments and context paths it
 can reach. Reusing the same source changes nothing; replacing it keeps the same
 template identity. A missing fragment, recursive tree, unsupported dependency,
 or Liquid error reports its location and leaves the last successful output
-untouched. That failed fill or render is also available by its subject with its
-normalized refusal code and any available location. A later successful fill or
-render for that subject clears the failure.
+untouched. That failed renderSource or renderTemplate is also available by its subject with its
+normalized refusal code and any available location. A later successful renderSource or
+renderTemplate for that subject clears the failure.
 
 ## Types
 
@@ -165,27 +165,27 @@ a set of Failures with
 ## Actions
 
 Missing definitions are permitted while templates are being defined, but
-`fill` and `render` require their entire trees to exist. A cycle is rejected
+`renderSource` and `renderTemplate` require their entire trees to exist. A cycle is rejected
 before evaluation.
 
 `define` validates before changing state. Defining exactly the same source
 returns `changed false`; defining different valid source replaces its direct
-uses and reads and returns `changed true`. `fill` evaluates unnamed one-off
-source and never adds it to the template name table. `render` evaluates a named
-template. Successful fill and render replace only the result with the same key.
+uses and reads and returns `changed true`. `renderSource` evaluates unnamed one-off
+source and never adds it to the template name table. `renderTemplate` evaluates a named
+template. Successful renderSource and renderTemplate replace only the result with the same key.
 
 Definition and forgetting refusals leave their prior state unchanged. A failed
-definition retains the previous definition. A failed fill or render retains the
+definition retains the previous definition. A failed renderSource or renderTemplate retains the
 previous output and dependency snapshot but replaces any Failure for its subject
 before refusing. Its code is the normalized uppercase refusal code, and its
 template name, line, and column come from the failure location when available. A
-successful fill or render clears any Failure for its subject. Defining or
+successful renderSource or renderTemplate clears any Failure for its subject. Defining or
 forgetting templates does not clear Failures. Forgetting a template removes its
 definition and renderings directly of that template. Successful outputs owned by
 other templates or fillings stay as historical results; the composition is
 responsible for invalidating and rebuilding their subjects.
 
-Locations are one-based Liquid source line and column numbers. `fill` may name
+Locations are one-based Liquid source line and column numbers. `renderSource` may name
 its authored source and provide its positive original starting line, so a body
 after front matter can report its original document coordinate. A named source
 also identifies its template name. Unsupported syntax points to the construct;
@@ -240,7 +240,7 @@ forget (name: Name) : return (template: Template)
     release its registered origin if present
     return template
 
-fill (subject: Subject, source: JavaScriptString, context: Values, trusted: Paths, sourceName?: Name, sourceLine?: PositiveInteger) : return (filling: Filling, output: JavaScriptString)
+renderSource (subject: Subject, source: JavaScriptString, context: Values, trusted: Paths, sourceName?: Name, sourceLine?: PositiveInteger) : return (filling: Filling, output: JavaScriptString)
   where source is not valid Liquid in the supported engine
   then
     replace any Failure for subject with code TEMPLATE_SYNTAX and any available location
@@ -279,7 +279,7 @@ fill (subject: Subject, source: JavaScriptString, context: Values, trusted: Path
     clear any Failure for subject
     return filling and output
 
-render (template: Template, subject: Subject, context: Values, trusted: Paths) : return (rendering: Rendering, output: JavaScriptString)
+renderTemplate (template: Template, subject: Subject, context: Values, trusted: Paths) : return (rendering: Rendering, output: JavaScriptString)
   where template is not in Templates
   then
     replace any Failure for subject with code TEMPLATE_NOT_FOUND and any available location
@@ -353,7 +353,7 @@ _reads (owner: Owner) : many (path: Keys)
   Apart from these fresh path lists, query rows contain no mutable values.
 
 _failure (subject: Subject) : optional (code: Code, templateName: Name | undefined, line: PositiveInteger | undefined, column: PositiveInteger | undefined)
-  Returns the latest failed fill or render for exactly the subject, or no row
+  Returns the latest failed renderSource or renderTemplate for exactly the subject, or no row
   when none is recorded. The code is one of the declared refusal codes.
   templateName, line, and column are present and undefined when no corresponding
   location is available.

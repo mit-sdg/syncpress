@@ -337,7 +337,7 @@ export class EmittingConcept {
   readonly #producers = new Map<string, ProducerRecord>();
   readonly #emitted = new Map<string, EmittedEntry>();
 
-  async direct({ destination, prefix }: { destination: string; prefix: string }) {
+  async configureDestination({ destination, prefix }: { destination: string; prefix: string }) {
     if (!isText(destination) || destination === "" || destination.includes("\u0000") || !isText(prefix) || prefix === "") {
       throw new InvalidDestination();
     }
@@ -382,7 +382,7 @@ export class EmittingConcept {
     return { destination, existing: snapshot.entries.size };
   }
 
-  begin({ producer }: { producer: string }) {
+  beginAttempt({ producer }: { producer: string }) {
     requireProducer(producer);
     const record = this.#producer(producer);
     if (record.attempt === Number.MAX_SAFE_INTEGER) throw new AttemptExhausted();
@@ -413,7 +413,7 @@ export class EmittingConcept {
     return { intent, path, digest: next.digest };
   }
 
-  commit({ producer, attempt }: { producer: string; attempt: unknown }) {
+  commitAttempt({ producer, attempt }: { producer: string; attempt: unknown }) {
     requireProducer(producer);
     const record = this.#producers.get(producer);
     if (record?.staged === undefined) throw new NotBegun();
@@ -428,7 +428,7 @@ export class EmittingConcept {
     return { producer, dropped };
   }
 
-  abort({ producer, attempt }: { producer: string; attempt: unknown }) {
+  abortAttempt({ producer, attempt }: { producer: string; attempt: unknown }) {
     requireProducer(producer);
     const record = this.#producers.get(producer);
     if (record?.staged === undefined) throw new NotBegun();
@@ -439,7 +439,7 @@ export class EmittingConcept {
     return { producer, discarded };
   }
 
-  retract({ producer }: { producer: string }) {
+  retractProducer({ producer }: { producer: string }) {
     requireProducer(producer);
     const record = this.#producers.get(producer);
     const paths = new Set([...(record?.active.keys() ?? []), ...(record?.staged?.keys() ?? [])]);

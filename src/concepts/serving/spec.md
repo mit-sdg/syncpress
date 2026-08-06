@@ -56,7 +56,7 @@ open (host: Text, port: Port) : return (server: Server, host: Text, port: Port)
     add an open server with no directory and no readers
     return it with the address the host actually gave it
 
-publish (server: Server, directory: Path) : return (server: Server, directory: Path, readers: Number)
+serveDirectory (server: Server, directory: Path) : return (server: Server, directory: Path, readers: Number)
   where server is unknown or not open
   then
     refuse SERVER_NOT_OPEN "There is no such open server."
@@ -109,9 +109,9 @@ contract served-files
   no-cache reload script before its closing body tag or at the end; other files
   receive the media type implied by their extension, or generic bytes.
 
-contract reload-readers on publish, close
+contract reload-readers on serveDirectory, close
   The reload endpoint retains one Reader per open event stream. Every successful
-  `publish`, including an unchanged directory, tells each current Reader once.
+  `serveDirectory`, including an unchanged directory, tells each current Reader once.
   Closure or listener failure ends all Readers; an unexpected listener failure
   also makes the Server failed.
 ```

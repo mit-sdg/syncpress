@@ -425,19 +425,19 @@ export class DeployingConcept {
     return this.#result(current.deployment);
   }
 
-  rejectOwner({ owner }: { owner: string }): { deployment: string; work?: string; completed: boolean } {
+  rejectOwnerWork({ owner }: { owner: string }): { deployment: string; work?: string; completed: boolean } {
     const found = this.#latestWorks().find((work) => "owner" in work && work.owner === owner);
     if (found === undefined) throw new WorkNotCurrent();
     return this.reject({ work: found.work });
   }
 
-  rejectProducer({ producer }: { producer: string }): { deployment: string; work?: string; completed: boolean } {
+  rejectProducerWork({ producer }: { producer: string }): { deployment: string; work?: string; completed: boolean } {
     const found = this.#latestWorks().find((work) => "producer" in work && work.producer === producer);
     if (found === undefined) throw new WorkNotCurrent();
     return this.reject({ work: found.work });
   }
 
-  divide({
+  expandPagination({
     deployment,
     work,
     template,
@@ -485,7 +485,7 @@ export class DeployingConcept {
     return { deployment, work: pageWorks[0]!.work, pages };
   }
 
-  redirect({ work, target, canonical, content }: { work: string; target: string; canonical: string; content: string }): { content: string } {
+  prepareRedirect({ work, target, canonical, content }: { work: string; target: string; canonical: string; content: string }): { content: string } {
     const current = this.#active(work, "redirect") as RedirectWork;
     if (!validRedirectProjection(current.to, target, canonical)) throw new InvalidRedirect();
     if (!isText(content)) throw new InvalidPreparation();
@@ -493,7 +493,7 @@ export class DeployingConcept {
     return { content };
   }
 
-  context({ work, context }: { work: string; context: unknown }): { owner: string; template: string; context: unknown } {
+  preparePageContext({ work, context }: { work: string; context: unknown }): { owner: string; template: string; context: unknown } {
     const current = this.#active(work, "pagination-page") as PaginationPageWork;
     let result: { owner: string; template: string; context: unknown };
     try {
@@ -566,7 +566,7 @@ export class DeployingConcept {
     return result;
   }
 
-  fail({ producer, path, code, detail }: { producer: string; path: string; code: string; detail: string }): { deployment: string; work?: string; completed: boolean; path: string; code: string; message: string } {
+  failWork({ producer, path, code, detail }: { producer: string; path: string; code: string; detail: string }): { deployment: string; work?: string; completed: boolean; path: string; code: string; message: string } {
     const found = this.#latestWorks().find((work) => "producer" in work && work.producer === producer);
     if (found === undefined) throw new WorkNotCurrent();
     const current = this.#current(found.deployment, found.work);

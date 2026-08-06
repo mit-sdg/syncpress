@@ -1,4 +1,4 @@
-# Depending
+# Dependency Tracking
 
 ## Purpose
 
@@ -38,17 +38,17 @@ State = "building" | "current" | "stale"
 
 Text is a well-formed Unicode string. Subjects and inputs are opaque Text in one
 shared namespace: an input may also be the subject of a result, which is how
-invalidation travels from one result to another. Depending does not require an
+invalidation travels from one result to another. DependencyTracking does not require an
 input to have its own result.
 
 Result and use identities are deterministic, collision-free encodings of their
-keys. Repeated beginnings, repeated uses, and drop followed by begin reuse those
+keys. Repeated begins, repeated dependency records, and removeResult followed by beginAttempt reuse those
 identities. Replacing a result's input set keeps its result identity; removing
 one input and adding another removes the old use and returns a different use
 identity.
 
 A reason is the immediate input through which a result was first reached by the
-touch that made it stale. Direct dependents therefore name the touched input;
+invalidation that made it stale. Direct dependents therefore name the invalidated input;
 transitive dependents name another result's subject. An already-stale result
 keeps its earlier reason. A stale result keeps that reason while it is retried
 and after it settles, so inspection can report why the latest recomputation
@@ -73,7 +73,7 @@ a set of Uses with
 ## Actions
 
 ```actions
-begin (subject: Subject) : return (result: Result, attempt: Number)
+beginAttempt (subject: Subject) : return (result: Result, attempt: Number)
   where subject is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
@@ -89,7 +89,7 @@ begin (subject: Subject) : return (result: Result, attempt: Number)
     discard its uncommitted attempt, retain its uses from the latest settlement if any,
     clear its reason if it was current, start an empty attempt, set it to building, and return it
 
-use (subject: Subject, attempt: Number, input: Input) : return (use: Use)
+recordDependency (subject: Subject, attempt: Number, input: Input) : return (use: Use)
   where subject or input is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
@@ -106,7 +106,7 @@ use (subject: Subject, attempt: Number, input: Input) : return (use: Use)
   then
     add input to its retained uses if none exists and return its use
 
-settle (subject: Subject, attempt: Number) : return (result: Result)
+settleAttempt (subject: Subject, attempt: Number) : return (result: Result)
   where subject is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
@@ -121,7 +121,7 @@ settle (subject: Subject, attempt: Number) : return (result: Result)
     replace its retained uses atomically with its active attempt's inputs, set it to current,
     retain its reason, and return it
 
-abandon (subject: Subject, attempt: Number) : return (result: Result)
+abandonAttempt (subject: Subject, attempt: Number) : return (result: Result)
   where subject is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
@@ -136,7 +136,7 @@ abandon (subject: Subject, attempt: Number) : return (result: Result)
     discard its provisional inputs, retain its last successful graph, and make it stale
     return it
 
-touch (input: Input) : return (input: Input, count: Number)
+invalidate (input: Input) : return (input: Input, count: Number)
   where input is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
@@ -146,7 +146,7 @@ touch (input: Input) : return (input: Input, count: Number)
     set each visited result that is not stale to stale with the reaching input as its reason
     return input and how many results became stale
 
-drop (subject: Subject) : return (result: Result)
+removeResult (subject: Subject) : return (result: Result)
   where subject is not Text
   then
     refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
@@ -187,7 +187,7 @@ _uses (subject: Subject) : many (input: Input)
   UTF-8 byte order. An unknown or non-Text Subject returns no rows.
 
 _dependents (input: Input) : many (subject: Subject)
-  Uses the same visible graph as _uses; touch follows this graph's transitive
+  Uses the same visible graph as _uses; invalidate follows this graph's transitive
   closure. Subjects are in ascending UTF-8 byte order. A non-Text Input returns
   no rows.
 ```

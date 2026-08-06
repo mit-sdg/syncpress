@@ -10,7 +10,8 @@ import {
 } from "./calculations.ts";
 import { DIAGNOSTIC_SCOPES, PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
-const { Diagnosing, Documenting, Emitting, Filing, Referencing, Rendering, Routing } = conceptRefs;
+const { Diagnosing, DocumentParsing, Emitting, Filing, Referencing, RenderTracking, Routing } = conceptRefs;
+
 
 const ASSET_MEDIUM = "application/octet-stream";
 
@@ -19,7 +20,7 @@ export const RelativeBodyReference = view(
   ({ source }, { rendering, page, reference, raw, role }, _bindings) =>
     where(
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._active({ rendering }).is({ subject: page }),
+      RenderTracking._active({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ reference, raw, role }),
       computations.targetHasKind({ target: raw, kind: "relative" }),
     ),
@@ -40,7 +41,7 @@ export const UnroutedContentBodyAsset = view(
     where(
       ResolvedLocalBodyReference({ source }).is({ rendering, page, reference, raw, role, target: asset }),
       no(Routing._address({ owner: asset })),
-      no(Documenting._document({ subject: asset })),
+      no(DocumentParsing._document({ subject: asset })),
       Filing._file({ file: asset }).is({ root, path: sourcePath, name, content }),
       Filing._root({ root }).is({ name: ROOTS.content }),
     ),
@@ -95,7 +96,7 @@ export const ClaimedBodyReferencesRetarget = reaction(({ source, reference, raw,
       Routing._address({ owner: target }).is({ address }),
       RetargetedReference({ replacement: address, original: raw }).is({ target: value }),
     )
-    .then(Referencing.answer({ reference, form: "address", value })),
+    .then(Referencing.resolve({ reference, form: "address", value })),
 );
 
 /** Copy ordinary and non-raster image assets beside the page that references them. */
@@ -104,7 +105,7 @@ export const CopyableBodyAssetsCopy = reaction(
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
         CopyableBodyAsset({ source }).is({ rendering, page, asset: target, name, content }),
-        Rendering._active({ rendering }).is({ emissionAttempt }),
+        RenderTracking._active({ rendering }).is({ emissionAttempt }),
         BesidePageOutput({ page, name }).is({ path }),
       )
       .then(
@@ -130,7 +131,7 @@ export const CopiedBodyAssetsAnswer = reaction(
         OutputPathAddress({ path }).is({ address }),
         RetargetedReference({ replacement: address, original: raw }).is({ target: value }),
       )
-      .then(Referencing.answer({ reference, form: "address", value })),
+    .then(Referencing.resolve({ reference, form: "address", value })),
 );
 
 /** Parsed documents without a route are pages, not copyable local assets. */
@@ -140,7 +141,7 @@ export const UnpublishedDocumentBodyReferencesDiagnose = reaction(
       .where(
         ResolvedLocalBodyReference({ source }).is({ page, target }),
         no(Routing._address({ owner: target })),
-        Documenting._document({ subject: target }).is({}),
+        DocumentParsing._document({ subject: target }).is({}),
         Filing._file({ file: target }).is({ root }),
         Filing._root({ root }).is({ name: ROOTS.content }),
         Filing._file({ file: page }).is({ path }),
@@ -160,7 +161,7 @@ export const UnpublishedDocumentBodyReferencesDiagnose = reaction(
 export const NonlocalBodyReferencesHold = reaction(({ source, reference, raw }) =>
   when(Referencing.scan({ part: PARTS.body }).responds({ source }))
     .where(HeldBodyReference({ source }).is({ reference, raw }))
-    .then(Referencing.answer({ reference, form: "address", value: raw })),
+    .then(Referencing.resolve({ reference, form: "address", value: raw })),
 );
 
 /** Invalid local URLs stay unanswered and become source diagnostics. */
@@ -242,13 +243,13 @@ export const AbsoluteLayoutReferencesRebase = reaction(({ source, reference, raw
       computations.targetHasKind({ target: raw, kind: "absolute" }),
       SiteUrl({ target: raw }).is({ url }),
     )
-    .then(Referencing.answer({ reference, form: "address", value: url })),
+    .then(Referencing.resolve({ reference, form: "address", value: url })),
 );
 
 export const NonlocalLayoutReferencesHold = reaction(({ source, reference, raw }) =>
   when(Referencing.scan({ part: PARTS.layout }).responds({ source }))
     .where(HeldLayoutReference({ source }).is({ reference, raw }))
-    .then(Referencing.answer({ reference, form: "address", value: raw })),
+    .then(Referencing.resolve({ reference, form: "address", value: raw })),
 );
 
 /** Layouts have no content-directory source path for relative references. */
@@ -256,7 +257,7 @@ export const RelativeLayoutReferencesDiagnose = reaction(({ source, rendering, p
   when(Referencing.scan({ part: PARTS.layout }).responds({ source }))
     .where(
       Referencing._source({ source }).is({ subject: rendering }),
-      Rendering._active({ rendering }).is({ subject: page }),
+      RenderTracking._active({ rendering }).is({ subject: page }),
       Referencing._references({ source }).is({ raw }),
       computations.targetHasKind({ target: raw, kind: "relative" }),
       Filing._file({ file: page }).is({ path }),

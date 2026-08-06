@@ -8,54 +8,6 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
-### Attending
-
-**Purpose.** Hold long-running work until its operator asks the process to stop, so the work
-can clean up instead of being terminated mid-transition.
-
-**Principle.** Ada starts a hold. It remains pending while she leaves the process alone. She
-requests an interrupt; the hold is released and returns `interrupt`, and no
-process listener remains. A later hold waits independently and returns
-`terminate` when she makes that request.
-
-_Registration checks member names, recoverable input names, and refusal mappings._
-_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
-
-#### Actions
-
-##### `hold () : return (hold: Hold, reason: Reason)`
-
-**Authored behavior:**
-
-    then
-      add a holding Hold and install its independent interrupt and terminate listeners
-      if listener setup faults, remove the attempted Hold and propagate the host failure
-      wait for the first request received by those listeners
-      make the Hold released, remove its listeners, and return the request Reason
-
-#### Queries
-
-##### `_hold (hold: Hold) : optional (state: State, reason: Reason | null)`
-
-**Authored behavior:**
-
-    Returns no row for an unknown Hold and continues to return a row after
-    release. The reason is null while the Hold is holding.
-
-##### `_holding () : one (holding: NonnegativeInteger)`
-
-**Authored behavior:**
-
-    Reports the number of Holds in the holding state.
-
-#### Types
-
-```types
-Reason = "interrupt" | "terminate"
-
-State = "holding" | "released"
-```
-
 ### Cataloging
 
 **Purpose.** Admit projected items into named catalogs under declared conditions and keep
@@ -148,7 +100,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `NOT_INCLUDED`
 
-##### `remove (name: Name) : return (catalog: Catalog, count: Number)`
+##### `removeCatalog (name: Name) : return (catalog: Catalog, count: Number)`
 
 **Authored behavior:**
 
@@ -320,7 +272,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `capture (arguments: Arguments | null) : return (words: Arguments)`
+##### `captureArguments (arguments: Arguments | null) : return (words: Arguments)`
 
 **Authored behavior:**
 
@@ -340,7 +292,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_ARGUMENTS`, `INVOCATION_CAPTURED`
 
-##### `write (stream: Stream, text: Text) : return (stream: Stream, text: Text)`
+##### `writeLine (stream: Stream, text: Text) : return (stream: Stream, text: Text)`
 
 **Authored behavior:**
 
@@ -355,7 +307,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_STREAM`, `INVALID_TEXT`
 
-##### `exit (code: ExitCode) : return (code: ExitCode, changed: Flag)`
+##### `setExitStatus (code: ExitCode) : return (code: ExitCode, changed: Flag)`
 
 **Authored behavior:**
 
@@ -418,7 +370,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `declare (name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)`
+##### `declareProfile (name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)`
 
 **Authored behavior:**
 
@@ -469,7 +421,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `PROFILE_NOT_FOUND`, `INVALID_CONVERSION_INPUT`, `CONVERSION_FAILED`
 
-##### `release (subject: Subject) : return (subject: Subject, count: Number)`
+##### `removeConversions (subject: Subject) : return (subject: Subject, count: Number)`
 
 **Authored behavior:**
 
@@ -594,7 +546,7 @@ contract current-profile-and-conversion-keys
   per Subject and Part.
 ```
 
-### Delivering
+### DeliveryArbitration
 
 **Purpose.** Coordinate one aggregate task answer with failures already delivered at its boundary,
 so settlement cannot race a second terminal answer.
@@ -610,7 +562,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `begin (task: Task) : return (task: Task, changed: Flag)`
+##### `beginDelivery (task: Task) : return (task: Task, changed: Flag)`
 
 **Authored behavior:**
 
@@ -626,7 +578,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TASK`
 
-##### `interrupt (task: Task) : return (task: Task, changed: Flag)`
+##### `recordInterruption (task: Task) : return (task: Task, changed: Flag)`
 
 **Authored behavior:**
 
@@ -679,7 +631,7 @@ contract one-delivery-per-task
   At most one delivery exists per task.
 ```
 
-### Depending
+### DependencyTracking
 
 **Purpose.** Remember what each piece of work used, so a change marks only the work that must
 be done again and can explain why.
@@ -706,7 +658,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `begin (subject: Subject) : return (result: Result, attempt: Number)`
+##### `beginAttempt (subject: Subject) : return (result: Result, attempt: Number)`
 
 **Authored behavior:**
 
@@ -727,7 +679,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `ATTEMPT_EXHAUSTED`
 
-##### `use (subject: Subject, attempt: Number, input: Input) : return (use: Use)`
+##### `recordDependency (subject: Subject, attempt: Number, input: Input) : return (use: Use)`
 
 **Authored behavior:**
 
@@ -749,7 +701,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `NOT_BUILDING`, `STALE_ATTEMPT`
 
-##### `settle (subject: Subject, attempt: Number) : return (result: Result)`
+##### `settleAttempt (subject: Subject, attempt: Number) : return (result: Result)`
 
 **Authored behavior:**
 
@@ -769,7 +721,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `NOT_BUILDING`, `STALE_ATTEMPT`
 
-##### `abandon (subject: Subject, attempt: Number) : return (result: Result)`
+##### `abandonAttempt (subject: Subject, attempt: Number) : return (result: Result)`
 
 **Authored behavior:**
 
@@ -789,7 +741,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `NOT_BUILDING`, `STALE_ATTEMPT`
 
-##### `touch (input: Input) : return (input: Input, count: Number)`
+##### `invalidate (input: Input) : return (input: Input, count: Number)`
 
 **Authored behavior:**
 
@@ -804,7 +756,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`
 
-##### `drop (subject: Subject) : return (result: Result)`
+##### `removeResult (subject: Subject) : return (result: Result)`
 
 **Authored behavior:**
 
@@ -869,7 +821,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Authored behavior:**
 
-    Uses the same visible graph as _uses; touch follows this graph's transitive
+    Uses the same visible graph as _uses; invalidate follows this graph's transitive
     closure. Subjects are in ascending UTF-8 byte order. A non-Text Input returns
     no rows.
 
@@ -887,17 +839,17 @@ State = "building" | "current" | "stale"
 
 Text is a well-formed Unicode string. Subjects and inputs are opaque Text in one
 shared namespace: an input may also be the subject of a result, which is how
-invalidation travels from one result to another. Depending does not require an
+invalidation travels from one result to another. DependencyTracking does not require an
 input to have its own result.
 
 Result and use identities are deterministic, collision-free encodings of their
-keys. Repeated beginnings, repeated uses, and drop followed by begin reuse those
+keys. Repeated begins, repeated dependency records, and removeResult followed by beginAttempt reuse those
 identities. Replacing a result's input set keeps its result identity; removing
 one input and adding another removes the old use and returns a different use
 identity.
 
 A reason is the immediate input through which a result was first reached by the
-touch that made it stale. Direct dependents therefore name the touched input;
+invalidation that made it stale. Direct dependents therefore name the invalidated input;
 transitive dependents name another result's subject. An already-stale result
 keeps its earlier reason. A stale result keeps that reason while it is retried
 and after it settles, so inspection can report why the latest recomputation
@@ -986,7 +938,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `WORK_NOT_CURRENT`, `WORK_NOT_ACTIVE`
 
-##### `rejectOwner (owner: Owner) : return (deployment: Deployment, work?: Work, completed: Flag)`
+##### `rejectOwnerWork (owner: Owner) : return (deployment: Deployment, work?: Work, completed: Flag)`
 
 **Authored behavior:**
 
@@ -1002,7 +954,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `WORK_NOT_CURRENT`, `WORK_NOT_ACTIVE`
 
-##### `rejectProducer (producer: Producer) : return (deployment: Deployment, work?: Work, completed: Flag)`
+##### `rejectProducerWork (producer: Producer) : return (deployment: Deployment, work?: Work, completed: Flag)`
 
 **Authored behavior:**
 
@@ -1018,7 +970,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `WORK_NOT_CURRENT`, `WORK_NOT_ACTIVE`
 
-##### `divide (deployment: Deployment, work: Work, template: Template, entries: Entries) : return (deployment: Deployment, work: Work, pages: Number)`
+##### `expandPagination (deployment: Deployment, work: Work, template: Template, entries: Entries) : return (deployment: Deployment, work: Work, pages: Number)`
 
 **Authored behavior:**
 
@@ -1037,7 +989,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_ENTRIES`, `WORK_NOT_CURRENT`, `WORK_NOT_ACTIVE`
 
-##### `redirect (work: Work, target: Url, canonical: Url, content: Text) : return (content: Text)`
+##### `prepareRedirect (work: Work, target: Url, canonical: Url, content: Text) : return (content: Text)`
 
 **Authored behavior:**
 
@@ -1059,7 +1011,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `WORK_NOT_CURRENT`, `WORK_NOT_ACTIVE`, `INVALID_REDIRECT`, `INVALID_PREPARATION`
 
-##### `context (work: Work, context: Value) : return (owner: Owner, template: Template, context: Value)`
+##### `preparePageContext (work: Work, context: Value) : return (owner: Owner, template: Template, context: Value)`
 
 **Authored behavior:**
 
@@ -1158,7 +1110,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `WORK_NOT_CURRENT`, `WORK_NOT_ACTIVE`, `INVALID_PREPARATION`
 
-##### `fail (producer: Producer, path: Path, code: Code, detail: Text) : return (deployment: Deployment, work?: Work, completed: Flag, path: Path, code: Code, message: Text)`
+##### `failWork (producer: Producer, path: Path, code: Code, detail: Text) : return (deployment: Deployment, work?: Work, completed: Flag, path: Path, code: Code, message: Text)`
 
 **Authored behavior:**
 
@@ -1323,7 +1275,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `UNKNOWN_SEVERITY`, `INVALID_TEXT`, `INVALID_LOCATION`
 
-##### `relate (diagnostic: Diagnostic, source: DiagnosticSource, line?: Position, column?: Position, note: Text) : return (relation: Relation)`
+##### `addRelatedLocation (diagnostic: Diagnostic, source: DiagnosticSource, line?: Position, column?: Position, note: Text) : return (relation: Relation)`
 
 **Authored behavior:**
 
@@ -1345,7 +1297,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `DIAGNOSTIC_NOT_FOUND`, `INVALID_LOCATION`
 
-##### `retract (scope?: Scope, source?: DiagnosticSource) : return (scope: Scope | undefined, source: DiagnosticSource | undefined, count: Number)`
+##### `retractGroup (scope?: Scope, source?: DiagnosticSource) : return (scope: Scope | undefined, source: DiagnosticSource | undefined, count: Number)`
 
 **Authored behavior:**
 
@@ -1473,7 +1425,7 @@ contract relation-owner
   Every Relation refers to a present Diagnostic.
 ```
 
-### Documenting
+### DocumentParsing
 
 **Purpose.** Separate a document's YAML details from the body they describe, so both can be
 kept in one ordinary text and read independently.
@@ -1491,7 +1443,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `parse (subject: Subject, text: Text) : return (document: Document, attributes: Values, body: Text)`
+##### `parseDocument (subject: Subject, text: Text) : return (document: Document, attributes: Values, body: Text)`
 
 **Authored behavior:**
 
@@ -1505,7 +1457,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `MALFORMED_ATTRIBUTES`
 
-##### `forget (subject: Subject) : return (document: Document)`
+##### `removeDocument (subject: Subject) : return (document: Document)`
 
 **Authored behavior:**
 
@@ -1651,7 +1603,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `INVALID_DIMENSION`, `INVALID_COUNT`, `INVALID_ADDRESS`, `INVALID_FORMAT`, `INVALID_ATTRIBUTES`
 
-##### `offer (embedding: Embedding, address: Address, format: Format, width: PositiveInteger, order: NonnegativeInteger) : return (offer: Offer, embedding: Embedding, arrived: Number, changed: Flag, completed: Flag)`
+##### `provideCandidate (embedding: Embedding, address: Address, format: Format, width: PositiveInteger, order: NonnegativeInteger) : return (offer: Offer, embedding: Embedding, arrived: Number, changed: Flag, completed: Flag)`
 
 **Authored behavior:**
 
@@ -1811,7 +1763,7 @@ contract embedding-keys
   At most one Embedding exists per Subject, one Offer per Embedding and Address,
   and one candidate per Embedding, Format, and width.
 
-contract stable-identities on declare, offer, withdraw
+contract stable-identities on declare, provideCandidate, withdraw
   An Embedding identity is determined by its Subject, and an Offer identity by
   its Embedding and Address. Replacing or later recreating either key preserves
   its opaque identity.
@@ -1838,7 +1790,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `direct (destination: Root, prefix: Root) : return (destination: Root, existing: Number)`
+##### `configureDestination (destination: Root, prefix: Root) : return (destination: Root, existing: Number)`
 
 **Authored behavior:**
 
@@ -1857,7 +1809,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_DESTINATION`, `DESTINATION_UNAVAILABLE`
 
-##### `begin (producer: Producer) : return (producer: Producer, attempt: Number)`
+##### `beginAttempt (producer: Producer) : return (producer: Producer, attempt: Number)`
 
 **Authored behavior:**
 
@@ -1915,7 +1867,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `STALE_ATTEMPT`, `INVALID_PRODUCER`, `INVALID_CLAIM`, `PATH_LEAVES_DESTINATION`, `INVALID_PATH`, `INVALID_CONTENT`, `INVALID_MEDIUM`, `PATH_CONTESTED`
 
-##### `commit (producer: Producer, attempt: Number) : return (producer: Producer, dropped: Number)`
+##### `commitAttempt (producer: Producer, attempt: Number) : return (producer: Producer, dropped: Number)`
 
 **Authored behavior:**
 
@@ -1936,7 +1888,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_PRODUCER`, `NOT_BEGUN`, `STALE_ATTEMPT`
 
-##### `abort (producer: Producer, attempt: Number) : return (producer: Producer, discarded: Number)`
+##### `abortAttempt (producer: Producer, attempt: Number) : return (producer: Producer, discarded: Number)`
 
 **Authored behavior:**
 
@@ -1957,7 +1909,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_PRODUCER`, `NOT_BEGUN`, `STALE_ATTEMPT`
 
-##### `retract (producer: Producer) : return (producer: Producer, count: Number)`
+##### `retractProducer (producer: Producer) : return (producer: Producer, count: Number)`
 
 **Authored behavior:**
 
@@ -2054,7 +2006,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 ```types
 Root = external
-  A nonempty native host path supplied as Text. `direct` uses one Root as the
+  A nonempty native host path supplied as Text. `configureDestination` uses one Root as the
   destination and another distinct sibling Root as its transaction prefix.
 
 Path = Text
@@ -2107,8 +2059,8 @@ contract intent-keys
   Producers may share a Path only when their exact bytes agree. Replacing,
   retracting, or recreating a pair preserves its Intent identity.
 
-contract publication-installation on direct, reconcile
-  `direct` records a destination only after complete inspection. `reconcile`
+contract publication-installation on configureDestination, reconcile
+  `configureDestination` records a destination only after complete inspection. `reconcile`
   prepares a complete sibling tree, serializes same-destination work in a
   process-local FIFO, and installs only after preparation and snapshot checks.
   Separate processes must not share a transaction prefix. Host failure may
@@ -2135,7 +2087,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `loadFile (name: Name, source: HostPath, path: Path) : return (status: Status, root?: Root, file?: File, digest?: Digest, count?: Number, changed?: Flag, code?: Code, detail?: Text)`
+##### `replaceTreeFromFile (name: Name, source: HostPath, path: Path) : return (status: Status, root?: Root, file?: File, digest?: Digest, count?: Number, changed?: Flag, code?: Code, detail?: Text)`
 
 **Authored behavior:**
 
@@ -2156,7 +2108,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_SOURCE`, `PATH_LEAVES_ROOT`, `INVALID_PATH`
 
-##### `loadTree (name: Name, directory: HostPath) : return (status: Status, root?: Root, count?: Number, changed?: Flag, code?: Code, detail?: Text)`
+##### `replaceTreeFromDirectory (name: Name, directory: HostPath) : return (status: Status, root?: Root, count?: Number, changed?: Flag, code?: Code, detail?: Text)`
 
 **Authored behavior:**
 
@@ -2171,7 +2123,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_SOURCE`
 
-##### `open (name: Name) : return (root: Root)`
+##### `ensureRoot (name: Name) : return (root: Root)`
 
 **Authored behavior:**
 
@@ -2183,7 +2135,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
       add a new root with name
       return root
 
-##### `place (root: Root, path: Path, content: Bytes) : return (file: File, digest: Digest, changed: Flag)`
+##### `putFile (root: Root, path: Path, content: Bytes) : return (file: File, digest: Digest, changed: Flag)`
 
 **Authored behavior:**
 
@@ -2205,7 +2157,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `ROOT_NOT_FOUND`, `PATH_LEAVES_ROOT`, `INVALID_PATH`
 
-##### `placeBase64 (root: Root, path: Path, encoded: Text) : return (file: File, digest: Digest, changed: Flag)`
+##### `putBase64File (root: Root, path: Path, encoded: Text) : return (file: File, digest: Digest, changed: Flag)`
 
 **Authored behavior:**
 
@@ -2223,7 +2175,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
       refuse INVALID_PATH "A file path must use the canonical portable form."
     where encoded, root, and path are valid
     then
-      decode it to bytes and behave exactly as place with root, path, and those bytes
+      decode it to bytes and behave exactly as putFile with root, path, and those bytes
 
 **Registered refusal codes:** `INVALID_ENCODING`, `ROOT_NOT_FOUND`, `PATH_LEAVES_ROOT`, `INVALID_PATH`
 
@@ -2318,7 +2270,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 ```types
 Name = JavaScriptString
-  An opaque Root name. Host-loading actions require nonempty Text; `open`
+  An opaque Root name. Host-loading actions require nonempty Text; `ensureRoot`
   accepts any JavaScriptString.
 
 HostPath = external
@@ -2358,12 +2310,12 @@ compares exact bytes rather than trusting digest equality.
 #### Contracts
 
 ```contracts
-contract stable-identities on loadFile, loadTree, open, place, placeBase64, discard
+contract stable-identities on replaceTreeFromFile, replaceTreeFromDirectory, ensureRoot, putFile, putBase64File, discard
   Each Name identifies one stable Root. Within a Root, each Path identifies one
   stable File, including after removal and recreation. Distinct Names and
   distinct `(Root, Path)` pairs have distinct identities.
 
-contract host-load-snapshot on loadFile, loadTree
+contract host-load-snapshot on replaceTreeFromFile, replaceTreeFromDirectory
   A host load reads every candidate byte before replacing its Root. A reported
   problem leaves the preceding Root unchanged. Concurrent host mutation may
   produce a problem or a mixed-time capture; the load is not a filesystem-wide
@@ -2512,6 +2464,54 @@ Configured default and collection matches must be portable globs. Collection
 sort fields and conditions must satisfy the catalog field and condition
 contracts. These failures are policy problems at their YAML locations. An
 accepted `site.origin` with a trailing slash is stored without that slash.
+
+### Holding
+
+**Purpose.** Hold long-running work until its operator asks the process to stop, so the work
+can clean up instead of being terminated mid-transition.
+
+**Principle.** Ada starts a hold. It remains pending while she leaves the process alone. She
+requests an interrupt; the hold is released and returns `interrupt`, and no
+process listener remains. A later hold waits independently and returns
+`terminate` when she makes that request.
+
+_Registration checks member names, recoverable input names, and refusal mappings._
+_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
+
+#### Actions
+
+##### `awaitStop () : return (hold: Hold, reason: Reason)`
+
+**Authored behavior:**
+
+    then
+      add a holding Hold and install its independent interrupt and terminate listeners
+      if listener setup faults, remove the attempted Hold and propagate the host failure
+      wait for the first request received by those listeners
+      make the Hold released, remove its listeners, and return the request Reason
+
+#### Queries
+
+##### `_hold (hold: Hold) : optional (state: State, reason: Reason | null)`
+
+**Authored behavior:**
+
+    Returns no row for an unknown Hold and continues to return a row after
+    release. The reason is null while the Hold is holding.
+
+##### `_holding () : one (holding: NonnegativeInteger)`
+
+**Authored behavior:**
+
+    Reports the number of Holds in the holding state.
+
+#### Types
+
+```types
+Reason = "interrupt" | "terminate"
+
+State = "holding" | "released"
+```
 
 ### Layering
 
@@ -2717,7 +2717,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `request (name: Name, path: Text) : return (name: Name, path: Text)`
+##### `recordRequest (name: Name, path: Text) : return (name: Name, path: Text)`
 
 **Authored behavior:**
 
@@ -2730,7 +2730,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_LOCATION`
 
-##### `ground (path: Text) : return (status: Status, path?: Path, real?: Path, code?: Code, detail?: Text)`
+##### `establishBase (path: Text) : return (status: Status, path?: Path, real?: Path, code?: Code, detail?: Text)`
 
 **Authored behavior:**
 
@@ -2756,7 +2756,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_LOCATION`
 
-##### `admit (name: Name, path: Text) : return (status: Status, place?: Place, path?: Path, real?: Path, contained?: Flag, resolved?: Flag, code?: Code, detail?: Text)`
+##### `inspectLocation (name: Name, path: Text) : return (status: Status, place?: Place, path?: Path, real?: Path, contained?: Flag, resolved?: Flag, code?: Code, detail?: Text)`
 
 **Authored behavior:**
 
@@ -2839,12 +2839,12 @@ Code = "LOCATION_MISSING" | "LOCATION_NOT_DIRECTORY" | "LOCATION_UNRESOLVABLE"
 #### Contracts
 
 ```contracts
-contract host-observations on ground, admit
+contract host-observations on establishBase, inspectLocation
   Paths and containment flags describe the host when the action runs. They are
-  not capabilities or locks and may become stale immediately. `admit` may
-  observe a missing trailing location; `ground` requires a present directory.
+  not capabilities or locks and may become stale immediately. `inspectLocation` may
+  observe a missing trailing location; `establishBase` requires a present directory.
 
-contract stable-place-identity on ground, admit
+contract stable-place-identity on establishBase, inspectLocation
   Each Name determines one Place identity. Replacing a Place, grounding another
   Base, and later admitting the Name preserve that identity.
 ```
@@ -2911,7 +2911,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `SEQUENCE_NOT_FOUND`, `SEQUENCE_ACTIVE`
 
-##### `advance (job: Job, attempt: PhaseAttempt) : return (job: Job, name: Name, phase: Phase | null, attempt: PhaseAttempt | null, transitioned: Flag)`
+##### `completePhase (job: Job, attempt: PhaseAttempt) : return (job: Job, name: Name, phase: Phase | null, attempt: PhaseAttempt | null, transitioned: Flag)`
 
 **Authored behavior:**
 
@@ -3005,7 +3005,7 @@ phase occurs at most once in its sequence.
 
 Sequence and Job values are opaque identities. A Sequence identity is a
 deterministic encoding of its Name and survives redeclaration. A PhaseAttempt is
-a deterministic encoding of its Job and phase index. The result of `advance`
+a deterministic encoding of its Job and phase index. The result of `completePhase`
 contains either the next Phase and its PhaseAttempt or `null` for both. `null`
 means that the Job has finished and cannot trigger phase work.
 
@@ -3052,7 +3052,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`
 
-##### `answer (reference: Reference, form: Form, value: Text) : return (reference: Reference, source: Source, subject: Subject, part: Part, changed: Flag, completed: Flag)`
+##### `resolve (reference: Reference, form: Form, value: Text) : return (reference: Reference, source: Source, subject: Subject, part: Part, changed: Flag, completed: Flag)`
 
 **Authored behavior:**
 
@@ -3256,7 +3256,7 @@ contract one-source-per-slot
   At most one Source exists per Subject and Part.
 ```
 
-### Rendering
+### RenderTracking
 
 **Purpose.** Track each page rendering attempt through body and layout settlement, so later
 behavior observes one terminal event for the active owner attempt.
@@ -3297,7 +3297,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_TEXT`, `INVALID_ATTEMPT`, `STALE_ATTEMPT`
 
-##### `settleBody (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)`
+##### `completeBody (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)`
 
 **Authored behavior:**
 
@@ -3313,7 +3313,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `RENDERING_NOT_FOUND`
 
-##### `settleLayout (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)`
+##### `completeLayout (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)`
 
 **Authored behavior:**
 
@@ -3580,7 +3580,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_SERVER`, `ADDRESS_UNAVAILABLE`
 
-##### `publish (server: Server, directory: Path) : return (server: Server, directory: Path, readers: Number)`
+##### `serveDirectory (server: Server, directory: Path) : return (server: Server, directory: Path, readers: Number)`
 
 **Authored behavior:**
 
@@ -3658,9 +3658,9 @@ contract served-files
   no-cache reload script before its closing body tag or at the end; other files
   receive the media type implied by their extension, or generic bytes.
 
-contract reload-readers on publish, close
+contract reload-readers on serveDirectory, close
   The reload endpoint retains one Reader per open event stream. Every successful
-  `publish`, including an unchanged directory, tells each current Reader once.
+  `serveDirectory`, including an unchanged directory, tells each current Reader once.
   Closure or listener failure ends all Readers; an unexpected listener failure
   also makes the Server failed.
 ```
@@ -3679,9 +3679,9 @@ error. Asking about the frame reports both the fragments and context paths it
 can reach. Reusing the same source changes nothing; replacing it keeps the same
 template identity. A missing fragment, recursive tree, unsupported dependency,
 or Liquid error reports its location and leaves the last successful output
-untouched. That failed fill or render is also available by its subject with its
-normalized refusal code and any available location. A later successful fill or
-render for that subject clears the failure.
+untouched. That failed renderSource or renderTemplate is also available by its subject with its
+normalized refusal code and any available location. A later successful renderSource or
+renderTemplate for that subject clears the failure.
 
 _Registration checks member names, recoverable input names, and refusal mappings._
 _Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
@@ -3747,7 +3747,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `TEMPLATE_NOT_FOUND`
 
-##### `fill (subject: Subject, source: JavaScriptString, context: Values, trusted: Paths, sourceName?: Name, sourceLine?: PositiveInteger) : return (filling: Filling, output: JavaScriptString)`
+##### `renderSource (subject: Subject, source: JavaScriptString, context: Values, trusted: Paths, sourceName?: Name, sourceLine?: PositiveInteger) : return (filling: Filling, output: JavaScriptString)`
 
 **Authored behavior:**
 
@@ -3791,7 +3791,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `TEMPLATE_SYNTAX`, `UNSUPPORTED_TEMPLATE`, `INVALID_TRUSTED_PATH`, `INVALID_TRUSTED_VALUE`, `USED_TEMPLATE_NOT_FOUND`, `RECURSIVE_TEMPLATE`, `UNDEFINED_VARIABLE`, `TEMPLATE_FAILED`
 
-##### `render (template: Template, subject: Subject, context: Values, trusted: Paths) : return (rendering: Rendering, output: JavaScriptString)`
+##### `renderTemplate (template: Template, subject: Subject, context: Values, trusted: Paths) : return (rendering: Rendering, output: JavaScriptString)`
 
 **Authored behavior:**
 
@@ -3886,7 +3886,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Authored behavior:**
 
-    Returns the latest failed fill or render for exactly the subject, or no row
+    Returns the latest failed renderSource or renderTemplate for exactly the subject, or no row
     when none is recorded. The code is one of the declared refusal codes.
     templateName, line, and column are present and undefined when no corresponding
     location is available.
@@ -4059,7 +4059,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `admit (subject: Subject, content: Bytes) : return (original: Original, digest: Digest, format: Format, width: Number, height: Number, animated: Flag, changed: Flag)`
+##### `ingest (subject: Subject, content: Bytes) : return (original: Original, digest: Digest, format: Format, width: Number, height: Number, animated: Flag, changed: Flag)`
 
 **Authored behavior:**
 
@@ -4083,7 +4083,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_SUBJECT`, `UNREADABLE_IMAGE`, `UNSUPPORTED_SOURCE_FORMAT`
 
-##### `render (original: Original, widths: Widths, formats: Formats) : return (original: Original, count: Number, derived: Number, changed: Flag)`
+##### `generateRenditions (original: Original, widths: Widths, formats: Formats) : return (original: Original, count: Number, derived: Number, changed: Flag)`
 
 **Authored behavior:**
 
@@ -4110,7 +4110,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `ORIGINAL_NOT_FOUND`, `INVALID_WIDTHS`, `UNSUPPORTED_FORMAT`, `RENDITION_FAILED`
 
-##### `release (subject: Subject) : return (subject: Subject, count: Number)`
+##### `removeSource (subject: Subject) : return (subject: Subject, count: Number)`
 
 **Authored behavior:**
 
@@ -4139,7 +4139,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
     Alternative formats come first in first-declared order after aliases and
     duplicates are merged; their non-upscaled widths ascend. The source-format
     group comes last and ends with the exact original fallback at the displayed
-    source dimensions. Every render has this fallback. The source-format group
+    source dimensions. Every rendition generation has this fallback. The source-format group
     also contains each requested smaller width that can preserve animation.
 
 ##### `_rendition (rendition: Rendition) : optional (original: Original, width: Number, height: Number, format: Format, animated: Flag, order: Number, digest: Digest, extension: Extension, name: Name, mediaType: MediaType, fallback: Flag)`
@@ -4237,7 +4237,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Actions
 
-##### `observe (directory: Path, settling: Duration, excluded: Path, prefix: Path) : return (watch: Watch)`
+##### `open (directory: Path, settling: Duration, excluded: Path, prefix: Path) : return (watch: Watch)`
 
 **Authored behavior:**
 
@@ -4259,7 +4259,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Registered refusal codes:** `INVALID_WATCH`, `DIRECTORY_MISSING`, `DIRECTORY_UNSUPPORTED`, `DIRECTORY_UNOBSERVABLE`
 
-##### `attend (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)`
+##### `waitForChange (watch: Watch, within: Duration) : return (changed: Flag, watching: Flag)`
 
 **Authored behavior:**
 
@@ -4332,16 +4332,16 @@ State = "open" | "failed" | "closed"
 #### Contracts
 
 ```contracts
-contract excluded-changes on observe
+contract excluded-changes on open
   A tree exclusion ignores its path and descendants by native path components.
   A prefix exclusion matches only the first component below its own parent.
 
-contract settled-bursts on observe, attend
+contract settled-bursts on open, waitForChange
   Each counted change restarts the settling Duration. A quiet Duration records
   one unreported burst; further bursts collapse into it until `attend` reports
   and consumes it.
 
-contract terminal-watch on attend, close
+contract terminal-watch on waitForChange, close
   An unexpected host-watcher end makes the Watch failed and releases attendance.
   A closed Watch observes nothing. Failed and closed Watches retain their
   identities and never become open again.
@@ -4429,7 +4429,7 @@ content document file — inputs (); outputs (file, text); bindings (root, path)
 relative body reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, role); bindings () — answers any number of (rendering, page, reference, raw, role)
   where
     Referencing._source (source) has (part: "body", subject: rendering)
-    Rendering._active (rendering) has (subject: page)
+    RenderTracking._active (rendering) has (subject: page)
     Referencing._references (source) has (raw, reference, role)
     targetHasKind (kind: "relative", target: raw)
 ```
@@ -4446,7 +4446,7 @@ unrouted content body asset of source (source) — inputs (source); outputs (ren
   where
     view "resolved local body reference of source (source)" with (source) has (page, raw, reference, rendering, role, target: asset)
     no Routing._address (owner: asset)
-    no Documenting._document (subject: asset)
+    no DocumentParsing._document (subject: asset)
     Filing._file (file: asset) has (content, name, path: sourcePath, root)
     Filing._root (root) has (name: "content")
 ```
@@ -4510,7 +4510,7 @@ the settled site build of job (job) — inputs (job); outputs (state); bindings 
 unsettled route owner — inputs (); outputs (owner); bindings () — answers any number of (owner)
   where
     Routing._claims () has (owner)
-    no Depending._current (subject: owner)
+    no DependencyTracking._current (subject: owner)
 ```
 
 ```view
@@ -4532,14 +4532,14 @@ path (path) relative to prefix (prefix) — inputs (path, prefix); outputs (rela
 ```view
 pending failed rendering cleanup — inputs (); outputs (page, rendering); bindings (dependencyAttempt, emissionAttempt) — answers any number of (page, rendering)
   where
-    Rendering._all () has (emissionAttempt, rendering, stage: "failed", subject: page)
-    Rendering._latest (subject: page) has (rendering)
+    RenderTracking._all () has (emissionAttempt, rendering, stage: "failed", subject: page)
+    RenderTracking._latest (subject: page) has (rendering)
     Emitting._open (producer: page) has (attempt: emissionAttempt)
   where
-    Rendering._all () has (dependencyAttempt, rendering, stage: "failed", subject: page)
-    Rendering._latest (subject: page) has (rendering)
-    Depending._attempt (subject: page) has (attempt: dependencyAttempt)
-    Depending._state (subject: page) has (state: "building")
+    RenderTracking._all () has (dependencyAttempt, rendering, stage: "failed", subject: page)
+    RenderTracking._latest (subject: page) has (rendering)
+    DependencyTracking._attempt (subject: page) has (attempt: dependencyAttempt)
+    DependencyTracking._state (subject: page) has (state: "building")
 ```
 
 ```view
@@ -4555,7 +4555,7 @@ responsive body image embedding (embedding) — inputs (embedding); outputs (ren
     Embedding._embedding (embedding) has (subject: reference)
     Referencing._reference (reference) has (raw, role: "image", source)
     Referencing._source (source) has (part: "body", subject: rendering)
-    Rendering._active (rendering) has (subject: page)
+    RenderTracking._active (rendering) has (subject: page)
     targetHasKind (kind: "relative", target: raw)
     Filing._resolve (address: raw, file: page) has (target: image)
     Transcoding._original (subject: image) has (original)
@@ -4698,9 +4698,9 @@ Former "the completed body render facts of rendering (rendering)" — inputs (re
 Former "the dependency inspection of owner (owner)" — inputs (owner); bindings (state, reason, input); promises exactly one record — forms:
   a record of
     dependencies: a record of
-      where Depending._state (subject: owner) has (state)
-      where whether Depending._reason (subject: owner) has (reason)
-      inputs: each Depending._uses (subject: owner) has (input)
+      where DependencyTracking._state (subject: owner) has (state)
+      where whether DependencyTracking._reason (subject: owner) has (reason)
+      inputs: each DependencyTracking._uses (subject: owner) has (input)
         form a record of
           input
       reason
@@ -4740,7 +4740,7 @@ Former "the layer inspection of owner (owner)" — inputs (owner); bindings (lay
 ```former
 Former "the originated page render facts of rendering (rendering)" — inputs (rendering); bindings (page, address, canonicalUrl); promises exactly one record — forms:
   a record of
-    where Rendering._active (rendering) has (subject: page)
+    where RenderTracking._active (rendering) has (subject: page)
     where Routing._address (owner: page) has (address)
     where view "absolute site URL of address (address)" with (address) has (url: canonicalUrl)
     canonicalUrl
@@ -4749,7 +4749,7 @@ Former "the originated page render facts of rendering (rendering)" — inputs (r
 ```former
 Former "the page render facts of rendering (rendering)" — inputs (rendering); bindings (page, data, address, path); promises exactly one record — forms:
   a record of
-    where Rendering._active (rendering) has (subject: page)
+    where RenderTracking._active (rendering) has (subject: page)
     where Layering._resolved (subject: page) has (values: data)
     where Routing._address (owner: page) has (address)
     where Filing._file (file: page) has (path)
@@ -4816,7 +4816,7 @@ Former "the publication card of page (page)" — inputs (page); bindings (data, 
 Former "the rendering inspection of owner (owner)" — inputs (owner); bindings (rendering, path, profile, template, stage, bodySource, layoutSource, historicalRendering, historicalPath, historicalProfile, historicalTemplate, historicalStage); promises exactly one record — forms:
   a record of
     rendering: a record of
-      where whether Rendering._latest (subject: owner) has (path, profile, rendering, stage, template)
+      where whether RenderTracking._latest (subject: owner) has (path, profile, rendering, stage, template)
       attempt: rendering
       body: a record of
         where whether Referencing._finished (part: "body", subject: rendering) has (source: bodySource)
@@ -4828,7 +4828,7 @@ Former "the rendering inspection of owner (owner)" — inputs (owner); bindings 
       profile
       stage
       template
-    renderings: each Rendering._all () has (path: historicalPath, profile: historicalProfile, rendering: historicalRendering, stage: historicalStage, subject: owner, template: historicalTemplate)
+    renderings: each RenderTracking._all () has (path: historicalPath, profile: historicalProfile, rendering: historicalRendering, stage: historicalStage, subject: owner, template: historicalTemplate)
       form a record of
         attempt: historicalRendering
         path: historicalPath
@@ -4878,7 +4878,7 @@ Former "the source inspection of owner (owner)" — inputs (owner); bindings (pa
 Former "the template inspection of owner (owner)" — inputs (owner); bindings (name, template, digest, used); promises exactly one record — forms:
   a record of
     template: a record of
-      where whether Rendering._latest (subject: owner) has (template: name)
+      where whether RenderTracking._latest (subject: owner) has (template: name)
       where whether Templating._template (name) has (digest, template)
       digest
       name
@@ -4912,7 +4912,7 @@ Former "the sitemap urls" — inputs (); bindings (owner, address, url); promise
 ```former
 Former "the unoriginated page render facts of rendering (rendering)" — inputs (rendering); bindings (page, address); promises exactly one record — forms:
   a record of
-    where Rendering._active (rendering) has (subject: page)
+    where RenderTracking._active (rendering) has (subject: page)
     where Routing._address (owner: page) has (address)
     where no view "absolute site URL of address (address)" with (address)
 ```
@@ -4963,7 +4963,7 @@ then
 ```reaction
 when refused Cataloging.index (item: page, path, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "collect", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "collect", transitioned: true)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, scope: "collection-indexing", severity: "error", source: path)
@@ -4972,7 +4972,7 @@ then
 ### fullSite.collections.CollectPhaseIndexesPages
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "collect", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "collect", transitioned: true)
 where
   Routing._claims () has (owner: page)
   Filing._named (name: "content") has (root: content)
@@ -4989,13 +4989,13 @@ when RequestBoundary.request (path: "/cli/misuse", requestId)
 where
   view "the Syncpress misuse report" has (text)
 then
-  Commanding.write (stream: "error", text)
+  Commanding.writeLine (stream: "error", text)
 ```
 
 ### fullSite.commanding.AnnounceMisuse#2
 
 ```reaction
-when Commanding.write (stream: "error", text), asked by fullSite.commanding.AnnounceMisuse
+when Commanding.writeLine (stream: "error", text), asked by fullSite.commanding.AnnounceMisuse
 where
   earlier, RequestBoundary.request (path: "/cli/misuse", requestId)
 then
@@ -5009,13 +5009,13 @@ when RequestBoundary.request (path: "/cli/usage", requestId)
 where
   view "the Syncpress usage report" has (text)
 then
-  Commanding.write (stream: "output", text)
+  Commanding.writeLine (stream: "output", text)
 ```
 
 ### fullSite.commanding.AnnounceUsage#2
 
 ```reaction
-when Commanding.write (stream: "output", text), asked by fullSite.commanding.AnnounceUsage
+when Commanding.writeLine (stream: "output", text), asked by fullSite.commanding.AnnounceUsage
 where
   earlier, RequestBoundary.request (path: "/cli/usage", requestId)
 then
@@ -5027,13 +5027,13 @@ then
 ```reaction
 when RequestBoundary.request (path: "/cli/hold", requestId)
 then
-  Attending.hold ()
+  Holding.awaitStop ()
 ```
 
 ### fullSite.commanding.HoldUntilStopped#2
 
 ```reaction
-when Attending.hold (reason), asked by fullSite.commanding.HoldUntilStopped
+when Holding.awaitStop (reason), asked by fullSite.commanding.HoldUntilStopped
 where
   earlier, RequestBoundary.request (path: "/cli/hold", requestId)
 then
@@ -5045,13 +5045,13 @@ then
 ```reaction
 when RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
 then
-  Commanding.capture (arguments: supplied)
+  Commanding.captureArguments (arguments: supplied)
 ```
 
 ### fullSite.commanding.InterpretCommandLine:invalid#2
 
 ```reaction
-when Commanding.capture (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
+when Commanding.captureArguments (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
 where
   no view "the Syncpress command represented by words (words)" with (words)
   earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
@@ -5062,7 +5062,7 @@ then
 ### fullSite.commanding.InterpretCommandLine:recognized#2
 
 ```reaction
-when Commanding.capture (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
+when Commanding.captureArguments (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
 where
   view "the Syncpress command represented by words (words)" with (words)
   earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
@@ -5075,13 +5075,13 @@ then
 ```reaction
 when RequestBoundary.request (code, path: "/cli/exit", requestId)
 then
-  Commanding.exit (code)
+  Commanding.setExitStatus (code)
 ```
 
 ### fullSite.commanding.SetCommandLineExit#2
 
 ```reaction
-when Commanding.exit (code), asked by fullSite.commanding.SetCommandLineExit
+when Commanding.setExitStatus (code), asked by fullSite.commanding.SetCommandLineExit
 where
   earlier, RequestBoundary.request (code, path: "/cli/exit", requestId)
 then
@@ -5093,13 +5093,13 @@ then
 ```reaction
 when RequestBoundary.request (path: "/cli/write", requestId, stream, text)
 then
-  Commanding.write (stream, text)
+  Commanding.writeLine (stream, text)
 ```
 
 ### fullSite.commanding.WriteCommandLine#2
 
 ```reaction
-when Commanding.write (stream, text), asked by fullSite.commanding.WriteCommandLine
+when Commanding.writeLine (stream, text), asked by fullSite.commanding.WriteCommandLine
 where
   earlier, RequestBoundary.request (path: "/cli/write", requestId, stream, text)
 then
@@ -5115,7 +5115,7 @@ where
   targetHasKind (kind: "absolute", target: raw)
   view "site URL of target (target)" with (target: raw) has (url)
 then
-  Referencing.answer (form: "address", reference, value: url)
+  Referencing.resolve (form: "address", reference, value: url)
 ```
 
 ### fullSite.deployment.ActivatedFeedWorkSnapshotsInputs
@@ -5163,7 +5163,7 @@ where
   view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
   Deploying._work (work) has (kind: "nojekyll", producer)
 then
-  Emitting.begin (producer)
+  Emitting.beginAttempt (producer)
 ```
 
 ### fullSite.deployment.ActivatedPaginationPlansDivide
@@ -5176,7 +5176,7 @@ where
   Cataloging._named (name: collectionName) has (catalog)
   Templating._template (name: templateName) has (template)
 then
-  Deploying.divide (deployment, entries: former "the deployment entries of catalog (catalog)" with (catalog), template, work)
+  Deploying.expandPagination (deployment, entries: former "the deployment entries of catalog (catalog)" with (catalog), template, work)
 ```
 
 ### fullSite.deployment.ActivatedPaginationPlansWithoutCollectionsDiagnose:diagnose
@@ -5254,7 +5254,7 @@ then
 ### fullSite.deployment.BegunFeedsIntend
 
 ```reaction
-when Emitting.begin (producer, attempt)
+when Emitting.beginAttempt (producer, attempt)
 where
   Deploying._forProducer (producer) has (kind: "feed", work)
   earlier, Deploying.prepareFeed (work, content, origin: true, path)
@@ -5265,7 +5265,7 @@ then
 ### fullSite.deployment.BegunNojekyllWorkIntends
 
 ```reaction
-when Emitting.begin (producer, attempt)
+when Emitting.beginAttempt (producer, attempt)
 where
   Deploying._forProducer (producer) has (kind: "nojekyll", path)
 then
@@ -5275,7 +5275,7 @@ then
 ### fullSite.deployment.BegunPaginationPagesIntend
 
 ```reaction
-when Emitting.begin (producer, attempt)
+when Emitting.beginAttempt (producer, attempt)
 where
   Deploying._forProducer (producer) has (address, kind: "pagination-page")
   view "output path of address (address)" with (address) has (path)
@@ -5287,11 +5287,11 @@ then
 ### fullSite.deployment.BegunRedirectsIntend
 
 ```reaction
-when Emitting.begin (producer, attempt)
+when Emitting.beginAttempt (producer, attempt)
 where
   Deploying._forProducer (producer) has (from: address, kind: "redirect", work)
   view "output path of address (address)" with (address) has (path)
-  earlier, Deploying.redirect (work, content)
+  earlier, Deploying.prepareRedirect (work, content)
 then
   Emitting.intend (attempt, content, medium: "text/html", path, producer)
 ```
@@ -5299,7 +5299,7 @@ then
 ### fullSite.deployment.BegunSitemapsIntend
 
 ```reaction
-when Emitting.begin (producer, attempt)
+when Emitting.beginAttempt (producer, attempt)
 where
   Deploying._forProducer (producer) has (kind: "sitemap", work)
   earlier, Deploying.prepareSitemap (work, content, path)
@@ -5316,7 +5316,7 @@ where
   targetHasKind (kind: "external", target)
   content is deploymentRedirectDocument (canonical: target, target)
 then
-  Deploying.redirect (canonical: target, content, target, work)
+  Deploying.prepareRedirect (canonical: target, content, target, work)
 ```
 
 ### fullSite.deployment.ClaimedLocalRedirectsPrepare
@@ -5329,7 +5329,7 @@ where
   view "absolute site URL of address (address)" with (address: raw) has (url: canonical)
   content is deploymentRedirectDocument (canonical, target)
 then
-  Deploying.redirect (canonical, content, target, work)
+  Deploying.prepareRedirect (canonical, content, target, work)
 ```
 
 ### fullSite.deployment.ClaimedPaginationPagesPrepareContext
@@ -5343,7 +5343,7 @@ where
   whether view "absolute site URL of address (address)" with (address) has (url: canonicalUrl)
   context is deploymentPaginationContext (address, canonicalUrl, cards, collection, collections, next, number, pages, previous, site, sourcePath, title)
 then
-  Deploying.context (context, work)
+  Deploying.preparePageContext (context, work)
 ```
 
 ### fullSite.deployment.ClaimedUnoriginatedRedirectsPrepare
@@ -5356,13 +5356,13 @@ where
   no view "absolute site URL of address (address)" with (address: raw)
   content is deploymentRedirectDocument (canonical: target, target)
 then
-  Deploying.redirect (canonical: target, content, target, work)
+  Deploying.prepareRedirect (canonical: target, content, target, work)
 ```
 
 ### fullSite.deployment.CommittedDeploymentArtifactsComplete
 
 ```reaction
-when Emitting.commit (attempt, producer)
+when Emitting.commitAttempt (attempt, producer)
 where
   view "committable deployment work of producer (producer)" with (producer) has (work)
   Emitting._attempt (producer) has (attempt)
@@ -5373,7 +5373,7 @@ then
 ### fullSite.deployment.DeploymentBeginFailuresDiagnose
 
 ```reaction
-when refused Emitting.begin (producer, detail, error)
+when refused Emitting.beginAttempt (producer, detail, error)
 where
   view "committable deployment work of producer (producer)" with (producer) has (work)
 then
@@ -5385,7 +5385,7 @@ then
 ```reaction
 when Deploying.reject (work), asked by fullSite.deployment.DeploymentBeginFailuresDiagnose
 where
-  earlier, refused Emitting.begin (producer, detail, error)
+  earlier, refused Emitting.beginAttempt (producer, detail, error)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
@@ -5393,7 +5393,7 @@ then
 ### fullSite.deployment.DeploymentCommitFailuresDiagnose
 
 ```reaction
-when refused Emitting.commit (attempt, producer, detail, error)
+when refused Emitting.commitAttempt (attempt, producer, detail, error)
 where
   view "committable deployment work of producer (producer)" with (producer) has (work)
   Emitting._open (producer) has (attempt)
@@ -5406,7 +5406,7 @@ then
 ```reaction
 when Deploying.reject (work), asked by fullSite.deployment.DeploymentCommitFailuresDiagnose
 where
-  earlier, refused Emitting.commit (attempt, producer, detail, error)
+  earlier, refused Emitting.commitAttempt (attempt, producer, detail, error)
 then
   Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
@@ -5419,17 +5419,17 @@ where
   view "committable deployment work of producer (producer)" with (producer)
   Emitting._open (producer) has (attempt)
 then
-  Deploying.fail (code: error, detail, path, producer)
+  Deploying.failWork (code: error, detail, path, producer)
 ```
 
 ### fullSite.deployment.DeploymentIntentFailuresFailAndAbort#2
 
 ```reaction
-when Deploying.fail (code: error, detail, path, producer), asked by fullSite.deployment.DeploymentIntentFailuresFailAndAbort
+when Deploying.failWork (code: error, detail, path, producer), asked by fullSite.deployment.DeploymentIntentFailuresFailAndAbort
 where
   earlier, refused Emitting.intend (attempt, path, producer, detail, error)
 then
-  Emitting.abort (attempt, producer)
+  Emitting.abortAttempt (attempt, producer)
 ```
 
 ### fullSite.deployment.DeploymentOutputFailuresRelateProducers
@@ -5437,16 +5437,16 @@ then
 ```reaction
 when Diagnosing.report (code: "PATH_CONTESTED", diagnostic)
 where
-  earlier, Deploying.fail (path)
+  earlier, Deploying.failWork (path)
   Emitting._producers (path) has (producer)
 then
-  Diagnosing.relate (diagnostic, note: "Competing output producer.", source: producer)
+  Diagnosing.addRelatedLocation (diagnostic, note: "Competing output producer.", source: producer)
 ```
 
 ### fullSite.deployment.DeploymentReferenceAnswerFailuresDiagnose:diagnose
 
 ```reaction
-when refused Referencing.answer (reference, detail, error)
+when refused Referencing.resolve (reference, detail, error)
 where
   Referencing._reference (reference) has (source)
   Referencing._source (source) has (part: "deployment-layout", subject: owner)
@@ -5458,13 +5458,13 @@ then
 ### fullSite.deployment.DeploymentReferenceAnswerFailuresDiagnose:reject
 
 ```reaction
-when refused Referencing.answer (reference, detail, error)
+when refused Referencing.resolve (reference, detail, error)
 where
   Referencing._reference (reference) has (source)
   Referencing._source (source) has (part: "deployment-layout", subject: owner)
   Deploying._forOwner (owner)
 then
-  Deploying.rejectOwner (owner)
+  Deploying.rejectOwnerWork (owner)
 ```
 
 ### fullSite.deployment.DeploymentReferenceScanFailuresDiagnose
@@ -5484,13 +5484,13 @@ when Diagnosing.report (code: error, message: detail, severity: "error", source:
 where
   earlier, refused Referencing.scan (part: "deployment-layout", subject: owner, detail, error)
 then
-  Deploying.rejectOwner (owner)
+  Deploying.rejectOwnerWork (owner)
 ```
 
 ### fullSite.deployment.DescribedDeploymentOutputFailuresDiagnose
 
 ```reaction
-when Deploying.fail (path, code, message)
+when Deploying.failWork (path, code, message)
 then
   Diagnosing.report (code, message, severity: "error", source: "site.yaml")
 ```
@@ -5498,7 +5498,7 @@ then
 ### fullSite.deployment.EmitPhaseStartsDeployment
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "emit", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "emit", transitioned: true)
 where
   Governing._publishing () has (policy)
 then
@@ -5512,17 +5512,17 @@ when Referencing.scan (part: "deployment-layout", subject: owner, completed: tru
 where
   Deploying._forOwner (owner) has (producer)
 then
-  Emitting.begin (producer)
+  Emitting.beginAttempt (producer)
 ```
 
 ### fullSite.deployment.FinishedPaginationLayoutAnswersBegin
 
 ```reaction
-when Referencing.answer (completed: true, part: "deployment-layout", subject: owner)
+when Referencing.resolve (completed: true, part: "deployment-layout", subject: owner)
 where
   Deploying._forOwner (owner) has (producer)
 then
-  Emitting.begin (producer)
+  Emitting.beginAttempt (producer)
 ```
 
 ### fullSite.deployment.GeneratedClaimsBeginDependencies
@@ -5532,27 +5532,27 @@ when Routing.claim (owner)
 where
   Deploying._forOwner (owner)
 then
-  Depending.begin (subject: owner)
+  DependencyTracking.beginAttempt (subject: owner)
 ```
 
 ### fullSite.deployment.GeneratedDependenciesSettle
 
 ```reaction
-when Depending.use (attempt, input: "site.yaml", subject: owner)
+when DependencyTracking.recordDependency (attempt, input: "site.yaml", subject: owner)
 where
   Deploying._forOwner (owner)
 then
-  Depending.settle (attempt, subject: owner)
+  DependencyTracking.settleAttempt (attempt, subject: owner)
 ```
 
 ### fullSite.deployment.GeneratedDependenciesTrackConfiguration
 
 ```reaction
-when Depending.begin (subject: owner, attempt)
+when DependencyTracking.beginAttempt (subject: owner, attempt)
 where
   Deploying._forOwner (owner)
 then
-  Depending.use (attempt, input: "site.yaml", subject: owner)
+  DependencyTracking.recordDependency (attempt, input: "site.yaml", subject: owner)
 ```
 
 ### fullSite.deployment.GeneratedRouteCollisionsDiagnose
@@ -5572,7 +5572,7 @@ when Diagnosing.report (code: "ROUTE_COLLISION", message: detail, severity: "err
 where
   earlier, refused Routing.claim (owner, detail, error: "ADDRESS_TAKEN")
 then
-  Deploying.rejectOwner (owner)
+  Deploying.rejectOwnerWork (owner)
 ```
 
 ### fullSite.deployment.IntendedDeploymentArtifactsCommit
@@ -5583,7 +5583,7 @@ where
   view "committable deployment work of producer (producer)" with (producer)
   Emitting._open (producer) has (attempt)
 then
-  Emitting.commit (attempt, producer)
+  Emitting.commitAttempt (attempt, producer)
 ```
 
 ### fullSite.deployment.InvalidDeploymentLayoutReferencesDiagnose:diagnose
@@ -5609,7 +5609,7 @@ where
   Referencing._references (source) has (raw)
   targetHasKind (kind: "relative", target: raw)
 then
-  Deploying.rejectOwner (owner)
+  Deploying.rejectOwnerWork (owner)
 ```
 
 ### fullSite.deployment.InvalidFeedEntriesDiagnose
@@ -5647,13 +5647,13 @@ when Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "err
 where
   earlier, refused Routing.claim (owner, detail, error: "INVALID_ADDRESS")
 then
-  Deploying.rejectOwner (owner)
+  Deploying.rejectOwnerWork (owner)
 ```
 
 ### fullSite.deployment.MissingRequiredNotFoundPagesDiagnose
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "emit", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "emit", transitioned: true)
 where
   Governing._deployment () has (requireNotFound: true)
   no Routing._owner (address: "/404.html")
@@ -5668,7 +5668,7 @@ when Referencing.scan (part: "deployment-layout", source)
 where
   view "held deployment layout reference of source (source)" with (source) has (raw, reference)
 then
-  Referencing.answer (form: "address", reference, value: raw)
+  Referencing.resolve (form: "address", reference, value: raw)
 ```
 
 ### fullSite.deployment.OriginlessFeedsDiagnose
@@ -5692,15 +5692,15 @@ then
 ### fullSite.deployment.PaginationContextsRender
 
 ```reaction
-when Deploying.context (work, context, owner, template)
+when Deploying.preparePageContext (work, context, owner, template)
 then
-  Templating.render (context, subject: owner, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.renderTemplate (context, subject: owner, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.deployment.PaginationTemplateFailuresDiagnose
 
 ```reaction
-when refused Templating.render (subject: owner, detail, error)
+when refused Templating.renderTemplate (subject: owner, detail, error)
 where
   Deploying._forOwner (owner) has (kind: "pagination-page")
 then
@@ -5712,9 +5712,9 @@ then
 ```reaction
 when Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml"), asked by fullSite.deployment.PaginationTemplateFailuresDiagnose
 where
-  earlier, refused Templating.render (subject: owner, detail, error)
+  earlier, refused Templating.renderTemplate (subject: owner, detail, error)
 then
-  Deploying.rejectOwner (owner)
+  Deploying.rejectOwnerWork (owner)
 ```
 
 ### fullSite.deployment.PreparedFeedsBegin
@@ -5724,17 +5724,17 @@ when Deploying.prepareFeed (work, origin: true, valid: true)
 where
   Deploying._work (work) has (producer)
 then
-  Emitting.begin (producer)
+  Emitting.beginAttempt (producer)
 ```
 
 ### fullSite.deployment.PreparedRedirectsBegin
 
 ```reaction
-when Deploying.redirect (work)
+when Deploying.prepareRedirect (work)
 where
   Deploying._work (work) has (producer)
 then
-  Emitting.begin (producer)
+  Emitting.beginAttempt (producer)
 ```
 
 ### fullSite.deployment.PreparedSitemapsBegin
@@ -5744,13 +5744,13 @@ when Deploying.prepareSitemap (work)
 where
   Deploying._work (work) has (producer)
 then
-  Emitting.begin (producer)
+  Emitting.beginAttempt (producer)
 ```
 
 ### fullSite.deployment.RenderedPaginationLayoutsScan
 
 ```reaction
-when Templating.render (subject: owner, output)
+when Templating.renderTemplate (subject: owner, output)
 where
   Deploying._forOwner (owner) has (kind: "pagination-page")
 then
@@ -5802,19 +5802,19 @@ where
   targetHasKind (kind: "absolute", target: raw)
   no view "site URL of target (target)" with (target: raw)
 then
-  Deploying.rejectOwner (owner)
+  Deploying.rejectOwnerWork (owner)
 ```
 
 ### fullSite.endpoints.AdvanceSiteBuild
 
 ```reaction
-when Phasing.advance (attempt, job, name: "site-build", transitioned: true)
+when Phasing.completePhase (attempt, job, name: "site-build", transitioned: true)
 at the flow's settlement frontier
 where
   Phasing._job (job) has (attempt: nextAttempt, name: "site-build", state: "running")
   no view "pending failed rendering cleanup"
 then
-  Phasing.advance (attempt: nextAttempt, job)
+  Phasing.completePhase (attempt: nextAttempt, job)
 ```
 
 ### fullSite.endpoints.AdvanceStartedSiteBuild
@@ -5825,7 +5825,7 @@ at the flow's settlement frontier
 where
   Phasing._running (sequence) has (attempt, job, name: "site-build")
 then
-  Phasing.advance (attempt, job)
+  Phasing.completePhase (attempt, job)
 ```
 
 ### fullSite.endpoints.BuildSiteAtConfiguredOutput
@@ -5835,13 +5835,13 @@ when RequestBoundary.request (destination, directory, path: "/site/build", reque
 where
   isAbsentValue (value: destination)
 then
-  Locating.request (name: "site", path: directory)
+  Locating.recordRequest (name: "site", path: directory)
 ```
 
 ### fullSite.endpoints.BuildSiteAtConfiguredOutput#2
 
 ```reaction
-when Locating.request (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput
+when Locating.recordRequest (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput
 then
   Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
 ```
@@ -5862,13 +5862,13 @@ at the flow's settlement frontier
 where
   view "the settled site build of job (job)" with (job)
 then
-  Delivering.settle (task: job)
+  DeliveryArbitration.settle (task: job)
 ```
 
 ### fullSite.endpoints.BuildSiteAtConfiguredOutput:errors#5
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
 where
   view "the settled site build of job (job)" with (job) has (state: "finished")
   Diagnosing._clean () has (clean: false)
@@ -5880,7 +5880,7 @@ then
 ### fullSite.endpoints.BuildSiteAtConfiguredOutput:failed#5
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
 where
   view "the settled site build of job (job)" with (job) has (state: "failed")
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
@@ -5891,7 +5891,7 @@ then
 ### fullSite.endpoints.BuildSiteAtConfiguredOutput:incomplete#5
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
 where
   view "the settled site build of job (job)" with (job) has (state: "finished")
   Diagnosing._clean () has (clean: true)
@@ -5904,7 +5904,7 @@ then
 ### fullSite.endpoints.BuildSiteAtConfiguredOutput:published#5
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
 where
   view "job (job) is a publishable site build" with (job)
 then
@@ -5928,23 +5928,23 @@ when RequestBoundary.request (destination, directory, path: "/site/build", reque
 where
   isTextValue (value: destination)
 then
-  Locating.request (name: "site", path: directory)
+  Locating.recordRequest (name: "site", path: directory)
 ```
 
 ### fullSite.endpoints.BuildSiteAtDestination#2
 
 ```reaction
-when Locating.request (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtDestination
+when Locating.recordRequest (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtDestination
 where
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
 then
-  Locating.request (name: "destination", path: destination)
+  Locating.recordRequest (name: "destination", path: destination)
 ```
 
 ### fullSite.endpoints.BuildSiteAtDestination#3
 
 ```reaction
-when Locating.request (name: "destination", path: destination), asked by fullSite.endpoints.BuildSiteAtDestination#2
+when Locating.recordRequest (name: "destination", path: destination), asked by fullSite.endpoints.BuildSiteAtDestination#2
 then
   Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
 ```
@@ -5965,13 +5965,13 @@ at the flow's settlement frontier
 where
   view "the settled site build of job (job)" with (job)
 then
-  Delivering.settle (task: job)
+  DeliveryArbitration.settle (task: job)
 ```
 
 ### fullSite.endpoints.BuildSiteAtDestination:errors#6
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
 where
   view "the settled site build of job (job)" with (job) has (state: "finished")
   Diagnosing._clean () has (clean: false)
@@ -5983,7 +5983,7 @@ then
 ### fullSite.endpoints.BuildSiteAtDestination:failed#6
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
 where
   view "the settled site build of job (job)" with (job) has (state: "failed")
   earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
@@ -5994,7 +5994,7 @@ then
 ### fullSite.endpoints.BuildSiteAtDestination:incomplete#6
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
 where
   view "the settled site build of job (job)" with (job) has (state: "finished")
   Diagnosing._clean () has (clean: true)
@@ -6007,7 +6007,7 @@ then
 ### fullSite.endpoints.BuildSiteAtDestination:published#6
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
 where
   view "job (job) is a publishable site build" with (job)
 then
@@ -6029,13 +6029,13 @@ then
 ```reaction
 when RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
 then
-  Locating.request (name: "site", path: directory)
+  Locating.recordRequest (name: "site", path: directory)
 ```
 
 ### fullSite.endpoints.InspectSite#2
 
 ```reaction
-when Locating.request (name: "site", path: directory), asked by fullSite.endpoints.InspectSite
+when Locating.recordRequest (name: "site", path: directory), asked by fullSite.endpoints.InspectSite
 then
   Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
 ```
@@ -6056,13 +6056,13 @@ at the flow's settlement frontier
 where
   view "the settled site build of job (job)" with (job)
 then
-  Delivering.settle (task: job)
+  DeliveryArbitration.settle (task: job)
 ```
 
 ### fullSite.endpoints.InspectSite:failed#5
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
 where
   view "the settled site build of job (job)" with (job) has (state: "failed")
   earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
@@ -6073,7 +6073,7 @@ then
 ### fullSite.endpoints.InspectSite:found#5
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
 where
   view "the settled site build of job (job)" with (job) has (state: "finished")
   earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
@@ -6085,7 +6085,7 @@ then
 ### fullSite.endpoints.InspectSite:missing#5
 
 ```reaction
-when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
+when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
 where
   view "the settled site build of job (job)" with (job) has (state: "finished")
   earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
@@ -6109,7 +6109,7 @@ when any action is faulted
 where
   earlier, Phasing.start (job, name: "site-build")
 then
-  Delivering.interrupt (task: job)
+  DeliveryArbitration.recordInterruption (task: job)
 ```
 
 ### fullSite.endpoints.SiteBuildRefusalsInterruptAggregateDelivery
@@ -6119,7 +6119,7 @@ when any action is refused
 where
   earlier, Phasing.start (job, name: "site-build")
 then
-  Delivering.interrupt (task: job)
+  DeliveryArbitration.recordInterruption (task: job)
 ```
 
 ### fullSite.excerpts.ExcerptConversionFailuresDiagnose
@@ -6127,7 +6127,7 @@ then
 ```reaction
 when refused Converting.convert (part: "excerpt", subject: page, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "excerpt", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "excerpt", transitioned: true)
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (path, root)
 then
@@ -6137,11 +6137,11 @@ then
 ### fullSite.excerpts.PageExcerptsConvert
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "excerpt", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "excerpt", transitioned: true)
 where
   Routing._claims () has (owner: page)
-  Documenting._document (subject: page) has (body)
-  Rendering._latest (subject: page) has (profile: profileName)
+  DocumentParsing._document (subject: page) has (body)
+  RenderTracking._latest (subject: page) has (profile: profileName)
   Converting._profile (name: profileName) has (profile)
 then
   Converting.convert (part: "excerpt", profile, source: body, subject: page)
@@ -6150,22 +6150,22 @@ then
 ### fullSite.images.AdmittedRasterImagesRender
 
 ```reaction
-when Transcoding.admit (original)
+when Transcoding.ingest (original)
 where
   Governing._images () has (formats, widths)
 then
-  Transcoding.render (formats, original, widths)
+  Transcoding.generateRenditions (formats, original, widths)
 ```
 
 ### fullSite.images.CompletedEmbeddingsAnswer
 
 ```reaction
-when Embedding.offer (embedding, completed: true)
+when Embedding.provideCandidate (embedding, completed: true)
 where
   Embedding._embedding (embedding) has (subject: reference)
   Embedding._markup (embedding) has (markup)
 then
-  Referencing.answer (form: "markup", reference, value: markup)
+  Referencing.resolve (form: "markup", reference, value: markup)
 ```
 
 ### fullSite.images.DeclaredEmbeddingsAnswer
@@ -6176,7 +6176,7 @@ where
   Embedding._embedding (embedding) has (subject: reference)
   Embedding._markup (embedding) has (markup)
 then
-  Referencing.answer (form: "markup", reference, value: markup)
+  Referencing.resolve (form: "markup", reference, value: markup)
 ```
 
 ### fullSite.images.PrimaryRasterImagesAdmit
@@ -6186,13 +6186,13 @@ when Referencing.scan (part: "body", source)
 where
   view "primary raster body asset reference of source (source)" with (source) has (content, image)
 then
-  Transcoding.admit (content, subject: image)
+  Transcoding.ingest (content, subject: image)
 ```
 
 ### fullSite.images.RasterAdmissionsDiagnose
 
 ```reaction
-when refused Transcoding.admit (subject: image, detail, error)
+when refused Transcoding.ingest (subject: image, detail, error)
 where
   earlier, Referencing.scan (part: "body", source)
   view "resolved local body reference of source (source)" with (source) has (page, role: "image", target: image)
@@ -6208,7 +6208,7 @@ when refused Embedding.declare (subject: reference, detail, error)
 where
   Referencing._reference (reference) has (source)
   Referencing._source (source) has (part: "body", subject: rendering)
-  Rendering._active (rendering) has (subject: page)
+  RenderTracking._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
@@ -6219,10 +6219,10 @@ then
 ```reaction
 when Emitting.intend (attempt: emissionAttempt, path, producer: page)
 where
-  earlier, Transcoding.render (original, derived)
+  earlier, Transcoding.generateRenditions (original, derived)
   earlier, Referencing.scan (part: "body", subject: rendering, source)
   view "primary raster body asset reference of source (source)" with (source) has (image, name, page, raw, reference, rendering)
-  Rendering._active (rendering) has (emissionAttempt)
+  RenderTracking._active (rendering) has (emissionAttempt)
   Referencing._reference (reference) has (attributes, label)
   Transcoding._original (subject: image) has (original)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
@@ -6236,12 +6236,12 @@ then
 ### fullSite.images.RasterFallbacksStage
 
 ```reaction
-when Transcoding.render (original)
+when Transcoding.generateRenditions (original)
 where
   earlier, Referencing.scan (part: "body", source)
   view "primary raster body asset reference of source (source)" with (source) has (image, name, page, rendering)
   Transcoding._original (subject: image) has (original)
-  Rendering._active (rendering) has (emissionAttempt)
+  RenderTracking._active (rendering) has (emissionAttempt)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
   Transcoding._renditions (original) has (content, fallback: true, mediaType)
 then
@@ -6251,12 +6251,12 @@ then
 ### fullSite.images.RasterOffersDiagnose
 
 ```reaction
-when refused Embedding.offer (embedding, detail, error)
+when refused Embedding.provideCandidate (embedding, detail, error)
 where
   Embedding._embedding (embedding) has (subject: reference)
   Referencing._reference (reference) has (source)
   Referencing._source (source) has (part: "body", subject: rendering)
-  Rendering._active (rendering) has (subject: page)
+  RenderTracking._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
@@ -6265,7 +6265,7 @@ then
 ### fullSite.images.RasterRendersDiagnose
 
 ```reaction
-when refused Transcoding.render (original, detail, error)
+when refused Transcoding.generateRenditions (original, detail, error)
 where
   earlier, Referencing.scan (part: "body", source)
   view "resolved local body reference of source (source)" with (source) has (page, role: "image", target: image)
@@ -6287,7 +6287,7 @@ where
   view "path joining prefix (prefix) and name (name)" with (name, prefix: assets) has (path)
   view "address of output path (path)" with (path) has (address)
 then
-  Embedding.offer (address, embedding, format, order, width)
+  Embedding.provideCandidate (address, embedding, format, order, width)
 ```
 
 ### fullSite.images.RasterRenditionsStage
@@ -6296,7 +6296,7 @@ then
 when Embedding.declare (embedding)
 where
   view "responsive body image embedding (embedding)" with (embedding) has (original, page, rendering)
-  Rendering._active (rendering) has (emissionAttempt)
+  RenderTracking._active (rendering) has (emissionAttempt)
   Transcoding._renditions (original) has (content, fallback: false, mediaType, name, rendition)
   Governing._paths () has (assets)
   view "path joining prefix (prefix) and name (name)" with (name, prefix: assets) has (path)
@@ -6327,7 +6327,7 @@ where
   targetHasKind (kind: "absolute", target: raw)
   view "site URL of target (target)" with (target: raw) has (url)
 then
-  Referencing.answer (form: "address", reference, value: url)
+  Referencing.resolve (form: "address", reference, value: url)
 ```
 
 ### fullSite.references.ClaimedBodyReferencesRetarget
@@ -6339,7 +6339,7 @@ where
   Routing._address (owner: target) has (address)
   view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address) has (target: value)
 then
-  Referencing.answer (form: "address", reference, value)
+  Referencing.resolve (form: "address", reference, value)
 ```
 
 ### fullSite.references.CopiedBodyAssetsAnswer
@@ -6353,7 +6353,7 @@ where
   view "address of output path (path)" with (path) has (address)
   view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address) has (target: value)
 then
-  Referencing.answer (form: "address", reference, value)
+  Referencing.resolve (form: "address", reference, value)
 ```
 
 ### fullSite.references.CopyableBodyAssetsCopy
@@ -6362,7 +6362,7 @@ then
 when Referencing.scan (part: "body", source)
 where
   view "copyable body asset of source (source)" with (source) has (asset: target, content, name, page, rendering)
-  Rendering._active (rendering) has (emissionAttempt)
+  RenderTracking._active (rendering) has (emissionAttempt)
   view "beside-page output for page (page) and name (name)" with (name, page) has (path)
 then
   Emitting.intend (attempt: emissionAttempt, claim: target, content, medium: "application/octet-stream", path, producer: page)
@@ -6399,7 +6399,7 @@ when Referencing.scan (part: "body", source)
 where
   view "held body reference of source (source)" with (source) has (raw, reference)
 then
-  Referencing.answer (form: "address", reference, value: raw)
+  Referencing.resolve (form: "address", reference, value: raw)
 ```
 
 ### fullSite.references.NonlocalLayoutReferencesHold
@@ -6409,7 +6409,7 @@ when Referencing.scan (part: "layout", source)
 where
   view "held layout reference of source (source)" with (source) has (raw, reference)
 then
-  Referencing.answer (form: "address", reference, value: raw)
+  Referencing.resolve (form: "address", reference, value: raw)
 ```
 
 ### fullSite.references.OutsideBodyReferencesDiagnose
@@ -6430,7 +6430,7 @@ then
 when Referencing.scan (part: "layout", source)
 where
   Referencing._source (source) has (subject: rendering)
-  Rendering._active (rendering) has (subject: page)
+  RenderTracking._active (rendering) has (subject: page)
   Referencing._references (source) has (raw)
   targetHasKind (kind: "relative", target: raw)
   Filing._file (file: page) has (path)
@@ -6445,7 +6445,7 @@ when Referencing.scan (part: "body", source)
 where
   view "resolved local body reference of source (source)" with (source) has (page, target)
   no Routing._address (owner: target)
-  Documenting._document (subject: target)
+  DocumentParsing._document (subject: target)
   Filing._file (file: target) has (root)
   Filing._root (root) has (name: "content")
   Filing._file (file: page) has (path)
@@ -6485,8 +6485,8 @@ then
 ```reaction
 when refused Converting.convert (part: "body", subject: rendering, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering) has (subject: page)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
@@ -6495,10 +6495,10 @@ then
 ### fullSite.render.BodyTemplateFailuresDiagnose
 
 ```reaction
-when refused Templating.fill (subject: rendering, detail, error)
+when refused Templating.renderSource (subject: rendering, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering) has (subject: page)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
   Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
 then
@@ -6508,12 +6508,12 @@ then
 ### fullSite.render.BodyTemplateFailuresFailRendering
 
 ```reaction
-when refused Templating.fill (subject: rendering, error)
+when refused Templating.renderSource (subject: rendering, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._active (rendering)
 then
-  Rendering.fail (reason: error, rendering)
+  RenderTracking.fail (reason: error, rendering)
 ```
 
 ### fullSite.render.ClaimedRoutesBeginPageDependencies
@@ -6521,20 +6521,20 @@ then
 ```reaction
 when Routing.claim (owner: page)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
 then
-  Depending.begin (subject: page)
+  DependencyTracking.beginAttempt (subject: page)
 ```
 
 ### fullSite.render.CommittedPageOutputsSettleDependencies
 
 ```reaction
-when Emitting.commit (attempt: emissionAttempt, producer: page)
+when Emitting.commitAttempt (attempt: emissionAttempt, producer: page)
 where
-  earlier, Rendering.settleLayout (rendering, subject: page, transitioned: true)
-  Rendering._latest (subject: page) has (dependencyAttempt, emissionAttempt, rendering, stage: "completed")
+  earlier, RenderTracking.completeLayout (rendering, subject: page, transitioned: true)
+  RenderTracking._latest (subject: page) has (dependencyAttempt, emissionAttempt, rendering, stage: "completed")
 then
-  Depending.settle (attempt: dependencyAttempt, subject: page)
+  DependencyTracking.settleAttempt (attempt: dependencyAttempt, subject: page)
 ```
 
 ### fullSite.render.ConvertedBodiesScan
@@ -6550,9 +6550,9 @@ then
 ```reaction
 when Referencing.scan (part: "body", subject: rendering, completed: true)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
 then
-  Rendering.settleBody (rendering)
+  RenderTracking.completeBody (rendering)
 ```
 
 ### fullSite.render.EmptyLayoutScansSettleRendering
@@ -6560,39 +6560,39 @@ then
 ```reaction
 when Referencing.scan (part: "layout", subject: rendering, completed: true)
 where
-  Rendering._active (rendering)
+  RenderTracking._active (rendering)
 then
-  Rendering.settleLayout (rendering)
+  RenderTracking.completeLayout (rendering)
 ```
 
 ### fullSite.render.FailedRenderingsAbandonDependencies
 
 ```reaction
-when Rendering.fail (rendering, subject: page, transitioned: true)
+when RenderTracking.fail (rendering, subject: page, transitioned: true)
 at the flow's settlement frontier
 where
-  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "failed")
+  RenderTracking._latest (subject: page) has (dependencyAttempt, rendering, stage: "failed")
 then
-  Depending.abandon (attempt: dependencyAttempt, subject: page)
+  DependencyTracking.abandonAttempt (attempt: dependencyAttempt, subject: page)
 ```
 
 ### fullSite.render.FailedRenderingsAbortOutput
 
 ```reaction
-when Rendering.fail (rendering, subject: page, transitioned: true)
+when RenderTracking.fail (rendering, subject: page, transitioned: true)
 at the flow's settlement frontier
 where
-  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "failed")
+  RenderTracking._latest (subject: page) has (emissionAttempt, rendering, stage: "failed")
 then
-  Emitting.abort (attempt: emissionAttempt, producer: page)
+  Emitting.abortAttempt (attempt: emissionAttempt, producer: page)
 ```
 
 ### fullSite.render.FilledBodiesConvert
 
 ```reaction
-when Templating.fill (subject: rendering, output)
+when Templating.renderSource (subject: rendering, output)
 where
-  Rendering._active (rendering) has (profile: name)
+  RenderTracking._active (rendering) has (profile: name)
   Converting._profile (name) has (profile)
 then
   Converting.convert (part: "body", profile, source: output, subject: rendering)
@@ -6601,33 +6601,33 @@ then
 ### fullSite.render.FilledBodiesTrackTemplates
 
 ```reaction
-when Templating.fill (subject: rendering, filling)
+when Templating.renderSource (subject: rendering, filling)
 where
-  Rendering._active (rendering) has (dependencyAttempt, subject: page)
+  RenderTracking._active (rendering) has (dependencyAttempt, subject: page)
   Templating._tree (owner: filling) has (used)
   Templating._template (name: used) has (template)
 then
-  Depending.use (attempt: dependencyAttempt, input: template, subject: page)
+  DependencyTracking.recordDependency (attempt: dependencyAttempt, input: template, subject: page)
 ```
 
 ### fullSite.render.FinishedBodyAnswersSettleRendering
 
 ```reaction
-when Referencing.answer (completed: true, part: "body", subject: rendering)
+when Referencing.resolve (completed: true, part: "body", subject: rendering)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
 then
-  Rendering.settleBody (rendering)
+  RenderTracking.completeBody (rendering)
 ```
 
 ### fullSite.render.FinishedLayoutAnswersSettleRendering
 
 ```reaction
-when Referencing.answer (completed: true, part: "layout", subject: rendering)
+when Referencing.resolve (completed: true, part: "layout", subject: rendering)
 where
-  Rendering._active (rendering)
+  RenderTracking._active (rendering)
 then
-  Rendering.settleLayout (rendering)
+  RenderTracking.completeLayout (rendering)
 ```
 
 ### fullSite.render.IntendedPageOutputsCommit
@@ -6635,47 +6635,47 @@ then
 ```reaction
 when Emitting.intend (attempt: emissionAttempt, producer: page)
 where
-  earlier, Rendering.settleLayout (rendering, subject: page, transitioned: true)
-  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
+  earlier, RenderTracking.completeLayout (rendering, subject: page, transitioned: true)
+  RenderTracking._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
 then
-  Emitting.commit (attempt: emissionAttempt, producer: page)
+  Emitting.commitAttempt (attempt: emissionAttempt, producer: page)
 ```
 
 ### fullSite.render.InvalidPageRenderingSelectionsAbandonDependencies
 
 ```reaction
-when Emitting.begin (producer: page, attempt: emissionAttempt)
+when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
 where
-  earlier, Depending.begin (subject: page, attempt: dependencyAttempt)
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  earlier, DependencyTracking.beginAttempt (subject: page, attempt: dependencyAttempt)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
   Filing._file (file: page) has (path)
   Layering._resolved (subject: page) has (values: data)
   view "the invalid rendering selection for path (path) and data (data)" with (data, path)
 then
-  Depending.abandon (attempt: dependencyAttempt, subject: page)
+  DependencyTracking.abandonAttempt (attempt: dependencyAttempt, subject: page)
 ```
 
 ### fullSite.render.InvalidPageRenderingSelectionsAbortOutput
 
 ```reaction
-when Emitting.begin (producer: page, attempt: emissionAttempt)
+when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
 where
-  earlier, Depending.begin (subject: page)
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  earlier, DependencyTracking.beginAttempt (subject: page)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
   Filing._file (file: page) has (path)
   Layering._resolved (subject: page) has (values: data)
   view "the invalid rendering selection for path (path) and data (data)" with (data, path)
 then
-  Emitting.abort (attempt: emissionAttempt, producer: page)
+  Emitting.abortAttempt (attempt: emissionAttempt, producer: page)
 ```
 
 ### fullSite.render.InvalidPageRenderingSelectionsDiagnose
 
 ```reaction
-when Emitting.begin (producer: page, attempt: emissionAttempt)
+when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
 where
-  earlier, Depending.begin (subject: page)
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  earlier, DependencyTracking.beginAttempt (subject: page)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
   Filing._file (file: page) has (path)
   Layering._resolved (subject: page) has (values: data)
   view "the invalid rendering selection for path (path) and data (data)" with (data, path) has (detail, error)
@@ -6686,10 +6686,10 @@ then
 ### fullSite.render.LayoutTemplateFailuresDiagnose
 
 ```reaction
-when refused Templating.render (subject: rendering, detail, error)
+when refused Templating.renderTemplate (subject: rendering, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering) has (subject: page)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._active (rendering) has (subject: page)
   Filing._file (file: page) has (path)
   Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
 then
@@ -6699,20 +6699,20 @@ then
 ### fullSite.render.LayoutTemplateFailuresFailRendering
 
 ```reaction
-when refused Templating.render (subject: rendering, error)
+when refused Templating.renderTemplate (subject: rendering, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._active (rendering)
 then
-  Rendering.fail (reason: error, rendering)
+  RenderTracking.fail (reason: error, rendering)
 ```
 
 ### fullSite.render.MissingRenderingProfilesDiagnose
 
 ```reaction
-when Templating.fill (subject: rendering)
+when Templating.renderSource (subject: rendering)
 where
-  Rendering._active (rendering) has (profile: name, subject: page)
+  RenderTracking._active (rendering) has (profile: name, subject: page)
   no Converting._profile (name)
   Filing._file (file: page) has (path)
 then
@@ -6722,9 +6722,9 @@ then
 ### fullSite.render.MissingRenderingTemplatesDiagnose
 
 ```reaction
-when Rendering.settleBody (rendering, subject: page, transitioned: true)
+when RenderTracking.completeBody (rendering, subject: page, transitioned: true)
 where
-  Rendering._active (rendering) has (template: name)
+  RenderTracking._active (rendering) has (template: name)
   no Templating._template (name)
   Filing._file (file: page) has (path)
 then
@@ -6736,9 +6736,9 @@ then
 ```reaction
 when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (emissionAttempt, rendering: pageRendering)
-  Rendering._active (rendering: pageRendering)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._latest (subject: page) has (emissionAttempt, rendering: pageRendering)
+  RenderTracking._active (rendering: pageRendering)
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
@@ -6747,12 +6747,12 @@ then
 ### fullSite.render.PageDependenciesOpenEmission
 
 ```reaction
-when Depending.begin (subject: page)
+when DependencyTracking.beginAttempt (subject: page)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
   Filing._file (file: page)
 then
-  Emitting.begin (producer: page)
+  Emitting.beginAttempt (producer: page)
 ```
 
 ### fullSite.render.PageEmissionFailuresDiagnose
@@ -6760,8 +6760,8 @@ then
 ```reaction
 when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (emissionAttempt, stage: "completed")
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._latest (subject: page) has (emissionAttempt, stage: "completed")
   Filing._file (file: page) has (path)
 then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
@@ -6770,26 +6770,26 @@ then
 ### fullSite.render.PageEmissionsBeginRendering
 
 ```reaction
-when Emitting.begin (producer: page, attempt: emissionAttempt)
+when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
 where
-  earlier, Depending.begin (subject: page, attempt: dependencyAttempt)
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
+  earlier, DependencyTracking.beginAttempt (subject: page, attempt: dependencyAttempt)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
+  DependencyTracking._attempt (subject: page) has (attempt: dependencyAttempt)
   Filing._file (file: page) has (path)
   Layering._resolved (subject: page) has (values: data)
   pageRenderingSelectionHasValidity (data, path, valid: true)
   profile is pageRenderingProfile (data, path)
   template is pageRenderingTemplate (data, path)
 then
-  Rendering.begin (dependencyAttempt, emissionAttempt, path, profile, subject: page, template)
+  RenderTracking.begin (dependencyAttempt, emissionAttempt, path, profile, subject: page, template)
 ```
 
 ### fullSite.render.RenderedLayoutsScan
 
 ```reaction
-when Templating.render (subject: rendering, output)
+when Templating.renderTemplate (subject: rendering, output)
 where
-  Rendering._active (rendering)
+  RenderTracking._active (rendering)
 then
   Referencing.scan (part: "layout", subject: rendering, text: output)
 ```
@@ -6797,55 +6797,55 @@ then
 ### fullSite.render.RenderedLayoutsTrackTemplates
 
 ```reaction
-when Templating.render (subject: attempt, rendering)
+when Templating.renderTemplate (subject: attempt, rendering)
 where
-  Rendering._active (rendering: attempt) has (dependencyAttempt: attemptDependency, subject: page)
+  RenderTracking._active (rendering: attempt) has (dependencyAttempt: attemptDependency, subject: page)
   Templating._tree (owner: rendering) has (used)
   Templating._template (name: used) has (template)
 then
-  Depending.use (attempt: attemptDependency, input: template, subject: page)
+  DependencyTracking.recordDependency (attempt: attemptDependency, input: template, subject: page)
 ```
 
 ### fullSite.render.RenderingAttemptsRetractDiagnostics
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
 where
   Routing._claims () has (owner: page)
-  Rendering._latest (subject: page) has (stage: "started")
+  RenderTracking._latest (subject: page) has (stage: "started")
   Filing._file (file: page) has (path)
 then
-  Diagnosing.retract (scope: "page-rendering", source: path)
+  Diagnosing.retractGroup (scope: "page-rendering", source: path)
 ```
 
 ### fullSite.render.RenderingBeginningsAbandonDependencies
 
 ```reaction
-when refused Rendering.begin (dependencyAttempt, subject: page, error)
+when refused RenderTracking.begin (dependencyAttempt, subject: page, error)
 where
-  earlier, Depending.begin (subject: page, attempt: dependencyAttempt)
-  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
+  earlier, DependencyTracking.beginAttempt (subject: page, attempt: dependencyAttempt)
+  DependencyTracking._attempt (subject: page) has (attempt: dependencyAttempt)
 then
-  Depending.abandon (attempt: dependencyAttempt, subject: page)
+  DependencyTracking.abandonAttempt (attempt: dependencyAttempt, subject: page)
 ```
 
 ### fullSite.render.RenderingBeginningsAbortEmission
 
 ```reaction
-when refused Rendering.begin (emissionAttempt, subject: page)
+when refused RenderTracking.begin (emissionAttempt, subject: page)
 where
-  earlier, Emitting.begin (producer: page, attempt: emissionAttempt)
+  earlier, Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
   Emitting._open (producer: page) has (attempt: emissionAttempt)
 then
-  Emitting.abort (attempt: emissionAttempt, producer: page)
+  Emitting.abortAttempt (attempt: emissionAttempt, producer: page)
 ```
 
 ### fullSite.render.RenderingBeginningsDiagnose
 
 ```reaction
-when refused Rendering.begin (dependencyAttempt, emissionAttempt, subject: page, detail, error)
+when refused RenderTracking.begin (dependencyAttempt, emissionAttempt, subject: page, detail, error)
 where
-  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
+  DependencyTracking._attempt (subject: page) has (attempt: dependencyAttempt)
   Emitting._open (producer: page) has (attempt: emissionAttempt)
   Filing._file (file: page) has (path)
 then
@@ -6859,57 +6859,57 @@ when Diagnosing.report (code, scope: "page-rendering", severity: "error", source
 where
   Filing._named (name: "content") has (root)
   Filing._under (prefix: "", root) has (file: page, path)
-  Rendering._latest (subject: page) has (rendering)
-  Rendering._active (rendering)
+  RenderTracking._latest (subject: page) has (rendering)
+  RenderTracking._active (rendering)
 then
-  Rendering.fail (reason: code, rendering)
+  RenderTracking.fail (reason: code, rendering)
 ```
 
 ### fullSite.render.RetractedRenderingAttemptsTrackSource
 
 ```reaction
-when Diagnosing.retract (scope: "page-rendering", source: path)
+when Diagnosing.retractGroup (scope: "page-rendering", source: path)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
   Routing._claims () has (owner: page)
-  Rendering._latest (subject: page) has (dependencyAttempt, stage: "started")
+  RenderTracking._latest (subject: page) has (dependencyAttempt, stage: "started")
   Filing._file (file: page) has (path)
 then
-  Depending.use (attempt: dependencyAttempt, input: page, subject: page)
+  DependencyTracking.recordDependency (attempt: dependencyAttempt, input: page, subject: page)
 ```
 
 ### fullSite.render.SettledBodiesRenderOriginatedPages
 
 ```reaction
-when Rendering.settleBody (rendering, subject: page, transitioned: true)
+when RenderTracking.completeBody (rendering, subject: page, transitioned: true)
 where
   Routing._address (owner: page) has (address)
   view "absolute site URL of address (address)" with (address)
-  Rendering._active (rendering) has (template: name)
+  RenderTracking._active (rendering) has (template: name)
   Templating._template (name) has (template)
 then
-  Templating.render (context: former "the originated completed render context of rendering (rendering)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.renderTemplate (context: former "the originated completed render context of rendering (rendering)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.render.SettledBodiesRenderUnoriginatedPages
 
 ```reaction
-when Rendering.settleBody (rendering, subject: page, transitioned: true)
+when RenderTracking.completeBody (rendering, subject: page, transitioned: true)
 where
   Routing._address (owner: page) has (address)
   no view "absolute site URL of address (address)" with (address)
-  Rendering._active (rendering) has (template: name)
+  RenderTracking._active (rendering) has (template: name)
   Templating._template (name) has (template)
 then
-  Templating.render (context: former "the unoriginated completed render context of rendering (rendering)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.renderTemplate (context: former "the unoriginated completed render context of rendering (rendering)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.render.SettledLayoutsStagePageOutput
 
 ```reaction
-when Rendering.settleLayout (rendering, subject: page, transitioned: true)
+when RenderTracking.completeLayout (rendering, subject: page, transitioned: true)
 where
-  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
+  RenderTracking._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
   Referencing._finished (part: "layout", subject: rendering) has (text)
   Routing._address (owner: page) has (address)
   view "output path of address (address)" with (address) has (path)
@@ -6920,41 +6920,41 @@ then
 ### fullSite.render.TrackedRenderingSourcesFillBodies:originated
 
 ```reaction
-when Depending.use (attempt: dependencyAttempt, input: page, subject: page)
+when DependencyTracking.recordDependency (attempt: dependencyAttempt, input: page, subject: page)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (path, root)
-  Documenting._document (subject: page) has (body, bodyLine)
+  DocumentParsing._document (subject: page) has (body, bodyLine)
   Routing._address (owner: page) has (address)
   view "absolute site URL of address (address)" with (address)
 then
-  Templating.fill (context: former "the originated render context of rendering (rendering)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.renderSource (context: former "the originated render context of rendering (rendering)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.render.TrackedRenderingSourcesFillBodies:unoriginated
 
 ```reaction
-when Depending.use (attempt: dependencyAttempt, input: page, subject: page)
+when DependencyTracking.recordDependency (attempt: dependencyAttempt, input: page, subject: page)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
+  earlier, Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
+  RenderTracking._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (path, root)
-  Documenting._document (subject: page) has (body, bodyLine)
+  DocumentParsing._document (subject: page) has (body, bodyLine)
   Routing._address (owner: page) has (address)
   no view "absolute site URL of address (address)" with (address)
 then
-  Templating.fill (context: former "the unoriginated render context of rendering (rendering)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
+  Templating.renderSource (context: former "the unoriginated render context of rendering (rendering)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
 ### fullSite.routes.DerivedRoutesClaim
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
 where
-  Documenting._all () has (subject: page)
+  DocumentParsing._all () has (subject: page)
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (path, root)
   Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
@@ -6967,9 +6967,9 @@ then
 ### fullSite.routes.ExplicitRoutesClaim
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
 where
-  Documenting._all () has (subject: page)
+  DocumentParsing._all () has (subject: page)
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (root)
   Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
@@ -6983,7 +6983,7 @@ then
 ```reaction
 when refused Routing.claim (owner: page, detail, error: "INVALID_ADDRESS")
 where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (path, root)
 then
@@ -6995,7 +6995,7 @@ then
 ```reaction
 when refused Routing.claim (owner: page, error: "ADDRESS_TAKEN")
 where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (path, root)
 then
@@ -7005,9 +7005,9 @@ then
 ### fullSite.routes.UnpublishedRoutesRelease
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
 where
-  Documenting._all () has (subject: page)
+  DocumentParsing._all () has (subject: page)
   Filing._named (name: "content") has (root)
   Filing._file (file: page) has (root)
   Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: false)
@@ -7057,13 +7057,13 @@ then
 ```reaction
 when RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
 then
-  Serving.publish (directory, server)
+  Serving.serveDirectory (directory, server)
 ```
 
 ### fullSite.serving.PublishSiteOutput#2
 
 ```reaction
-when Serving.publish (directory, server, readers), asked by fullSite.serving.PublishSiteOutput
+when Serving.serveDirectory (directory, server, readers), asked by fullSite.serving.PublishSiteOutput
 where
   earlier, RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
 then
@@ -7085,7 +7085,7 @@ then
 ```reaction
 when requested Governing.assess ()
 then
-  Diagnosing.retract (scope: "configuration-assessment", source: "site.yaml")
+  Diagnosing.retractGroup (scope: "configuration-assessment", source: "site.yaml")
 ```
 
 ### fullSite.settings.SettingsCollectionDeclarationFailuresDiagnose
@@ -7093,7 +7093,7 @@ then
 ```reaction
 when refused Cataloging.declare (detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
 then
   Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
 ```
@@ -7103,7 +7103,7 @@ then
 ```reaction
 when Cataloging.reset ()
 where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
   Governing._collections () has (condition, direction, match, name, sort)
 then
   Cataloging.declare (condition, direction, name, selector: match, sort)
@@ -7112,31 +7112,31 @@ then
 ### fullSite.settings.SettingsDeclareMarkdownProfile
 
 ```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+when Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
 where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
   Governing._markdown () has (extensions, raw, separator)
 then
-  Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator)
+  Converting.declareProfile (extensions, kind: "markdown", name: "markdown", raw, separator)
 ```
 
 ### fullSite.settings.SettingsDeclareVerbatimProfile
 
 ```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+when Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
 where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
   Governing._markdown () has (separator)
 then
-  Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator)
+  Converting.declareProfile (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator)
 ```
 
 ### fullSite.settings.SettingsMarkdownProfileFailuresDiagnose
 
 ```reaction
-when refused Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
+when refused Converting.declareProfile (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
   Governing._markdown () has (extensions, raw, separator)
 then
   Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
@@ -7145,17 +7145,17 @@ then
 ### fullSite.settings.SettingsPhaseRetractsDiagnostics
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
 then
-  Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+  Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
 ```
 
 ### fullSite.settings.SettingsResetCatalogs
 
 ```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+when Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
 where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
 then
   Cataloging.reset ()
 ```
@@ -7163,9 +7163,9 @@ then
 ### fullSite.settings.SettingsVerbatimProfileFailuresDiagnose
 
 ```reaction
-when refused Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
+when refused Converting.declareProfile (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
   Governing._markdown () has (separator)
 then
   Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
@@ -7176,10 +7176,10 @@ then
 ```reaction
 when Layering.clear (subject)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
   Filing._named (name: "content") has (root)
   Filing._file (file: subject) has (root)
-  Documenting._document (subject) has (attributes)
+  DocumentParsing._document (subject) has (attributes)
 then
   Layering.contribute (rank: 9007199254740991, subject, values: attributes)
 ```
@@ -7189,7 +7189,7 @@ then
 ```reaction
 when Layering.clear (subject)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
   Filing._named (name: "content") has (root: content)
   Filing._file (file: subject) has (path, root: content)
   Governing._defaults () has (index, text, values)
@@ -7201,19 +7201,19 @@ then
 ### fullSite.sources.ContentDocumentsParse
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
 where
   view "content document file" has (file, text)
 then
-  Documenting.parse (subject: file, text)
+  DocumentParsing.parseDocument (subject: file, text)
 ```
 
 ### fullSite.sources.DocumentParseFailuresDiagnose
 
 ```reaction
-when refused Documenting.parse (subject: file, detail, error: "MALFORMED_ATTRIBUTES")
+when refused DocumentParsing.parseDocument (subject: file, detail, error: "MALFORMED_ATTRIBUTES")
 where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
   Filing._named (name: "content") has (root)
   Filing._file (file) has (path, root)
 then
@@ -7225,7 +7225,7 @@ then
 ```reaction
 when refused Templating.register (name: path, origin: file, source: text, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
   Filing._named (name: "templates") has (root)
   Filing._under (prefix: "includes", root) has (file, path: physicalPath)
   view "path (path) relative to prefix (prefix)" with (path: physicalPath, prefix: "includes") has (relative: path)
@@ -7237,7 +7237,7 @@ then
 ### fullSite.sources.IncludesDefine
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
 where
   Filing._named (name: "templates") has (root)
   Filing._under (prefix: "includes", root) has (file, path: physicalPath)
@@ -7250,9 +7250,9 @@ then
 ### fullSite.sources.ParsedContentClearsLayers
 
 ```reaction
-when Documenting.parse (subject)
+when DocumentParsing.parseDocument (subject)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
   Filing._named (name: "content") has (root)
   Filing._file (file: subject) has (root)
 then
@@ -7262,7 +7262,7 @@ then
 ### fullSite.sources.PublicFilesIntendOutput
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
 where
   Filing._named (name: "public") has (root)
   Filing._under (prefix: "", root) has (file, path)
@@ -7276,7 +7276,7 @@ then
 ```reaction
 when refused Templating.register (name: path, origin: file, source: text, detail, error)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  earlier, Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
   Filing._named (name: "templates") has (root)
   Filing._under (prefix: "", root) has (file, path)
   Filing._text (file) has (text)
@@ -7287,7 +7287,7 @@ then
 ### fullSite.sources.TemplatesDefine
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
 where
   Filing._named (name: "templates") has (root)
   Filing._under (prefix: "", root) has (file, path)
@@ -7300,55 +7300,55 @@ then
 ### fullSite.staging.AdmittedConfigurationIsLoaded
 
 ```reaction
-when Locating.admit (name: "settings", path, status: "admitted")
+when Locating.inspectLocation (name: "settings", path, status: "admitted")
 then
-  Filing.loadFile (name: "project", path: "site.yaml", source: path)
+  Filing.replaceTreeFromFile (name: "project", path: "site.yaml", source: path)
 ```
 
 ### fullSite.staging.AdmittedSourceRootsAreLoaded
 
 ```reaction
-when Locating.admit (name: root, path: directory, contained: true, real, resolved: true, status: "admitted")
+when Locating.inspectLocation (name: root, path: directory, contained: true, real, resolved: true, status: "admitted")
 where
   Governing._sources () has (name: root, path: directory)
 then
-  Filing.loadTree (directory: real, name: root)
+  Filing.replaceTreeFromDirectory (directory: real, name: root)
 ```
 
 ### fullSite.staging.BegunSiteBuildDeliveriesRetractStagingDiagnostics
 
 ```reaction
-when Delivering.begin (task: job)
+when DeliveryArbitration.beginDelivery (task: job)
 where
   earlier, Phasing.start (job, name: "site-build", phase: "locate")
 then
-  Diagnosing.retract (scope: "project-staging", source: "site.yaml")
+  Diagnosing.retractGroup (scope: "project-staging", source: "site.yaml")
 ```
 
 ### fullSite.staging.ConfiguredOutputDirectsPublication
 
 ```reaction
-when Locating.admit (name: "output", path: directory, contained: true, real, resolved: true, status: "admitted")
+when Locating.inspectLocation (name: "output", path: directory, contained: true, real, resolved: true, status: "admitted")
 where
   view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
 then
-  Emitting.direct (destination: real, prefix)
+  Emitting.configureDestination (destination: real, prefix)
 ```
 
 ### fullSite.staging.DestinationDirectsPublication
 
 ```reaction
-when Locating.admit (name: "destination", path: directory, real, status: "admitted")
+when Locating.inspectLocation (name: "destination", path: directory, real, status: "admitted")
 where
   view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
 then
-  Emitting.direct (destination: real, prefix)
+  Emitting.configureDestination (destination: real, prefix)
 ```
 
 ### fullSite.staging.EscapingConfiguredOutputDiagnoses
 
 ```reaction
-when Locating.admit (name: "output", path: directory, place: admitted, status: "admitted")
+when Locating.inspectLocation (name: "output", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -7358,7 +7358,7 @@ then
 ### fullSite.staging.EscapingContentRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "content", path: directory, place: admitted, status: "admitted")
+when Locating.inspectLocation (name: "content", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -7368,7 +7368,7 @@ then
 ### fullSite.staging.EscapingPublicRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "public", path: directory, place: admitted, status: "admitted")
+when Locating.inspectLocation (name: "public", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -7378,7 +7378,7 @@ then
 ### fullSite.staging.EscapingTemplateRootDiagnoses
 
 ```reaction
-when Locating.admit (name: "templates", path: directory, place: admitted, status: "admitted")
+when Locating.inspectLocation (name: "templates", path: directory, place: admitted, status: "admitted")
 where
   no Locating._place (place: admitted) has (contained: true, resolved: true)
 then
@@ -7388,15 +7388,15 @@ then
 ### fullSite.staging.GroundedSiteAdmitsConfiguration
 
 ```reaction
-when Locating.ground (status: "grounded")
+when Locating.establishBase (status: "grounded")
 then
-  Locating.admit (name: "settings", path: "site.yaml")
+  Locating.inspectLocation (name: "settings", path: "site.yaml")
 ```
 
 ### fullSite.staging.LoadedConfigurationIsAssessed
 
 ```reaction
-when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
+when Filing.replaceTreeFromFile (name: "project", path: "site.yaml", file, root, status: "loaded")
 where
   Filing._named (name: "project") has (root)
   Filing._text (file) has (text)
@@ -7407,18 +7407,18 @@ then
 ### fullSite.staging.LocateGroundsSiteDirectory
 
 ```reaction
-when Diagnosing.retract (scope: "project-staging", source: "site.yaml")
+when Diagnosing.retractGroup (scope: "project-staging", source: "site.yaml")
 where
   earlier, Phasing.start (name: "site-build", phase: "locate")
   Locating._requested (name: "site") has (path)
 then
-  Locating.ground (path)
+  Locating.establishBase (path)
 ```
 
 ### fullSite.staging.OutputOverlappingConfigurationDiagnoses
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
 where
   view "the publication place" has (place: publication)
   Locating._named (name: "settings") has (place: settings)
@@ -7430,7 +7430,7 @@ then
 ### fullSite.staging.OutputOverlappingSourceRootDiagnoses
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
 where
   view "the publication place" has (place: publication)
   Governing._sources () has (name: root)
@@ -7443,32 +7443,32 @@ then
 ### fullSite.staging.StageAdmitsConfiguredOutput
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "stage", transitioned: true)
 where
   Governing._paths () has (output: directory)
   no Locating._requested (name: "destination")
 then
-  Locating.admit (name: "output", path: directory)
+  Locating.inspectLocation (name: "output", path: directory)
 ```
 
 ### fullSite.staging.StageAdmitsRequestedDestination
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "stage", transitioned: true)
 where
   Locating._requested (name: "destination") has (path: directory)
 then
-  Locating.admit (name: "destination", path: directory)
+  Locating.inspectLocation (name: "destination", path: directory)
 ```
 
 ### fullSite.staging.StageAdmitsSourceRoots
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
+when Phasing.completePhase (name: "site-build", phase: "stage", transitioned: true)
 where
   Governing._sources () has (name: root, path: directory)
 then
-  Locating.admit (name: root, path: directory)
+  Locating.inspectLocation (name: root, path: directory)
 ```
 
 ### fullSite.staging.StartedSiteBuildsBeginAggregateDelivery
@@ -7476,13 +7476,13 @@ then
 ```reaction
 when Phasing.start (job, name: "site-build", phase: "locate")
 then
-  Delivering.begin (task: job)
+  DeliveryArbitration.beginDelivery (task: job)
 ```
 
 ### fullSite.staging.UndecodableConfigurationDiagnoses
 
 ```reaction
-when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
+when Filing.replaceTreeFromFile (name: "project", path: "site.yaml", file, root, status: "loaded")
 where
   Filing._named (name: "project") has (root)
   no Filing._text (file)
@@ -7493,7 +7493,7 @@ then
 ### fullSite.staging.UndirectablePublicationDiagnoses
 
 ```reaction
-when refused Emitting.direct (destination, detail, error)
+when refused Emitting.configureDestination (destination, detail, error)
 then
   Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
 ```
@@ -7501,7 +7501,7 @@ then
 ### fullSite.staging.UngroundableSiteDirectoryDiagnoses
 
 ```reaction
-when Locating.ground (path, code, detail, status: "problem")
+when Locating.establishBase (path, code, detail, status: "problem")
 then
   Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
 ```
@@ -7509,7 +7509,7 @@ then
 ### fullSite.staging.UnloadableSourceRootDiagnoses
 
 ```reaction
-when Filing.loadTree (name: root, code, detail, status: "problem")
+when Filing.replaceTreeFromDirectory (name: root, code, detail, status: "problem")
 then
   Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: root)
 ```
@@ -7517,7 +7517,7 @@ then
 ### fullSite.staging.UnreadableConfigurationDiagnoses
 
 ```reaction
-when Filing.loadFile (name: "project", path: "site.yaml", code, detail, status: "problem")
+when Filing.replaceTreeFromFile (name: "project", path: "site.yaml", code, detail, status: "problem")
 then
   Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
 ```
@@ -7525,7 +7525,7 @@ then
 ### fullSite.staging.UnresolvableLocationDiagnoses
 
 ```reaction
-when Locating.admit (name, path, code, detail, status: "problem")
+when Locating.inspectLocation (name, path, code, detail, status: "problem")
 then
   Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
 ```
@@ -7535,13 +7535,13 @@ then
 ```reaction
 when RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
 then
-  Watching.attend (watch, within)
+  Watching.waitForChange (watch, within)
 ```
 
 ### fullSite.watching.AttendSiteWatch#2
 
 ```reaction
-when Watching.attend (watch, within, changed, watching), asked by fullSite.watching.AttendSiteWatch
+when Watching.waitForChange (watch, within, changed, watching), asked by fullSite.watching.AttendSiteWatch
 where
   earlier, RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
 then
@@ -7574,13 +7574,13 @@ where
   isTextValue (value: output)
   view "the publication transaction prefix of destination (destination)" with (destination: output) has (prefix)
 then
-  Watching.observe (directory, excluded: output, prefix, settling)
+  Watching.open (directory, excluded: output, prefix, settling)
 ```
 
 ### fullSite.watching.OpenSiteWatch#2
 
 ```reaction
-when Watching.observe (directory, excluded: output, prefix, settling, watch), asked by fullSite.watching.OpenSiteWatch
+when Watching.open (directory, excluded: output, prefix, settling, watch), asked by fullSite.watching.OpenSiteWatch
 where
   earlier, RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
 then

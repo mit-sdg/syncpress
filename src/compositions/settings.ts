@@ -11,7 +11,7 @@ const { Cataloging, Converting, Diagnosing, Governing, Phasing } = conceptRefs;
 
 /** Each assessment replaces only diagnostics owned by configuration policy. */
 export const ConfigurationAssessmentRetractsDiagnostics = reaction(() =>
-  when(Governing.assess({})).then(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.configuration, source: CONFIGURATION_PATH })),
+  when(Governing.assess({})).then(Diagnosing.retractGroup({ scope: DIAGNOSTIC_SCOPES.configuration, source: CONFIGURATION_PATH })),
 );
 
 /** Publish every product-policy problem through the application's diagnostic owner. */
@@ -31,19 +31,19 @@ export const AssessedConfigurationProblemsDiagnose = reaction(({ code, message, 
 
 /** Begin settings work after replacing diagnostics from the preceding assessment. */
 export const SettingsPhaseRetractsDiagnostics = reaction(() =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "settings", transitioned: true })).then(
-    Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }),
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "settings", transitioned: true })).then(
+    Diagnosing.retractGroup({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }),
   ),
 );
 
 export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, separator }) =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
+  when(Diagnosing.retractGroup({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ extensions, raw, separator }),
     )
     .then(
-      Converting.declare({
+      Converting.declareProfile({
         name: PROFILES.markdown,
         kind: "markdown",
         extensions,
@@ -55,7 +55,7 @@ export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, separ
 
 export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ extensions, raw, separator, error, detail }) =>
   when(
-    Converting.declare({
+    Converting.declareProfile({
       name: PROFILES.markdown,
       kind: "markdown",
       extensions,
@@ -64,20 +64,20 @@ export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ extensions, r
     }).refuses({ error, detail }),
   )
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ extensions, raw, separator }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
 
 export const SettingsDeclareVerbatimProfile = reaction(({ separator }) =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
+  when(Diagnosing.retractGroup({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ separator }),
     )
     .then(
-      Converting.declare({
+      Converting.declareProfile({
         name: PROFILES.verbatim,
         kind: "verbatim",
         extensions: [],
@@ -89,7 +89,7 @@ export const SettingsDeclareVerbatimProfile = reaction(({ separator }) =>
 
 export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ separator, error, detail }) =>
   when(
-    Converting.declare({
+    Converting.declareProfile({
       name: PROFILES.verbatim,
       kind: "verbatim",
       extensions: [],
@@ -98,22 +98,22 @@ export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ separator, er
     }).refuses({ error, detail }),
   )
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ separator }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
 
 export const SettingsResetCatalogs = reaction(() =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }))
+  when(Diagnosing.retractGroup({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
+    .where(earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }))
     .then(Cataloging.reset({})),
 );
 
 export const SettingsDeclareCatalogs = reaction(({ name, match, direction, sort, condition }) =>
   when(Cataloging.reset({}).responds({}))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._collections({}).is({ name, match, direction, sort, condition }),
     )
     .then(Cataloging.declare({ name, selector: match, direction, sort, condition })),
@@ -123,7 +123,7 @@ export const SettingsCollectionDeclarationFailuresDiagnose = reaction(
   ({ error, detail }) =>
     when(Cataloging.declare({}).refuses({ error, detail }))
       .where(
-        earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
+        earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       )
       .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );

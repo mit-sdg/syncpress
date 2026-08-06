@@ -10,7 +10,7 @@ import {
 import { diagnosing as registeredDiagnosing } from "./registry.ts";
 
 type Report = Parameters<DiagnosingConcept["report"]>[0];
-type Relation = Parameters<DiagnosingConcept["relate"]>[0];
+type Relation = Parameters<DiagnosingConcept["addRelatedLocation"]>[0];
 
 function report(diagnosing: DiagnosingConcept, overrides: Partial<Report> = {}) {
   return diagnosing.report({
@@ -32,7 +32,7 @@ test("its principle: problems accumulate, repeat idempotently, and retract by so
     line: 2,
     column: 8,
   });
-  const related = diagnosing.relate({
+  const related = diagnosing.addRelatedLocation({
     diagnostic: first.diagnostic,
     source: "rules/catalog.txt",
     line: 1,
@@ -64,7 +64,7 @@ test("its principle: problems accumulate, repeat idempotently, and retract by so
   expect(diagnosing._clean()).toEqual({ clean: false });
 
   expect(report(diagnosing, { code: "REQUIRED_VALUE", message: "A later message.", line: 2, column: 8 })).toEqual(first);
-  expect(diagnosing.relate({
+  expect(diagnosing.addRelatedLocation({
     diagnostic: first.diagnostic,
     source: "rules/catalog.txt",
     line: 1,
@@ -73,7 +73,7 @@ test("its principle: problems accumulate, repeat idempotently, and retract by so
   expect(diagnosing._for({ source: "records/alpha.txt" })[0]!.message).toBe("A required value is absent.");
   expect(diagnosing._related({ diagnostic: first.diagnostic })).toHaveLength(1);
 
-  expect(diagnosing.retract({ source: "records/alpha.txt" })).toEqual({ scope: undefined, source: "records/alpha.txt", count: 2 });
+  expect(diagnosing.retractGroup({ source: "records/alpha.txt" })).toEqual({ scope: undefined, source: "records/alpha.txt", count: 2 });
   expect(diagnosing._clean()).toEqual({ clean: true });
   expect(diagnosing.clear()).toEqual({ count: 1 });
   expect(diagnosing._all()).toEqual([]);
@@ -85,7 +85,7 @@ test("scopes isolate replacement for checks that share one source", () => {
   const settings = report(diagnosing, { scope: "settings", source: "site.yaml", line: undefined, column: undefined });
   expect(assessment.diagnostic).not.toBe(settings.diagnostic);
 
-  expect(diagnosing.retract({ scope: "assessment", source: "site.yaml" })).toEqual({
+  expect(diagnosing.retractGroup({ scope: "assessment", source: "site.yaml" })).toEqual({
     scope: "assessment",
     source: "site.yaml",
     count: 1,
@@ -173,7 +173,7 @@ test("related locations are optional, idempotent, stable, and totally ordered", 
   const build = (arrival: Omit<Relation, "diagnostic">[]) => {
     const diagnosing = new DiagnosingConcept();
     const diagnostic = report(diagnosing, { source: undefined, line: undefined, column: undefined });
-    const identities = arrival.map((relation) => diagnosing.relate({ diagnostic: diagnostic.diagnostic, ...relation }).relation);
+    const identities = arrival.map((relation) => diagnosing.addRelatedLocation({ diagnostic: diagnostic.diagnostic, ...relation }).relation);
     return { diagnosing, diagnostic, identities };
   };
 
@@ -190,7 +190,7 @@ test("related locations are optional, idempotent, stable, and totally ordered", 
     { source: "b", line: undefined, column: undefined, note: "other source" },
   ]);
   expect(new Set(forward.identities)).toEqual(new Set(reverse.identities));
-  expect(forward.diagnosing.relate({ diagnostic: forward.diagnostic.diagnostic, source: "a", note: "a" }).relation).toBe(
+  expect(forward.diagnosing.addRelatedLocation({ diagnostic: forward.diagnostic.diagnostic, source: "a", note: "a" }).relation).toBe(
     forward.identities[1],
   );
   expect(forward.diagnosing._related({ diagnostic: forward.diagnostic.diagnostic })).toHaveLength(5);
@@ -201,16 +201,16 @@ test("source retraction and clearing have exact repeated-work lifecycle semantic
   const global = report(diagnosing, { code: "GLOBAL", source: undefined, line: undefined, column: undefined });
   const alpha = report(diagnosing, { code: "ALPHA", source: "alpha", line: undefined, column: undefined });
   const beta = report(diagnosing, { code: "BETA", source: "beta", line: undefined, column: undefined });
-  diagnosing.relate({ diagnostic: alpha.diagnostic, source: "beta", note: "related to beta" });
-  diagnosing.relate({ diagnostic: beta.diagnostic, source: "alpha", note: "related to alpha" });
+  diagnosing.addRelatedLocation({ diagnostic: alpha.diagnostic, source: "beta", note: "related to beta" });
+  diagnosing.addRelatedLocation({ diagnostic: beta.diagnostic, source: "alpha", note: "related to alpha" });
 
-  expect(diagnosing.retract({ source: "alpha" })).toEqual({ scope: undefined, source: "alpha", count: 1 });
+  expect(diagnosing.retractGroup({ source: "alpha" })).toEqual({ scope: undefined, source: "alpha", count: 1 });
   expect(diagnosing._related({ diagnostic: alpha.diagnostic })).toEqual([]);
   expect(diagnosing._related({ diagnostic: beta.diagnostic })).toEqual([
     { source: "alpha", line: undefined, column: undefined, note: "related to alpha" },
   ]);
-  expect(diagnosing.retract({ source: "alpha" })).toEqual({ scope: undefined, source: "alpha", count: 0 });
-  expect(diagnosing.retract({})).toEqual({ scope: undefined, source: undefined, count: 1 });
+  expect(diagnosing.retractGroup({ source: "alpha" })).toEqual({ scope: undefined, source: "alpha", count: 0 });
+  expect(diagnosing.retractGroup({})).toEqual({ scope: undefined, source: undefined, count: 1 });
   expect(diagnosing._related({ diagnostic: global.diagnostic })).toEqual([]);
 
   const recreated = report(diagnosing, {
@@ -258,15 +258,15 @@ test("actions reject malformed runtime values atomically and lookup queries stay
   expect(diagnosing._all()).toHaveLength(1);
   expect(diagnosing._all()[0]!.message).toBe("This value has the wrong form.");
 
-  expect(() => diagnosing.relate({ diagnostic: 1, source: "other", note: "note" })).toThrow(InvalidText);
-  expect(() => diagnosing.relate({ diagnostic: kept.diagnostic, source: malformed, note: "note" })).toThrow(InvalidText);
-  expect(() => diagnosing.relate({ diagnostic: kept.diagnostic, source: "other", note: null })).toThrow(InvalidText);
-  expect(() => diagnosing.relate({ diagnostic: "missing", source: "other", line: 0, note: "note" })).toThrow(DiagnosticNotFound);
-  expect(() => diagnosing.relate({ diagnostic: kept.diagnostic, source: "other", line: 0, note: "note" })).toThrow(InvalidLocation);
-  expect(() => diagnosing.relate({ diagnostic: kept.diagnostic, source: "other", column: 1, note: "note" })).toThrow(InvalidLocation);
+  expect(() => diagnosing.addRelatedLocation({ diagnostic: 1, source: "other", note: "note" })).toThrow(InvalidText);
+  expect(() => diagnosing.addRelatedLocation({ diagnostic: kept.diagnostic, source: malformed, note: "note" })).toThrow(InvalidText);
+  expect(() => diagnosing.addRelatedLocation({ diagnostic: kept.diagnostic, source: "other", note: null })).toThrow(InvalidText);
+  expect(() => diagnosing.addRelatedLocation({ diagnostic: "missing", source: "other", line: 0, note: "note" })).toThrow(DiagnosticNotFound);
+  expect(() => diagnosing.addRelatedLocation({ diagnostic: kept.diagnostic, source: "other", line: 0, note: "note" })).toThrow(InvalidLocation);
+  expect(() => diagnosing.addRelatedLocation({ diagnostic: kept.diagnostic, source: "other", column: 1, note: "note" })).toThrow(InvalidLocation);
   expect(diagnosing._related({ diagnostic: kept.diagnostic })).toEqual([]);
 
-  expect(() => diagnosing.retract({ source: 1 })).toThrow(InvalidText);
+  expect(() => diagnosing.retractGroup({ source: 1 })).toThrow(InvalidText);
   expect(diagnosing._all()).toHaveLength(1);
   expect(diagnosing._for({ source: 1 })).toEqual([]);
   expect(diagnosing._for({ source: malformed })).toEqual([]);
@@ -282,7 +282,7 @@ test("clean is an exact one-row error gate and warnings do not close it", () => 
   expect(diagnosing._clean()).toEqual({ clean: true });
   report(diagnosing, { code: "BLOCKING", source: undefined, line: undefined, column: undefined });
   expect(diagnosing._clean()).toEqual({ clean: false });
-  diagnosing.retract({});
+  diagnosing.retractGroup({});
   expect(diagnosing._clean()).toEqual({ clean: true });
 });
 
@@ -349,7 +349,7 @@ test("registry exposes every declared refusal and exact query cardinality", asyn
     error: "INVALID_LOCATION",
     detail: "A location needs a source; line and column must be positive safe integers, and a column needs a line.",
   });
-  expect(await app.concepts.Diagnosing.relate({ diagnostic: "missing", source: "other", note: "note" })).toEqual({
+  expect(await app.concepts.Diagnosing.addRelatedLocation({ diagnostic: "missing", source: "other", note: "note" })).toEqual({
     error: "DIAGNOSTIC_NOT_FOUND",
     detail: "There is no such diagnostic.",
   });

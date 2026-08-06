@@ -254,7 +254,7 @@ export class ServingConcept {
     return { server: identity, host, port: bound };
   }
 
-  async publish({ server, directory }: { server: string; directory: string }) {
+  async serveDirectory({ server, directory }: { server: string; directory: string }) {
     const record = this.#open(server);
     if (!isServerText(directory)) throw new InvalidPublication();
     const requested = resolve(directory);

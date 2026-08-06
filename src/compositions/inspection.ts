@@ -4,16 +4,17 @@ import { PARTS, ROOTS } from "./shared.ts";
 
 const {
   Cataloging,
-  Depending,
+  DependencyTracking,
   Diagnosing,
   Emitting,
   Filing,
   Layering,
   Referencing,
-  Rendering,
+  RenderTracking,
   Routing,
   Templating,
 } = conceptRefs;
+
 
 export const InspectionOwner = view(
   "the inspection owner of target (target)",
@@ -39,7 +40,7 @@ const OwnerTemplateInspection = former(
   ({ owner }, { name, template, digest, used }) =>
     form({
       template: where(
-        whether(Rendering._latest({ subject: owner }).is({ template: name })),
+        whether(RenderTracking._latest({ subject: owner }).is({ template: name })),
         whether(Templating._template({ name }).is({ template, digest })),
       ).form({
         name,
@@ -83,7 +84,7 @@ const OwnerRenderingInspection = former(
   ) =>
     form({
       rendering: where(
-        whether(Rendering._latest({ subject: owner }).is({ rendering, path, profile, template, stage })),
+        whether(RenderTracking._latest({ subject: owner }).is({ rendering, path, profile, template, stage })),
       ).form({
         attempt: rendering,
         path,
@@ -97,7 +98,7 @@ const OwnerRenderingInspection = former(
           whether(Referencing._finished({ subject: rendering, part: PARTS.layout }).is({ source: layoutSource })),
         ).form({ source: layoutSource }),
       }),
-      renderings: each(Rendering._all({}).is({
+      renderings: each(RenderTracking._all({}).is({
         rendering: historicalRendering,
         subject: owner,
         path: historicalPath,
@@ -129,12 +130,12 @@ const OwnerDependencyInspection = former(
   ({ owner }, { state, reason, input }) =>
     form({
       dependencies: where(
-        Depending._state({ subject: owner }).is({ state }),
-        whether(Depending._reason({ subject: owner }).is({ reason })),
+        DependencyTracking._state({ subject: owner }).is({ state }),
+        whether(DependencyTracking._reason({ subject: owner }).is({ reason })),
       ).form({
         state,
         reason,
-        inputs: each(Depending._uses({ subject: owner }).is({ input })).form({ input }),
+        inputs: each(DependencyTracking._uses({ subject: owner }).is({ input })).form({ input }),
       }),
     }),
 );

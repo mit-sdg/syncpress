@@ -15,7 +15,7 @@ const {
   Filing,
   Governing,
   Referencing,
-  Rendering,
+  RenderTracking,
   Routing,
   Transcoding,
 } = conceptRefs;
@@ -46,7 +46,7 @@ export const ResponsiveBodyImageEmbedding = view(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source, raw, role: "image" }),
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._active({ rendering }).is({ subject: page }),
+      RenderTracking._active({ rendering }).is({ subject: page }),
       computations.targetHasKind({ target: raw, kind: "relative" }),
       Filing._resolve({ file: page, address: raw }).is({ target: image }),
       Transcoding._original({ subject: image }).is({ original }),
@@ -60,14 +60,14 @@ export const PrimaryRasterImagesAdmit = reaction(
       .where(
         RasterBodyAssetReference({ source }).is({ image, content }),
       )
-      .then(Transcoding.admit({ subject: image, content })),
+      .then(Transcoding.ingest({ subject: image, content })),
 );
 
 /** Render the configured rendition set after an image has been admitted. */
 export const AdmittedRasterImagesRender = reaction(({ original, widths, formats }) =>
-  when(Transcoding.admit({}).responds({ original }))
+  when(Transcoding.ingest({}).responds({ original }))
     .where(Governing._images({}).is({ widths, formats }))
-    .then(Transcoding.render({ original, widths, formats })),
+    .then(Transcoding.generateRenditions({ original, widths, formats })),
 );
 
 /** Stage the exact fallback beside the page that owns its primary image reference. */
@@ -84,12 +84,12 @@ export const RasterFallbacksStage = reaction(
     mediaType,
     emissionAttempt,
   }) =>
-    when(Transcoding.render({ original }).responds({}))
+    when(Transcoding.generateRenditions({ original }).responds({}))
       .where(
         earlier(Referencing.scan, { part: PARTS.body }, { source }),
         Transcoding._original({ subject: image }).is({ original }),
         RasterBodyAssetReference({ source }).is({ rendering, page, image, name }),
-        Rendering._active({ rendering }).is({ emissionAttempt }),
+        RenderTracking._active({ rendering }).is({ emissionAttempt }),
         BesidePageOutput({ page, name }).is({ path }),
         Transcoding._renditions({ original }).is({
           fallback: true,
@@ -124,10 +124,10 @@ export const RasterFallbacksDeclare = reaction(
   }) =>
     when(Emitting.intend({ producer: page, attempt: emissionAttempt, path }).responds({}))
       .where(
-        earlier(Transcoding.render, { original }, { derived }),
+        earlier(Transcoding.generateRenditions, { original }, { derived }),
         earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
         RasterBodyAssetReference({ source }).is({ rendering, page, reference, raw, image, name }),
-        Rendering._active({ rendering }).is({ emissionAttempt }),
+        RenderTracking._active({ rendering }).is({ emissionAttempt }),
         Referencing._reference({ reference }).is({ label, attributes }),
         Transcoding._original({ subject: image }).is({ original }),
         BesidePageOutput({ page, name }).is({ path }),
@@ -189,7 +189,7 @@ export const RasterRenditionsStage = reaction(
     when(Embedding.declare({}).responds({ embedding }))
       .where(
         ResponsiveBodyImageEmbedding({ embedding }).is({ rendering, page, original }),
-        Rendering._active({ rendering }).is({ emissionAttempt }),
+        RenderTracking._active({ rendering }).is({ emissionAttempt }),
         Transcoding._renditions({ original }).is({
           rendition,
           fallback: false,
@@ -215,7 +215,7 @@ export const RasterRenditionsOffer = reaction(
         JoinedPath({ prefix: assets, name }).is({ path }),
         OutputPathAddress({ path }).is({ address }),
       )
-      .then(Embedding.offer({ embedding, address, format, width, order })),
+       .then(Embedding.provideCandidate({ embedding, address, format, width, order })),
 );
 
 /** Zero-derived images complete on declaration after their fallback is staged. */
@@ -225,22 +225,22 @@ export const DeclaredEmbeddingsAnswer = reaction(({ embedding, reference, markup
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Embedding._markup({ embedding }).is({ markup }),
     )
-    .then(Referencing.answer({ reference, form: "markup", value: markup })),
+    .then(Referencing.resolve({ reference, form: "markup", value: markup })),
 );
 
 /** Positive-derived images answer only after the final staged offer completes. */
 export const CompletedEmbeddingsAnswer = reaction(({ embedding, reference, markup }) =>
-  when(Embedding.offer({ embedding }).responds({ completed: true }))
+  when(Embedding.provideCandidate({ embedding }).responds({ completed: true }))
     .where(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Embedding._markup({ embedding }).is({ markup }),
     )
-    .then(Referencing.answer({ reference, form: "markup", value: markup })),
+    .then(Referencing.resolve({ reference, form: "markup", value: markup })),
 );
 
 /** Image failures retain the original page output and make the build unpublishable. */
 export const RasterAdmissionsDiagnose = reaction(({ image, error, detail, source, page, path }) =>
-  when(Transcoding.admit({ subject: image }).refuses({ error, detail }))
+  when(Transcoding.ingest({ subject: image }).refuses({ error, detail }))
     .where(
       earlier(Referencing.scan, { part: PARTS.body }, { source }),
       ResolvedLocalBodyReference({ source }).is({ page, role: "image", target: image }),
@@ -250,7 +250,7 @@ export const RasterAdmissionsDiagnose = reaction(({ image, error, detail, source
 );
 
 export const RasterRendersDiagnose = reaction(({ original, error, detail, source, page, image, path }) =>
-  when(Transcoding.render({ original }).refuses({ error, detail }))
+  when(Transcoding.generateRenditions({ original }).refuses({ error, detail }))
     .where(
       earlier(Referencing.scan, { part: PARTS.body }, { source }),
       ResolvedLocalBodyReference({ source }).is({ page, role: "image", target: image }),
@@ -265,19 +265,19 @@ export const RasterEmbeddingDeclarationsDiagnose = reaction(({ reference, error,
     .where(
       Referencing._reference({ reference }).is({ source }),
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._active({ rendering }).is({ subject: page }),
+       RenderTracking._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source: path })),
 );
 
 export const RasterOffersDiagnose = reaction(({ embedding, error, detail, reference, source, rendering, page, path }) =>
-  when(Embedding.offer({ embedding }).refuses({ error, detail }))
+  when(Embedding.provideCandidate({ embedding }).refuses({ error, detail }))
     .where(
       Embedding._embedding({ embedding }).is({ subject: reference }),
       Referencing._reference({ reference }).is({ source }),
       Referencing._source({ source }).is({ subject: rendering, part: PARTS.body }),
-      Rendering._active({ rendering }).is({ subject: page }),
+       RenderTracking._active({ rendering }).is({ subject: page }),
       Filing._file({ file: page }).is({ path }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source: path })),

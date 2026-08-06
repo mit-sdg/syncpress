@@ -31,7 +31,7 @@ export type DeploymentFeedInput = {
   entries: unknown;
 };
 
-const queueTransitions = new Set(["start", "complete", "reject", "rejectOwner", "rejectProducer", "fail", "divide"]);
+const queueTransitions = new Set(["start", "complete", "reject", "rejectOwnerWork", "rejectProducerWork", "failWork", "expandPagination"]);
 
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();

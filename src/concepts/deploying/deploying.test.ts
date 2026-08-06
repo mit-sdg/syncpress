@@ -50,7 +50,7 @@ test("its principle: prepare one ordered deployment through completion", () => {
 
   expect(deploying._current()[0]).toMatchObject({ work: redirect.work, status: "active" });
   expect(() => deploying.complete({ work: redirect.work! })).toThrow(WorkNotPrepared);
-  const redirectDocument = deploying.redirect({
+  const redirectDocument = deploying.prepareRedirect({
     work: redirect.work!,
     target: "/new/",
     canonical: "https://example.test/new/",
@@ -60,7 +60,7 @@ test("its principle: prepare one ordered deployment through completion", () => {
   expect(deploying._current()[0]).toMatchObject({ kind: "redirect", status: "prepared" });
   const pagination = deploying.complete({ work: redirect.work! });
 
-  const divided = deploying.divide({
+  const divided = deploying.expandPagination({
     deployment: started.deployment,
     work: pagination.work!,
     template: "template:1",
@@ -73,7 +73,7 @@ test("its principle: prepare one ordered deployment through completion", () => {
   expect(divided.pages).toBe(2);
   expect(deploying._current()[0]).toMatchObject({ kind: "pagination-page", number: 1, status: "active" });
 
-  const firstPage = deploying.context({
+  const firstPage = deploying.preparePageContext({
     work: divided.work,
     context: { pagination: { current: 1, pages: 2 } },
   });
@@ -81,7 +81,7 @@ test("its principle: prepare one ordered deployment through completion", () => {
   const secondPage = deploying.complete({ work: divided.work });
 
   expect(deploying._current()[0]).toMatchObject({ work: secondPage.work, status: "active" });
-  deploying.context({ work: secondPage.work!, context: {} });
+  deploying.preparePageContext({ work: secondPage.work!, context: {} });
   const sitemap = deploying.complete({ work: secondPage.work! });
 
   const sitemapUrls = [{ url: "https://example.test/" }];
@@ -132,20 +132,20 @@ test("every queue transition atomically activates its returned work", () => {
   expect(deploying._work({ work: secondRedirect.work! })[0]).toMatchObject({ kind: "redirect", status: "active" });
   const redirectOwner = deploying._work({ work: secondRedirect.work! })[0]!;
 
-  const plan = deploying.rejectOwner({ owner: "owner" in redirectOwner ? redirectOwner.owner : "" });
+  const plan = deploying.rejectOwnerWork({ owner: "owner" in redirectOwner ? redirectOwner.owner : "" });
   expect(deploying._work({ work: plan.work! })[0]).toMatchObject({ kind: "pagination-plan", status: "active" });
 
-  const page = deploying.divide({ deployment: started.deployment, work: plan.work!, template: "template:1", entries: [] });
+  const page = deploying.expandPagination({ deployment: started.deployment, work: plan.work!, template: "template:1", entries: [] });
   expect(deploying._work({ work: page.work })[0]).toMatchObject({ kind: "pagination-page", status: "active" });
   const pageOwner = deploying._work({ work: page.work })[0]!;
 
-  const sitemap = deploying.rejectOwner({ owner: "owner" in pageOwner ? pageOwner.owner : "" });
+  const sitemap = deploying.rejectOwnerWork({ owner: "owner" in pageOwner ? pageOwner.owner : "" });
   expect(deploying._work({ work: sitemap.work! })[0]).toMatchObject({ kind: "sitemap", status: "active" });
 
-  const feed = deploying.fail({ producer: "deployment:sitemap", path: "sitemap.xml", code: "FAILED", detail: "failed" });
+  const feed = deploying.failWork({ producer: "deployment:sitemap", path: "sitemap.xml", code: "FAILED", detail: "failed" });
   expect(deploying._work({ work: feed.work! })[0]).toMatchObject({ kind: "feed", status: "active" });
 
-  expect(deploying.rejectProducer({ producer: "deployment:feed" })).toMatchObject({ completed: true });
+  expect(deploying.rejectProducerWork({ producer: "deployment:feed" })).toMatchObject({ completed: true });
   expect(deploying._outcome()).toEqual({ state: "failed" });
 });
 
@@ -157,7 +157,7 @@ test("pagination division creates one page for an empty collection", () => {
       pagination: [{ name: "posts", collection: "posts", perPage: 2, route: "/page/:page/", template: "page.html" }],
     },
   });
-  const divided = deploying.divide({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
+  const divided = deploying.expandPagination({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
   expect(divided.pages).toBe(1);
   expect(deploying._work({ work: divided.work })[0]).toMatchObject({ number: 1, pages: 1, address: "/page/1/", status: "active" });
 });
@@ -173,8 +173,8 @@ test("pagination plan and page identities cannot collide with punctuated names",
       ],
     },
   });
-  const page = deploying.divide({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
-  deploying.context({ work: page.work, context: {} });
+  const page = deploying.expandPagination({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
+  deploying.preparePageContext({ work: page.work, context: {} });
   const nextPlan = deploying.complete({ work: page.work });
 
   expect(nextPlan.work).not.toBe(page.work);
@@ -213,20 +213,20 @@ test("refuses stale work and malformed supplied facts", () => {
     },
   });
   expect(() => deploying.complete({ work: "missing" })).toThrow(WorkNotCurrent);
-  expect(() => deploying.divide({
+  expect(() => deploying.expandPagination({
     deployment: started.deployment,
     work: started.work!,
     template: "template:1",
     entries: [{ item: "missing-url", card: { data: { title: "Missing URL" } } }],
   })).toThrow(InvalidEntries);
-  expect(() => deploying.divide({
+  expect(() => deploying.expandPagination({
     deployment: started.deployment,
     work: started.work!,
     template: "template:1",
     entries: {} as never,
   })).toThrow(InvalidEntries);
   const sparseEntries = new Array(1) as Array<{ item: string; card: unknown }>;
-  expect(() => deploying.divide({
+  expect(() => deploying.expandPagination({
     deployment: started.deployment,
     work: started.work!,
     template: "template:1",
@@ -248,10 +248,10 @@ test("redirect preparation validates the configured target projection", () => {
   const deploying = new DeployingConcept();
   const started = deploying.start({ policy: { ...emptyPolicy, redirects: [{ from: "/old/", to: "/new/" }] } });
 
-  expect(() => deploying.redirect({ work: started.work!, target: 1 as never, canonical: "/new/", content: "" })).toThrow(InvalidRedirect);
-  expect(() => deploying.redirect({ work: started.work!, target: "/other/", canonical: "https://example.test/other/", content: "" })).toThrow(InvalidRedirect);
+  expect(() => deploying.prepareRedirect({ work: started.work!, target: 1 as never, canonical: "/new/", content: "" })).toThrow(InvalidRedirect);
+  expect(() => deploying.prepareRedirect({ work: started.work!, target: "/other/", canonical: "https://example.test/other/", content: "" })).toThrow(InvalidRedirect);
   expect(deploying._current()[0]).toMatchObject({ status: "active" });
-  expect(deploying.redirect({
+  expect(deploying.prepareRedirect({
     work: started.work!,
     target: "/base/new/",
     canonical: "https://example.test/base/new/",
@@ -262,7 +262,7 @@ test("redirect preparation validates the configured target projection", () => {
   const externalStarted = external.start({
     policy: { ...emptyPolicy, redirects: [{ from: "/away/", to: "https://elsewhere.test/path" }] },
   });
-  expect(() => external.redirect({
+  expect(() => external.prepareRedirect({
     work: externalStarted.work!,
     target: "https://elsewhere.test/other",
     canonical: "https://elsewhere.test/other",
@@ -278,11 +278,11 @@ test("failed context snapshots leave pagination work active", () => {
       pagination: [{ name: "posts", collection: "posts", perPage: 2, route: "/page/:page/", template: "page.html" }],
     },
   });
-  const divided = deploying.divide({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
+  const divided = deploying.expandPagination({ deployment: started.deployment, work: started.work!, template: "template:1", entries: [] });
 
-  expect(() => deploying.context({ work: divided.work, context: { invalid: () => undefined } })).toThrow(InvalidContext);
+  expect(() => deploying.preparePageContext({ work: divided.work, context: { invalid: () => undefined } })).toThrow(InvalidContext);
   expect(deploying._current()[0]).toMatchObject({ work: divided.work, status: "active" });
-  expect(deploying.context({ work: divided.work, context: {} })).toMatchObject({
+  expect(deploying.preparePageContext({ work: divided.work, context: {} })).toMatchObject({
     owner: 'deployment-owner:["pagination-page","posts",1]',
   });
 });
@@ -314,7 +314,7 @@ test("invalid and originless feed projections never become prepared", () => {
     expect(deploying._current()[0]).toMatchObject({ work: started.work, status: "active" });
     expect(() => deploying.complete({ work: started.work! })).toThrow(WorkNotPrepared);
     expect(deploying.prepareFeed({ work: started.work!, preparation })).toMatchObject({ path: "feed.xml" });
-    expect(deploying.rejectProducer({ producer: "deployment:feed" })).toMatchObject({ completed: true });
+    expect(deploying.rejectProducerWork({ producer: "deployment:feed" })).toMatchObject({ completed: true });
     expect(deploying._outcome()).toEqual({ state: "failed" });
   }
 });
@@ -324,11 +324,11 @@ test("successful preparation is single-use and malformed preparation leaves work
   const started = deploying.start({ policy: { ...emptyPolicy, redirects: [{ from: "/old/", to: "/new/" }] } });
   const content = deploymentRedirectDocument("/new/", "/new/");
 
-  expect(() => deploying.redirect({ work: started.work!, target: "/new/", canonical: "/new/", content: "\ud800" }))
+  expect(() => deploying.prepareRedirect({ work: started.work!, target: "/new/", canonical: "/new/", content: "\ud800" }))
     .toThrow(InvalidPreparation);
   expect(deploying._current()[0]).toMatchObject({ status: "active" });
-  deploying.redirect({ work: started.work!, target: "/new/", canonical: "/new/", content });
-  expect(() => deploying.redirect({ work: started.work!, target: "/new/", canonical: "/new/", content }))
+  deploying.prepareRedirect({ work: started.work!, target: "/new/", canonical: "/new/", content });
+  expect(() => deploying.prepareRedirect({ work: started.work!, target: "/new/", canonical: "/new/", content }))
     .toThrow(WorkNotActive);
 });
 

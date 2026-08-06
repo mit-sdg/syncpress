@@ -4,19 +4,19 @@ import { RelativePath } from "./calculations.ts";
 import { MAX_PAGE_LAYER_RANK, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 import { ContentDocumentFile } from "./views.ts";
 
-const { Diagnosing, Documenting, Emitting, Filing, Governing, Layering, Phasing, Templating } = conceptRefs;
+const { Diagnosing, DocumentParsing, Emitting, Filing, Governing, Layering, Phasing, Templating } = conceptRefs;
 
 export const ContentDocumentsParse = reaction(({ file, text }) =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
     .where(ContentDocumentFile({}).is({ file, text }))
-    .then(Documenting.parse({ subject: file, text })),
+    .then(DocumentParsing.parseDocument({ subject: file, text })),
 );
 
 /** Front-matter refusals belong to the authored content file, not a derived page. */
 export const DocumentParseFailuresDiagnose = reaction(({ file, root, path, detail }) =>
-  when(Documenting.parse({ subject: file }).refuses({ error: "MALFORMED_ATTRIBUTES", detail }))
+  when(DocumentParsing.parseDocument({ subject: file }).refuses({ error: "MALFORMED_ATTRIBUTES", detail }))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._file({ file }).is({ root, path }),
     )
@@ -31,7 +31,7 @@ export const DocumentParseFailuresDiagnose = reaction(({ file, root, path, detai
 );
 
 export const TemplatesDefine = reaction(({ root, file, path, text }) =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
     .where(
       Filing._named({ name: ROOTS.templates }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
@@ -42,7 +42,7 @@ export const TemplatesDefine = reaction(({ root, file, path, text }) =>
 );
 
 export const IncludesDefine = reaction(({ root, file, physicalPath, path, text }) =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
     .where(
       Filing._named({ name: ROOTS.templates }).is({ root }),
       Filing._under({ root, prefix: ROOTS.includes }).is({ file, path: physicalPath }),
@@ -55,7 +55,7 @@ export const IncludesDefine = reaction(({ root, file, physicalPath, path, text }
 export const TemplateDefinitionFailuresDiagnose = reaction(({ root, file, path, text, error, detail }) =>
   when(Templating.register({ name: path, source: text, origin: file }).refuses({ error, detail }))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
       Filing._named({ name: ROOTS.templates }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
       Filing._text({ file }).is({ text }),
@@ -66,7 +66,7 @@ export const TemplateDefinitionFailuresDiagnose = reaction(({ root, file, path, 
 export const IncludeDefinitionFailuresDiagnose = reaction(({ root, file, physicalPath, path, text, error, detail }) =>
   when(Templating.register({ name: path, source: text, origin: file }).refuses({ error, detail }))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
       Filing._named({ name: ROOTS.templates }).is({ root }),
       Filing._under({ root, prefix: ROOTS.includes }).is({ file, path: physicalPath }),
       RelativePath({ path: physicalPath, prefix: ROOTS.includes }).is({ relative: path }),
@@ -76,7 +76,7 @@ export const IncludeDefinitionFailuresDiagnose = reaction(({ root, file, physica
 );
 
 export const PublicFilesIntendOutput = reaction(({ root, file, path, content }) =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
     .where(
       Filing._named({ name: ROOTS.public }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
@@ -93,9 +93,9 @@ export const PublicFilesIntendOutput = reaction(({ root, file, path, content }) 
 );
 
 export const ParsedContentClearsLayers = reaction(({ subject, root }) =>
-  when(Documenting.parse({ subject }).responds({}))
+  when(DocumentParsing.parseDocument({ subject }).responds({}))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._file({ file: subject }).is({ root }),
     )
@@ -106,7 +106,7 @@ export const ClearedContentGetsDefaults = reaction(
   ({ subject, content, path, index, text, values }) =>
     when(Layering.clear({ subject }).responds({}))
       .where(
-        earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
+        earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
         Filing._named({ name: ROOTS.content }).is({ root: content }),
         Filing._file({ file: subject }).is({ root: content, path }),
         Governing._defaults({}).is({ index, text, values }),
@@ -118,10 +118,10 @@ export const ClearedContentGetsDefaults = reaction(
 export const ClearedContentGetsAttributes = reaction(({ subject, root, attributes }) =>
   when(Layering.clear({ subject }).responds({}))
     .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
+      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
       Filing._named({ name: ROOTS.content }).is({ root }),
       Filing._file({ file: subject }).is({ root }),
-      Documenting._document({ subject }).is({ attributes }),
+      DocumentParsing._document({ subject }).is({ attributes }),
     )
     .then(Layering.contribute({ subject, rank: MAX_PAGE_LAYER_RANK, values: attributes })),
 );

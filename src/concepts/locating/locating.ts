@@ -72,13 +72,13 @@ export class LocatingConcept {
   #base: Base | undefined;
   readonly #places = new Map<string, PlaceRecord>();
 
-  request({ name, path }: { name: string; path: string }) {
+  recordRequest({ name, path }: { name: string; path: string }) {
     if (!isLocationText(name) || !isLocationText(path)) throw new InvalidLocation();
     this.#requests.set(name, path);
     return { name, path };
   }
 
-  async ground({ path }: { path: string }) {
+  async establishBase({ path }: { path: string }) {
     if (!isLocationText(path)) throw new InvalidLocation();
     const absolute = resolve(path);
 
@@ -109,7 +109,7 @@ export class LocatingConcept {
     return { status: "grounded" as const, path: absolute, real };
   }
 
-  async admit({ name, path }: { name: string; path: string }) {
+  async inspectLocation({ name, path }: { name: string; path: string }) {
     const base = this.#base;
     if (base === undefined) throw new NotGrounded();
     if (!isLocationText(name) || !isLocationText(path)) throw new InvalidLocation();

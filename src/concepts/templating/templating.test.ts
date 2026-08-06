@@ -60,7 +60,7 @@ test("its principle: named fragments produce escaped HTML with explicit trusted 
     { path: ["site", "title"] },
   ]);
 
-  const rendered = templating.render({
+  const rendered = templating.renderTemplate({
     template: page.template,
     subject: "event",
     context,
@@ -119,7 +119,7 @@ test("render arguments are isolated locals and contribute their caller reads", (
     { path: ["site", "title"] },
   ]);
   expect(
-    templating.render({
+    templating.renderTemplate({
       template: page.template,
       subject: "page",
       context: { page: { data: { title: "Local" } }, site: { title: "Global" } },
@@ -167,7 +167,7 @@ test("literal bracket paths and literal raw blocks remain supported", () => {
     { path: ["collections", "posts", "0", "title"] },
   ]);
   expect(
-    templating.render({
+    templating.renderTemplate({
       template: template.template,
       subject: "literal",
       context: { collections: { posts: [{ title: "Safe <Title>" }] } },
@@ -187,7 +187,7 @@ test("syntax errors preserve their source location and do not replace a definiti
   expect(unclosed.detail).toContain("not closed");
   expect(templating._template({ name: "page" })).toEqual(before);
   expect(
-    templating.render({ template: original.template, subject: "still-valid", context: {}, trusted: [] }).output,
+    templating.renderTemplate({ template: original.template, subject: "still-valid", context: {}, trusted: [] }).output,
   ).toBe("original");
 
   const filter = thrown(() => templating.define({ name: "filter", source: "{{ value | not_a_filter }}" }), TemplateSyntax);
@@ -198,7 +198,7 @@ test("direct and transitive missing templates are classified and located", () =>
   const templating = new TemplatingConcept();
   const direct = templating.define({ name: "direct", source: "first\n{% render \"missing\" %}" });
   const directError = thrown(
-    () => templating.render({ template: direct.template, subject: "direct", context: {}, trusted: [] }),
+    () => templating.renderTemplate({ template: direct.template, subject: "direct", context: {}, trusted: [] }),
     UsedTemplateNotFound,
   );
   expect(directError.used).toBe("missing");
@@ -209,7 +209,7 @@ test("direct and transitive missing templates are classified and located", () =>
   templating.define({ name: "middle", source: "one\ntwo\n{% render \"nested-missing\" %}" });
   const root = templating.define({ name: "root", source: '{% render "middle" %}' });
   const nestedError = thrown(
-    () => templating.render({ template: root.template, subject: "root", context: {}, trusted: [] }),
+    () => templating.renderTemplate({ template: root.template, subject: "root", context: {}, trusted: [] }),
     UsedTemplateNotFound,
   );
   expect(nestedError.used).toBe("nested-missing");
@@ -218,18 +218,18 @@ test("direct and transitive missing templates are classified and located", () =>
   expect(nestedError.line).toBe(3);
 
   const fillError = thrown(
-    () => templating.fill({ subject: "body", source: '{% render "body-missing" %}', context: {}, trusted: [] }),
+    () => templating.renderSource({ subject: "body", source: '{% render "body-missing" %}', context: {}, trusted: [] }),
     UsedTemplateNotFound,
   );
   expect(fillError.used).toBe("body-missing");
   expect(fillError.templateName).toBeUndefined();
 });
 
-test("render and fill reject self and nested literal cycles before evaluation", () => {
+test("renderTemplate and renderSource reject self and nested literal cycles before evaluation", () => {
   const selfTemplating = new TemplatingConcept();
   const self = selfTemplating.define({ name: "self", source: 'first\n{% render "self" %}' });
   const selfError = thrown(
-    () => selfTemplating.render({ template: self.template, subject: "self", context: {}, trusted: [] }),
+    () => selfTemplating.renderTemplate({ template: self.template, subject: "self", context: {}, trusted: [] }),
     RecursiveTemplate,
   );
   expect(selfError.cycle).toEqual(["self", "self"]);
@@ -240,7 +240,7 @@ test("render and fill reject self and nested literal cycles before evaluation", 
   templating.define({ name: "a", source: '{% render "b" %}' });
   templating.define({ name: "b", source: 'first\n{% render "a" %}' });
   const fillError = thrown(
-    () => templating.fill({ subject: "body", source: '{% render "a" %}', context: {}, trusted: [] }),
+    () => templating.renderSource({ subject: "body", source: '{% render "a" %}', context: {}, trusted: [] }),
     RecursiveTemplate,
   );
   expect(fillError.cycle).toEqual(["a", "b", "a"]);
@@ -266,7 +266,7 @@ test("ordinary values escape and only explicit trusted string paths bypass escap
     "{% capture captured %}{{ page.content }}{% endcapture %}{{ captured }}",
     '{% render "trusted-argument", value: page.content %}',
   ].join("|");
-  const output = templating.fill({
+  const output = templating.renderSource({
     subject: "trust",
     source,
     context,
@@ -294,7 +294,7 @@ test("trusted paths use literal segments and validate shape, existence, and valu
   const templating = new TemplatingConcept();
   const context = { data: { "a.b": { "": "<i>literal path</i>" }, count: 1 } };
   expect(
-    templating.fill({
+    templating.renderSource({
       subject: "literal-path",
       source: '{{ data["a.b"][""] }}',
       context,
@@ -303,19 +303,19 @@ test("trusted paths use literal segments and validate shape, existence, and valu
   ).toBe("<i>literal path</i>");
 
   const invalidPath = thrown(
-    () => templating.fill({ subject: "invalid", source: "", context, trusted: [[]] }),
+    () => templating.renderSource({ subject: "invalid", source: "", context, trusted: [[]] }),
     InvalidTrustedPath,
   );
   expect(invalidPath.index).toBe(0);
   expect(
     thrown(
-      () => templating.fill({ subject: "missing", source: "", context, trusted: [["data", "missing"]] }),
+      () => templating.renderSource({ subject: "missing", source: "", context, trusted: [["data", "missing"]] }),
       InvalidTrustedValue,
     ).path,
   ).toEqual(["data", "missing"]);
   expect(
     thrown(
-      () => templating.fill({ subject: "number", source: "", context, trusted: [["data", "count"]] }),
+      () => templating.renderSource({ subject: "number", source: "", context, trusted: [["data", "count"]] }),
       InvalidTrustedValue,
     ).path,
   ).toEqual(["data", "count"]);
@@ -337,7 +337,7 @@ test("the collection excerpt capability trusts only rich collection excerpts", (
     source:
       '{% for card in collections.posts %}{{ card.title }}|{% if card.excerpt %}{{ card.excerpt }}{% else %}none{% endif %}|{{ card.body }};{% endfor %}{% for card in collections.notes %}{{ card.excerpt }};{% endfor %}{% for card in collections["__proto__"] %}{{ card.excerpt }};{% endfor %}',
   });
-  const output = templating.render({
+  const output = templating.renderTemplate({
     template: template.template,
     subject: "collection-excerpts",
     context,
@@ -351,7 +351,7 @@ test("the collection excerpt capability trusts only rich collection excerpts", (
 
   const literalStars = { collections: { "*": { "*": { excerpt: "<i>literal stars</i>" } } } };
   expect(
-    templating.fill({
+    templating.renderSource({
       subject: "literal-stars",
       source: '{{ collections["*"]["*"].excerpt }}',
       context: literalStars,
@@ -373,7 +373,7 @@ test("wildcard trust rejects malformed declarations and unsafe matched values", 
   ];
   for (const declaration of declarations) {
     const error = thrown(
-      () => templating.fill({ subject: "invalid-wildcard", source: "", context, trusted: [declaration as TrustedPath] }),
+      () => templating.renderSource({ subject: "invalid-wildcard", source: "", context, trusted: [declaration as TrustedPath] }),
       InvalidTrustedPath,
     );
     expect(error.index).toBe(0);
@@ -381,7 +381,7 @@ test("wildcard trust rejects malformed declarations and unsafe matched values", 
 
   const valueError = thrown(
     () =>
-      templating.fill({
+      templating.renderSource({
         subject: "invalid-excerpt",
         source: "",
         context: { collections: { posts: [{ excerpt: 1 }] } },
@@ -395,7 +395,7 @@ test("wildcard trust rejects malformed declarations and unsafe matched values", 
   decorated.extra = true;
   const shapeError = thrown(
     () =>
-      templating.fill({
+      templating.renderSource({
         subject: "decorated-collection",
         source: "",
         context: { collections: { posts: decorated } },
@@ -410,7 +410,7 @@ test("optional conditions and default are lenient while other undefined reads ar
   const templating = new TemplatingConcept();
   const context = { page: { data: {} } };
   expect(
-    templating.fill({
+    templating.renderSource({
       subject: "optional",
       source: '{% if page.data.subtitle %}shown{% else %}hidden{% endif %}|{{ page.data.subtitle | default: "none" }}',
       context,
@@ -419,7 +419,7 @@ test("optional conditions and default are lenient while other undefined reads ar
   ).toBe("hidden|none");
 
   const outputError = thrown(
-    () => templating.fill({ subject: "undefined", source: "first\n{{ page.data.subtitle }}", context, trusted: [] }),
+    () => templating.renderSource({ subject: "undefined", source: "first\n{{ page.data.subtitle }}", context, trusted: [] }),
     UndefinedVariable,
   );
   expect(outputError.variable).toBe("page.data.subtitle");
@@ -427,7 +427,7 @@ test("optional conditions and default are lenient while other undefined reads ar
   expect(outputError.column).toBeGreaterThan(0);
 
   const loopError = thrown(
-    () => templating.fill({ subject: "loop", source: "{% for item in page.data.items %}{{ item }}{% endfor %}", context, trusted: [] }),
+    () => templating.renderSource({ subject: "loop", source: "{% for item in page.data.items %}{{ item }}{% endfor %}", context, trusted: [] }),
     UndefinedVariable,
   );
   expect(loopError.variable).toBe("page.data.items");
@@ -435,7 +435,7 @@ test("optional conditions and default are lenient while other undefined reads ar
   templating.define({ name: "undefined-partial", source: "first\n{{ missing }}" });
   const root = templating.define({ name: "undefined-root", source: '{% render "undefined-partial" %}' });
   const partialError = thrown(
-    () => templating.render({ template: root.template, subject: "partial", context: {}, trusted: [] }),
+    () => templating.renderTemplate({ template: root.template, subject: "partial", context: {}, trusted: [] }),
     UndefinedVariable,
   );
   expect(partialError.templateName).toBe("undefined-partial");
@@ -452,7 +452,7 @@ test("other evaluation failures remain distinct from undefined values", () => {
     },
   });
   const error = thrown(
-    () => templating.fill({ subject: "failed", source: "line\n{{ page.boom }}", context: { page }, trusted: [] }),
+    () => templating.renderSource({ subject: "failed", source: "line\n{{ page.boom }}", context: { page }, trusted: [] }),
     TemplateFailed,
   );
   expect(error).not.toBeInstanceOf(UndefinedVariable);
@@ -460,15 +460,15 @@ test("other evaluation failures remain distinct from undefined values", () => {
   expect(error.line).toBe(2);
 });
 
-test("define, fill, and render identities are stable and collision-free", () => {
+test("define, renderSource, and renderTemplate identities are stable and collision-free", () => {
   const templating = new TemplatingConcept();
   const colon = templating.define({ name: "a:b", source: "A" });
   const plain = templating.define({ name: "a", source: "B" });
   expect(templating.define({ name: "a:b", source: "A" })).toEqual({ template: colon.template, changed: false });
   expect(templating.define({ name: "a:b", source: "AA" })).toEqual({ template: colon.template, changed: true });
 
-  const first = templating.render({ template: colon.template, subject: "c", context: {}, trusted: [] });
-  const second = templating.render({ template: plain.template, subject: "b:c", context: {}, trusted: [] });
+  const first = templating.renderTemplate({ template: colon.template, subject: "c", context: {}, trusted: [] });
+  const second = templating.renderTemplate({ template: plain.template, subject: "b:c", context: {}, trusted: [] });
   expect(first.rendering).not.toBe(second.rendering);
   expect(templating._of({ rendering: first.rendering })).toEqual([
     { template: colon.template, subject: "c", output: "AA" },
@@ -478,8 +478,8 @@ test("define, fill, and render identities are stable and collision-free", () => 
   ]);
   expect(templating._of({ rendering: "unknown" })).toEqual([]);
 
-  const filling = templating.fill({ subject: "a:b:c", source: "one", context: {}, trusted: [] });
-  const replacement = templating.fill({ subject: "a:b:c", source: "two", context: {}, trusted: [] });
+  const filling = templating.renderSource({ subject: "a:b:c", source: "one", context: {}, trusted: [] });
+  const replacement = templating.renderSource({ subject: "a:b:c", source: "two", context: {}, trusted: [] });
   expect(replacement.filling).toBe(filling.filling);
   expect(templating._filling({ subject: "a:b:c" })).toEqual([{ filling: filling.filling, output: "two" }]);
 });
@@ -506,13 +506,13 @@ test("successful redefine and refill replace current dependency metadata", () =>
   expect(templating._usedBy({ name: "old-partial" })).toEqual([]);
   expect(templating._usedBy({ name: "new-partial" })).toEqual([{ owner: first.template }]);
 
-  const filling = templating.fill({
+  const filling = templating.renderSource({
     subject: "body",
     source: '{% render "old-partial" %}{{ site.old }}',
     context: { site: { old: "old" } },
     trusted: [],
   });
-  const refilled = templating.fill({
+  const refilled = templating.renderSource({
     subject: "body",
     source: '{% render "new-partial" %}{{ site.new }}',
     context: { site: { new: "new" } },
@@ -532,7 +532,7 @@ test("successful outputs keep dependency snapshots across redefine and forget", 
   const templating = new TemplatingConcept();
   templating.define({ name: "partial", source: "{{ site.old }}" });
   const page = templating.define({ name: "page", source: '{% render "partial" %}' });
-  const rendered = templating.render({
+  const rendered = templating.renderTemplate({
     template: page.template,
     subject: "page",
     context: { site: { old: "old", new: "new" } },
@@ -553,17 +553,17 @@ test("successful outputs keep dependency snapshots across redefine and forget", 
   expect(templating._tree({ owner: rendered.rendering })).toEqual([{ used: "partial" }]);
   expect(templating._reads({ owner: rendered.rendering })).toEqual([{ path: ["site", "old"] }]);
   thrown(
-    () => templating.render({ template: page.template, subject: "page", context: { site: {} }, trusted: [] }),
+    () => templating.renderTemplate({ template: page.template, subject: "page", context: { site: {} }, trusted: [] }),
     UsedTemplateNotFound,
   );
 });
 
-test("failed fill and render attempts preserve snapshots and expose subject failures", () => {
+test("failed renderSource and renderTemplate attempts preserve snapshots and expose subject failures", () => {
   const templating = new TemplatingConcept();
   templating.define({ name: "old", source: "{{ site.old }}" });
   templating.define({ name: "new", source: "{{ site.new }}" });
   const context = { page: { old: "page old" }, site: { old: "site old", new: "site new" } };
-  const filling = templating.fill({
+  const filling = templating.renderSource({
     subject: "body",
     source: '{% render "old" %}|{{ page.old }}',
     context,
@@ -573,7 +573,7 @@ test("failed fill and render attempts preserve snapshots and expose subject fail
   const fillingReads = templating._reads({ owner: filling.filling });
   thrown(
     () =>
-      templating.fill({
+      templating.renderSource({
         subject: "body",
         source: '{% render "new" %}\n{{ missing }}',
         context,
@@ -590,18 +590,18 @@ test("failed fill and render attempts preserve snapshots and expose subject fail
   expect(fillFailure[0]!.column).toBeGreaterThan(0);
 
   const recovery = templating.define({ name: "recovery", source: "recovered" });
-  expect(templating.render({ template: recovery.template, subject: "body", context: {}, trusted: [] }).output).toBe("recovered");
+  expect(templating.renderTemplate({ template: recovery.template, subject: "body", context: {}, trusted: [] }).output).toBe("recovered");
   expect(templating._failure({ subject: "body" })).toEqual([]);
   expect(templating._tree({ owner: filling.filling })).toEqual(fillingTree);
   expect(templating._reads({ owner: filling.filling })).toEqual(fillingReads);
 
   const page = templating.define({ name: "page", source: '{% render "old" %}|{{ page.old }}' });
-  const rendering = templating.render({ template: page.template, subject: "page", context, trusted: [] });
+  const rendering = templating.renderTemplate({ template: page.template, subject: "page", context, trusted: [] });
   const renderingTree = templating._tree({ owner: rendering.rendering });
   const renderingReads = templating._reads({ owner: rendering.rendering });
   templating.define({ name: "page", source: '{% render "new" %}\n{{ missing }}' });
   thrown(
-    () => templating.render({ template: page.template, subject: "page", context, trusted: [] }),
+    () => templating.renderTemplate({ template: page.template, subject: "page", context, trusted: [] }),
     UndefinedVariable,
   );
   expect(templating._rendering({ template: page.template, subject: "page" })).toEqual([
@@ -617,19 +617,19 @@ test("failed fill and render attempts preserve snapshots and expose subject fail
   expect(renderFailure[0]).toMatchObject({ code: "UNDEFINED_VARIABLE", templateName: "page", line: 2 });
   expect(renderFailure[0]!.column).toBeGreaterThan(0);
 
-  expect(templating.fill({ subject: "page", source: "recovered", context: {}, trusted: [] }).output).toBe("recovered");
+  expect(templating.renderSource({ subject: "page", source: "recovered", context: {}, trusted: [] }).output).toBe("recovered");
   expect(templating._failure({ subject: "page" })).toEqual([]);
   expect(templating._tree({ owner: rendering.rendering })).toEqual(renderingTree);
   expect(templating._reads({ owner: rendering.rendering })).toEqual(renderingReads);
 
   thrown(
-    () => templating.render({ template: "missing", subject: "missing", context: {}, trusted: [] }),
+    () => templating.renderTemplate({ template: "missing", subject: "missing", context: {}, trusted: [] }),
     TemplateNotFound,
   );
   expect(templating._failure({ subject: "missing" })).toEqual([
     { code: "TEMPLATE_NOT_FOUND", templateName: undefined, line: undefined, column: undefined },
   ]);
-  expect(templating.fill({ subject: "missing", source: "recovered", context: {}, trusted: [] }).output).toBe("recovered");
+  expect(templating.renderSource({ subject: "missing", source: "recovered", context: {}, trusted: [] }).output).toBe("recovered");
   expect(templating._failure({ subject: "missing" })).toEqual([]);
 });
 
@@ -637,7 +637,7 @@ test("named fills report original source coordinates and a fallback source", () 
   const templating = new TemplatingConcept();
 
   thrown(
-    () => templating.fill({
+    () => templating.renderSource({
       subject: "body",
       source: "{{ missing }}",
       context: {},
@@ -660,7 +660,7 @@ test("named fills report original source coordinates and a fallback source", () 
   ]);
 
   thrown(
-    () => templating.render({ template: "missing", subject: "missing", context: {}, trusted: [] }),
+    () => templating.renderTemplate({ template: "missing", subject: "missing", context: {}, trusted: [] }),
     TemplateNotFound,
   );
   expect(templating._failureLocation({ subject: "missing", fallbackSource: "fallback.md" })).toEqual([
@@ -668,17 +668,17 @@ test("named fills report original source coordinates and a fallback source", () 
   ]);
 });
 
-test("fill is unnamed, snapshots dependencies, and is independent from render", () => {
+test("renderSource is unnamed, snapshots dependencies, and is independent from renderTemplate", () => {
   const templating = new TemplatingConcept();
   templating.define({ name: "partial", source: "{{ site.title }}" });
   const layout = templating.define({ name: "layout", source: "layout {{ page.title }}" });
-  const filling = templating.fill({
+  const filling = templating.renderSource({
     subject: "body",
     source: '{% render "partial" %} {{ page.body }}',
     context: { page: { body: "body" }, site: { title: "site" } },
     trusted: [],
   });
-  const rendering = templating.render({
+  const rendering = templating.renderTemplate({
     template: layout.template,
     subject: "body",
     context: { page: { title: "title" } },
@@ -699,8 +699,8 @@ test("fill is unnamed, snapshots dependencies, and is independent from render", 
 test("forget removes a definition and its direct renderings only", () => {
   const templating = new TemplatingConcept();
   const partial = templating.define({ name: "partial", source: "partial" });
-  const direct = templating.render({ template: partial.template, subject: "direct", context: {}, trusted: [] });
-  const filling = templating.fill({ subject: "body", source: '{% render "partial" %}', context: {}, trusted: [] });
+  const direct = templating.renderTemplate({ template: partial.template, subject: "direct", context: {}, trusted: [] });
+  const filling = templating.renderSource({ subject: "body", source: '{% render "partial" %}', context: {}, trusted: [] });
 
   expect(templating.forget({ name: "partial" })).toEqual({ template: partial.template });
   expect(templating._rendering({ template: partial.template, subject: "direct" })).toEqual([]);
@@ -742,7 +742,7 @@ test("the registry maps every declared refusal to its error class", () => {
     ["register", ["INVALID_TEMPLATE_ORIGIN", "TEMPLATE_NAME_TAKEN", "TEMPLATE_SYNTAX", "UNSUPPORTED_TEMPLATE"]],
     ["forget", ["TEMPLATE_NOT_FOUND"]],
     [
-      "fill",
+      "renderSource",
       [
         "TEMPLATE_SYNTAX",
         "UNSUPPORTED_TEMPLATE",
@@ -755,7 +755,7 @@ test("the registry maps every declared refusal to its error class", () => {
       ],
     ],
     [
-      "render",
+      "renderTemplate",
       [
         "TEMPLATE_NOT_FOUND",
         "INVALID_TRUSTED_PATH",

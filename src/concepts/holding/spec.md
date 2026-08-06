@@ -1,4 +1,4 @@
-# Attending
+# Holding
 
 ## Purpose
 
@@ -31,7 +31,7 @@ a set of Holds with
 ## Actions
 
 ```actions
-hold () : return (hold: Hold, reason: Reason)
+awaitStop () : return (hold: Hold, reason: Reason)
   then
     add a holding Hold and install its independent interrupt and terminate listeners
     if listener setup faults, remove the attempted Hold and propagate the host failure

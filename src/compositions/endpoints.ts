@@ -13,7 +13,7 @@ import { PendingFailedRenderingCleanup } from "./render.ts";
 import { InspectionOwner, SiteInspection } from "./inspection.ts";
 import { SiteBuildSummary } from "./views.ts";
 
-const { Depending, Delivering, Deploying, Diagnosing, Emitting, Locating, Phasing, Routing } = conceptRefs;
+const { DeliveryArbitration, DependencyTracking, Deploying, Diagnosing, Emitting, Locating, Phasing, Routing } = conceptRefs;
 
 function validBuildInput(value: unknown): { ok: true } | { ok: false; detail: string } {
   if (value === null || typeof value !== "object") return { ok: false, detail: "A site build needs an input object." };
@@ -32,14 +32,14 @@ function validBuildInput(value: unknown): { ok: true } | { ok: false; detail: st
 export const SiteBuildRefusalsInterruptAggregateDelivery = reaction(({ job }) =>
   when(refused({}))
     .where(earlier(Phasing.start, {}, { job, name: PHASE_SEQUENCE }))
-    .then(Delivering.interrupt({ task: job })),
+    .then(DeliveryArbitration.recordInterruption({ task: job })),
 );
 
 /** Runtime faults use the same one-answer rule, scoped to their build flow. */
 export const SiteBuildFaultsInterruptAggregateDelivery = reaction(({ job }) =>
   when(faulted({}))
     .where(earlier(Phasing.start, {}, { job, name: PHASE_SEQUENCE }))
-    .then(Delivering.interrupt({ task: job })),
+    .then(DeliveryArbitration.recordInterruption({ task: job })),
 );
 
 /** Enumerate routed owners without a current dependency result. */
@@ -48,7 +48,7 @@ export const UnsettledRouteOwners = view(
   (_inputs, { owner }, _bindings) =>
     where(
       Routing._claims({}).is({ owner }),
-      no(Depending._current({ subject: owner })),
+      no(DependencyTracking._current({ subject: owner })),
     ),
 ).many();
 
@@ -81,13 +81,13 @@ export const BuildSiteAtDestination = endpoint(
   ({ directory, destination, sequence, job, written, replaced, kept, removed }) =>
     receive({ directory, destination })
       .where(computations.isTextValue({ value: destination }))
-      .then(Locating.request({ name: PLACES.base, path: directory }).responds({}))
-      .then(Locating.request({ name: PLACES.destination, path: destination }).responds({}))
+      .then(Locating.recordRequest({ name: PLACES.base, path: directory }).responds({}))
+      .then(Locating.recordRequest({ name: PLACES.destination, path: destination }).responds({}))
       .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
       .then(Phasing.start({ sequence }).responds({ job }))
       .afterFlowSettles()
       .where(SettledSiteBuild({ job }))
-      .then(Delivering.settle({ task: job }).responds({ task: job, interrupted: false }))
+      .then(DeliveryArbitration.settle({ task: job }).responds({ task: job, interrupted: false }))
       .then(
         where(PublishableSiteBuild({ job }))
           .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
@@ -123,12 +123,12 @@ export const BuildSiteAtConfiguredOutput = endpoint(
   ({ directory, destination, sequence, job, written, replaced, kept, removed }) =>
     receive({ directory, destination })
       .where(computations.isAbsentValue({ value: destination }))
-      .then(Locating.request({ name: PLACES.base, path: directory }).responds({}))
+      .then(Locating.recordRequest({ name: PLACES.base, path: directory }).responds({}))
       .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
       .then(Phasing.start({ sequence }).responds({ job }))
       .afterFlowSettles()
       .where(SettledSiteBuild({ job }))
-      .then(Delivering.settle({ task: job }).responds({ task: job, interrupted: false }))
+      .then(DeliveryArbitration.settle({ task: job }).responds({ task: job, interrupted: false }))
       .then(
         where(PublishableSiteBuild({ job }))
           .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
@@ -159,12 +159,12 @@ export const BuildSiteAtConfiguredOutput = endpoint(
 
 export const InspectSite = endpoint("/site/inspect", ({ directory, target, sequence, job, owner }) =>
   receive({ directory, target })
-    .then(Locating.request({ name: PLACES.base, path: directory }).responds({}))
+    .then(Locating.recordRequest({ name: PLACES.base, path: directory }).responds({}))
     .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
     .then(Phasing.start({ sequence }).responds({ job }))
     .afterFlowSettles()
     .where(SettledSiteBuild({ job }))
-    .then(Delivering.settle({ task: job }).responds({ task: job, interrupted: false }))
+    .then(DeliveryArbitration.settle({ task: job }).responds({ task: job, interrupted: false }))
     .then(
       where(
         SettledSiteBuild({ job }).is({ state: "finished" }),
@@ -197,16 +197,16 @@ export const AdvanceStartedSiteBuild = reaction(({ sequence, job, attempt }) =>
   when(Phasing.start({ sequence }).responds({ job, name: PHASE_SEQUENCE, attempt }))
     .afterFlowSettles()
     .where(Phasing._running({ sequence }).is({ job, name: PHASE_SEQUENCE, attempt }))
-    .then(Phasing.advance({ job, attempt })),
+    .then(Phasing.completePhase({ job, attempt })),
 );
 
 /** Continue each later phase at the next settlement frontier in the same flow. */
 export const AdvanceSiteBuild = reaction(({ job, attempt, nextAttempt }) =>
-  when(Phasing.advance({ job, attempt }).responds({ name: PHASE_SEQUENCE, transitioned: true }))
+  when(Phasing.completePhase({ job, attempt }).responds({ name: PHASE_SEQUENCE, transitioned: true }))
     .afterFlowSettles()
     .where(
       Phasing._job({ job }).is({ name: PHASE_SEQUENCE, state: "running", attempt: nextAttempt }),
       no(PendingFailedRenderingCleanup({})),
     )
-    .then(Phasing.advance({ job, attempt: nextAttempt })),
+    .then(Phasing.completePhase({ job, attempt: nextAttempt })),
 );

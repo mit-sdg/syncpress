@@ -39,7 +39,7 @@ an element Invocation with
 ## Actions
 
 ```actions
-capture (arguments: Arguments | null) : return (words: Arguments)
+captureArguments (arguments: Arguments | null) : return (words: Arguments)
   where arguments is null
   then
     read the process arguments after its executable and script names
@@ -54,7 +54,7 @@ capture (arguments: Arguments | null) : return (words: Arguments)
   then
     retain the first words and return a copy
 
-write (stream: Stream, text: Text) : return (stream: Stream, text: Text)
+writeLine (stream: Stream, text: Text) : return (stream: Stream, text: Text)
   where stream is not output or error
   then
     refuse INVALID_STREAM "A command stream must be output or error."
@@ -64,7 +64,7 @@ write (stream: Stream, text: Text) : return (stream: Stream, text: Text)
   then
     write one line to the selected operator stream and return it
 
-exit (code: ExitCode) : return (code: ExitCode, changed: Flag)
+setExitStatus (code: ExitCode) : return (code: ExitCode, changed: Flag)
   where code is not a safe integer from 0 through 255
   then
     refuse INVALID_EXIT_CODE "A command exit code must be a safe integer from 0 through 255."

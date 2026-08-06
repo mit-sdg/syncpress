@@ -95,7 +95,7 @@ export class WatchingConcept {
   readonly #watches = new Map<string, WatchRecord>();
   #next = 0;
 
-  async observe(
+  async open(
     { directory, settling, excluded, prefix }: {
       directory: string;
       settling: number;
@@ -184,7 +184,7 @@ export class WatchingConcept {
     waiting?.();
   }
 
-  async attend({ watch: identity, within }: { watch: string; within: number }) {
+  async waitForChange({ watch: identity, within }: { watch: string; within: number }) {
     const record = this.#watches.get(identity);
     if (record === undefined) throw new WatchNotFound();
     if (!isDuration(within)) throw new InvalidWatch();

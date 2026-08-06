@@ -547,7 +547,7 @@ export class ReferencingConcept {
     return { source, count: record.references.length, replaced: current !== undefined, completed: record.references.length === 0 };
   }
 
-  answer({ reference, form, value }: { reference: string; form: ReferenceForm; value: string }) {
+  resolve({ reference, form, value }: { reference: string; form: ReferenceForm; value: string }) {
     requireText(reference);
     requireText(value);
     requireForm(form);

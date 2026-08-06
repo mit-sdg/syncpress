@@ -4,15 +4,15 @@ export class StaleAttempt extends Error {}
 export class RenderingNotFound extends Error {}
 export class StageNotReady extends Error {}
 
-export type RenderingStage = "started" | "body-settled" | "completed" | "failed" | "superseded";
+export type RenderTrackingStage = "started" | "body-settled" | "completed" | "failed" | "superseded";
 
-type RenderingRecord = {
+type RenderTrackingRecord = {
   rendering: string;
   subject: string;
   path: string;
   profile: string;
   template: string;
-  stage: RenderingStage;
+  stage: RenderTrackingStage;
   failure?: string;
   order: bigint;
   dependencyAttempt: number;
@@ -32,9 +32,9 @@ function requireAttempt(value: unknown): asserts value is number {
 }
 
 /** Coordinate observable page rendering attempts without performing peer behavior. */
-export class RenderingConcept {
-  readonly #attempts = new Map<string, RenderingRecord>();
-  readonly #latestBySubject = new Map<string, RenderingRecord>();
+export class RenderTrackingConcept {
+  readonly #attempts = new Map<string, RenderTrackingRecord>();
+  readonly #latestBySubject = new Map<string, RenderTrackingRecord>();
   #nextRendering = 1n;
 
   begin({
@@ -83,7 +83,7 @@ export class RenderingConcept {
     const order = this.#nextRendering;
     this.#nextRendering += 1n;
     const rendering = `rendering:${order}`;
-    const record: RenderingRecord = {
+    const record: RenderTrackingRecord = {
       rendering,
       subject,
       path,
@@ -99,14 +99,14 @@ export class RenderingConcept {
     return { rendering, subject, profile, template, dependencyAttempt, emissionAttempt };
   }
 
-  settleBody({ rendering }: { rendering: unknown }) {
+  completeBody({ rendering }: { rendering: unknown }) {
     const record = this.#record(rendering);
     if (record.stage !== "started") return { rendering: record.rendering, subject: record.subject, transitioned: false };
     record.stage = "body-settled";
     return { rendering: record.rendering, subject: record.subject, transitioned: true };
   }
 
-  settleLayout({ rendering }: { rendering: unknown }) {
+  completeLayout({ rendering }: { rendering: unknown }) {
     const record = this.#record(rendering);
     if (record.stage === "started") throw new StageNotReady();
     if (record.stage !== "body-settled") {
@@ -127,13 +127,13 @@ export class RenderingConcept {
     return { rendering: record.rendering, subject: record.subject, transitioned: true };
   }
 
-  _attempt({ rendering }: { rendering: unknown }): Omit<RenderingRecord, "rendering" | "order">[] {
+  _attempt({ rendering }: { rendering: unknown }): Omit<RenderTrackingRecord, "rendering" | "order">[] {
     if (!isText(rendering)) return [];
     const record = this.#attempts.get(rendering);
     return record === undefined ? [] : [this.#row(record)];
   }
 
-  _active({ rendering }: { rendering: unknown }): Omit<RenderingRecord, "rendering" | "order">[] {
+  _active({ rendering }: { rendering: unknown }): Omit<RenderTrackingRecord, "rendering" | "order">[] {
     if (!isText(rendering)) return [];
     const record = this.#attempts.get(rendering);
     return record === undefined
@@ -145,7 +145,7 @@ export class RenderingConcept {
       : [this.#row(record)];
   }
 
-  _latest({ subject }: { subject: unknown }): Omit<RenderingRecord, "subject" | "order">[] {
+  _latest({ subject }: { subject: unknown }): Omit<RenderTrackingRecord, "subject" | "order">[] {
     if (!isText(subject)) return [];
     const record = this.#latestBySubject.get(subject);
     return record === undefined
@@ -162,19 +162,19 @@ export class RenderingConcept {
         }];
   }
 
-  _all(): Omit<RenderingRecord, "order">[] {
+  _all(): Omit<RenderTrackingRecord, "order">[] {
     return [...this.#attempts.values()]
       .sort((left, right) => (left.order < right.order ? -1 : left.order > right.order ? 1 : 0))
       .map(({ order: _order, ...record }) => ({ ...record }));
   }
 
-  #record(rendering: unknown): RenderingRecord {
+  #record(rendering: unknown): RenderTrackingRecord {
     const record = isText(rendering) ? this.#attempts.get(rendering) : undefined;
     if (record === undefined) throw new RenderingNotFound();
     return record;
   }
 
-  #row(record: RenderingRecord): Omit<RenderingRecord, "rendering" | "order"> {
+  #row(record: RenderTrackingRecord): Omit<RenderTrackingRecord, "rendering" | "order"> {
     return {
       subject: record.subject,
       path: record.path,

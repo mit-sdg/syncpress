@@ -125,7 +125,7 @@ export class FilingConcept {
   readonly #filesByID = new Map<string, FileRecord>();
   readonly #fileIDsByRoot = new Map<string, Map<string, string>>();
 
-  open({ name }: { name: string }) {
+  ensureRoot({ name }: { name: string }) {
     if (typeof name !== "string") throw new TypeError("A root name must be text.");
     const existing = this.#rootsByName.get(name);
     if (existing !== undefined) return { root: existing.root };
@@ -139,7 +139,7 @@ export class FilingConcept {
   }
 
   /** Read one complete host file before replacing its named singleton tree. */
-  async loadFile({ name, source, path }: { name: string; source: string; path: string }) {
+  async replaceTreeFromFile({ name, source, path }: { name: string; source: string; path: string }) {
     if (!isScalarText(name) || name === "" || !isScalarText(source) || source === "") throw new InvalidSource();
     const status = pathStatus(path);
     if (status === "outside") throw new PathLeavesRoot();
@@ -175,7 +175,7 @@ export class FilingConcept {
   }
 
   /** Read a complete host tree before replacing the corresponding named tree. */
-  async loadTree({ name, directory }: { name: string; directory: string }) {
+  async replaceTreeFromDirectory({ name, directory }: { name: string; directory: string }) {
     if (!isScalarText(name) || name === "" || !isScalarText(directory) || directory === "") throw new InvalidSource();
 
     let rootStatus: Awaited<ReturnType<typeof lstat>>;
@@ -238,11 +238,11 @@ export class FilingConcept {
     return { status: "loaded" as const, ...this.#replaceTree(name, entries) };
   }
 
-  place({ root, path, content }: { root: string; path: string; content: Uint8Array }) {
+  putFile({ root, path, content }: { root: string; path: string; content: Uint8Array }) {
     return this.#place(root, path, content);
   }
 
-  placeBase64({ root, path, encoded }: { root: string; path: string; encoded: string }) {
+  putBase64File({ root, path, encoded }: { root: string; path: string; encoded: string }) {
     if (typeof encoded !== "string") throw new InvalidEncoding();
     const content = Buffer.from(encoded, "base64");
     if (content.toString("base64") !== encoded) throw new InvalidEncoding();

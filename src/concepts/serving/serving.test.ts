@@ -59,7 +59,7 @@ describe("Serving", () => {
       await writeFile(join(published, "index.html"), "<html><body>Home</body></html>\n");
       await writeFile(join(published, "posts", "index.html"), "<html><body>Posts</body></html>\n");
       await writeFile(join(published, "styles.css"), "body{}\n");
-      expect(await serving.publish({ server: opened.server, directory: published })).toEqual({
+      expect(await serving.serveDirectory({ server: opened.server, directory: published })).toEqual({
         server: opened.server,
         directory: published,
         readers: 0,
@@ -92,7 +92,7 @@ describe("Serving", () => {
     }
 
     expect(serving._server({ server: opened.server })).toMatchObject([{ state: "closed" }]);
-    await expect(serving.publish({ server: opened.server, directory: published })).rejects.toBeInstanceOf(ServerNotOpen);
+    await expect(serving.serveDirectory({ server: opened.server, directory: published })).rejects.toBeInstanceOf(ServerNotOpen);
   });
 
   test("a reader is told to reload and is counted while it listens", async () => {
@@ -102,16 +102,16 @@ describe("Serving", () => {
 
     try {
       await writeFile(join(published, "index.html"), "<html><body>Home</body></html>\n");
-      await serving.publish({ server: opened.server, directory: published });
+      await serving.serveDirectory({ server: opened.server, directory: published });
 
       const listening = await fetch(`${origin}/__syncpress/live-reload`);
       const reader = listening.body!.getReader();
       expect((await reader.read()).value).toEqual(new TextEncoder().encode("retry: 1000\n\n"));
       expect(serving._readers({ server: opened.server })).toEqual({ readers: 1 });
 
-      expect(await serving.publish({ server: opened.server, directory: published })).toMatchObject({ readers: 1 });
+      expect(await serving.serveDirectory({ server: opened.server, directory: published })).toMatchObject({ readers: 1 });
       expect(new TextDecoder().decode((await reader.read()).value)).toBe("data: reload\n\n");
-      expect(await serving.publish({ server: opened.server, directory: published })).toMatchObject({ readers: 1 });
+      expect(await serving.serveDirectory({ server: opened.server, directory: published })).toMatchObject({ readers: 1 });
       expect(new TextDecoder().decode((await reader.read()).value)).toBe("data: reload\n\n");
       expect(serving._readers({ server: opened.server })).toEqual({ readers: 1 });
       await reader.cancel();
@@ -144,16 +144,16 @@ describe("Serving", () => {
     await expect(serving.open({ host: "", port: 0 })).rejects.toBeInstanceOf(InvalidServer);
     await expect(serving.open({ host: "127.0.0.1", port: 70_000 })).rejects.toBeInstanceOf(InvalidServer);
     await expect(serving.close({ server: "server:absent" })).rejects.toBeInstanceOf(ServerNotFound);
-    await expect(serving.publish({ server: "server:absent", directory: published })).rejects.toBeInstanceOf(ServerNotOpen);
+    await expect(serving.serveDirectory({ server: "server:absent", directory: published })).rejects.toBeInstanceOf(ServerNotOpen);
     expect(serving._server({ server: "server:absent" })).toEqual([]);
     expect(serving._readers({ server: "server:absent" })).toEqual({ readers: 0 });
 
     const opened = await serving.open({ host: "127.0.0.1", port: 0 });
     try {
-      await expect(serving.publish({ server: opened.server, directory: "" })).rejects.toThrow(
+      await expect(serving.serveDirectory({ server: opened.server, directory: "" })).rejects.toThrow(
         new InvalidPublication(),
       );
-      await expect(serving.publish({ server: opened.server, directory: join(published, "missing") })).rejects.toBeInstanceOf(
+      await expect(serving.serveDirectory({ server: opened.server, directory: join(published, "missing") })).rejects.toBeInstanceOf(
         PublicationUnavailable,
       );
     } finally {

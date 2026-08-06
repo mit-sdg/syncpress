@@ -1,9 +1,9 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { DeliveringConcept, DeliveryNotActive, InvalidTask } from "./delivering.ts";
+import { DeliveryArbitrationConcept, DeliveryNotActive, InvalidTask } from "./delivery-arbitration.ts";
 import spec from "./spec.md" with { type: "text" };
 
-export const delivering = registerConcept({
-  class: DeliveringConcept,
+export const deliveryArbitration = registerConcept({
+  class: DeliveryArbitrationConcept,
   spec,
   refusals: {
     DELIVERY_NOT_ACTIVE: DeliveryNotActive,

@@ -111,12 +111,12 @@ a set of Renditions with
 
 ## Actions
 
-`admit` copies the supplied bytes. A source is readable only when Sharp can read
+`ingest` copies the supplied bytes. A source is readable only when Sharp can read
 its metadata and decode all pixel data with `failOn: warning`; header-only
 success is not enough. An unsupported but readable format refuses differently
 from unreadable or corrupt bytes.
 
-`render` requires an ordinary dense list of positive safe integer widths. It
+`generateRenditions` requires an ordinary dense list of positive safe integer widths. It
 deduplicates and sorts widths ascending, and omits widths greater than the
 displayed source width. Format names remain in first-declared order after aliases
 and duplicates are merged. Other spellings, unavailable requested encoders, and
@@ -139,11 +139,11 @@ These settings make output repeatable for one Sharp/libvips build; the digest
 records the actual result so a changed encoder result receives a changed
 identity. Generated animated GIF and WebP renditions retain the source frame
 count, frame delays, and loop count. Any decoding, encoding, dimension, format,
-or animation verification failure refuses the whole render without replacing
+or animation verification failure refuses the whole rendition generation without replacing
 its previous renditions.
 
 ```actions
-admit (subject: Subject, content: Bytes) : return (original: Original, digest: Digest, format: Format, width: Number, height: Number, animated: Flag, changed: Flag)
+ingest (subject: Subject, content: Bytes) : return (original: Original, digest: Digest, format: Format, width: Number, height: Number, animated: Flag, changed: Flag)
   where subject is not well-formed text
   then
     refuse INVALID_SUBJECT "An image subject must be well-formed text."
@@ -162,7 +162,7 @@ admit (subject: Subject, content: Bytes) : return (original: Original, digest: D
     add an original with copied content, its digest, displayed dimensions, format, and animation facts
     return it with changed true
 
-render (original: Original, widths: Widths, formats: Formats) : return (original: Original, count: Number, derived: Number, changed: Flag)
+generateRenditions (original: Original, widths: Widths, formats: Formats) : return (original: Original, count: Number, derived: Number, changed: Flag)
   where original is absent
   then
     refuse ORIGINAL_NOT_FOUND "There is no such image."
@@ -184,7 +184,7 @@ render (original: Original, widths: Widths, formats: Formats) : return (original
     atomically replace its renditions in normalized format and width order, with the original format last
     return original, the final rendition count, the non-fallback rendition count, and changed true
 
-release (subject: Subject) : return (subject: Subject, count: Number)
+removeSource (subject: Subject) : return (subject: Subject, count: Number)
   where subject is not well-formed text
   then
     refuse INVALID_SUBJECT "An image subject must be well-formed text."
@@ -204,7 +204,7 @@ _renditions (original: Original) : many (rendition: Rendition, width: Number, he
   Alternative formats come first in first-declared order after aliases and
   duplicates are merged; their non-upscaled widths ascend. The source-format
   group comes last and ends with the exact original fallback at the displayed
-  source dimensions. Every render has this fallback. The source-format group
+  source dimensions. Every rendition generation has this fallback. The source-format group
   also contains each requested smaller width that can preserve animation.
 
 _rendition (rendition: Rendition) : optional (original: Original, width: Number, height: Number, format: Format, animated: Flag, order: Number, digest: Digest, extension: Extension, name: Name, mediaType: MediaType, fallback: Flag)

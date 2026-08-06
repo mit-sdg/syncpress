@@ -30,7 +30,7 @@ function markdown(
   raw = true,
   separator = "<!--more-->",
 ) {
-  return converting.declare({ name, kind: "markdown", extensions, raw, separator });
+  return converting.declareProfile({ name, kind: "markdown", extensions, raw, separator });
 }
 
 function output(converting: ConvertingConcept, profile: string, source: string, subject = "page", part = "body") {
@@ -167,7 +167,7 @@ test("raw HTML is copied only when the Markdown profile permits it", () => {
 
 test("profile kind, not profile name, selects Markdown or verbatim", () => {
   const converting = new ConvertingConcept();
-  const namedVerbatim = converting.declare({
+  const namedVerbatim = converting.declareProfile({
     name: "markdown",
     kind: "verbatim",
     extensions: [],
@@ -185,7 +185,7 @@ test("profile kind, not profile name, selects Markdown or verbatim", () => {
 
 test("verbatim preserves exact text and independently extracts an exact prefix", () => {
   const converting = new ConvertingConcept();
-  const profile = converting.declare({
+  const profile = converting.declareProfile({
     name: "html",
     kind: "verbatim",
     extensions: [],
@@ -259,10 +259,10 @@ test("malformed, unsupported, duplicate, and incompatible declarations are atomi
   const original = markdown(converting, "prose", ["tables"]).profile;
 
   expect(() =>
-    converting.declare({ name: "prose", kind: "rst", extensions: [], raw: true, separator: "" }),
+    converting.declareProfile({ name: "prose", kind: "rst", extensions: [], raw: true, separator: "" }),
   ).toThrow(UnsupportedProfileKind);
   expect(() =>
-    converting.declare({
+    converting.declareProfile({
       name: "prose",
       kind: "rst",
       extensions: null as unknown as string[],
@@ -271,23 +271,23 @@ test("malformed, unsupported, duplicate, and incompatible declarations are atomi
     }),
   ).toThrow(InvalidProfile);
   expect(() =>
-    converting.declare({ name: "prose", kind: "rst", extensions: ["smartypants"], raw: true, separator: "" }),
+    converting.declareProfile({ name: "prose", kind: "rst", extensions: ["smartypants"], raw: true, separator: "" }),
   ).toThrow(UnsupportedProfileKind);
   expect(() => markdown(converting, "prose", ["smartypants"])).toThrow(UnsupportedExtension);
   expect(() => markdown(converting, "prose", ["tables", "tables"])).toThrow(InvalidProfile);
   expect(() => markdown(converting, "prose", ["smartypants", "smartypants"])).toThrow(InvalidProfile);
   expect(() =>
-    converting.declare({ name: "html", kind: "verbatim", extensions: ["tables"], raw: true, separator: "" }),
+    converting.declareProfile({ name: "html", kind: "verbatim", extensions: ["tables"], raw: true, separator: "" }),
   ).toThrow(IncompatibleProfile);
   expect(() =>
-    converting.declare({ name: "html", kind: "verbatim", extensions: [], raw: false, separator: "" }),
+    converting.declareProfile({ name: "html", kind: "verbatim", extensions: [], raw: false, separator: "" }),
   ).toThrow(IncompatibleProfile);
   expect(() => markdown(converting, "", [])).toThrow(InvalidProfile);
   expect(() =>
-    converting.declare({ name: "bad", kind: "markdown", extensions: null as unknown as string[], raw: true, separator: "" }),
+    converting.declareProfile({ name: "bad", kind: "markdown", extensions: null as unknown as string[], raw: true, separator: "" }),
   ).toThrow(InvalidProfile);
   expect(() =>
-    converting.declare({ name: "bad", kind: "markdown", extensions: [], raw: "yes" as unknown as boolean, separator: "" }),
+    converting.declareProfile({ name: "bad", kind: "markdown", extensions: [], raw: "yes" as unknown as boolean, separator: "" }),
   ).toThrow(InvalidProfile);
   expect(converting._profile({ name: "prose" })[0]?.profile).toBe(original);
 });
@@ -376,16 +376,16 @@ test("conversion input validation, unknown profiles, queries, and release are pr
   expect(() =>
     converting.convert({ subject: 1 as unknown as string, part: "body", profile, source: "" }),
   ).toThrow(InvalidConversionInput);
-  expect(() => converting.release({ subject: null as unknown as string })).toThrow(InvalidSubject);
+  expect(() => converting.removeConversions({ subject: null as unknown as string })).toThrow(InvalidSubject);
   expect(converting._profile({ name: "absent" })).toEqual([]);
   expect(converting._conversion({ conversion: "absent" })).toEqual([]);
   expect(converting._for({ subject: "absent", part: "body" })).toEqual([]);
   expect(converting._excerpt({ subject: "absent", part: "body" })).toEqual([]);
 
-  expect(converting.release({ subject: "page" })).toEqual({ subject: "page", count: 2 });
+  expect(converting.removeConversions({ subject: "page" })).toEqual({ subject: "page", count: 2 });
   expect(converting._conversion({ conversion: body.conversion })).toEqual([]);
   expect(converting._for({ subject: "other", part: "body" })).toHaveLength(1);
-  expect(converting.release({ subject: "page" })).toEqual({ subject: "page", count: 0 });
+  expect(converting.removeConversions({ subject: "page" })).toEqual({ subject: "page", count: 0 });
   expect(converting._profile({ name: "prose" })).toHaveLength(1);
 });
 
@@ -405,16 +405,16 @@ test("registry maps every refusal and supplies exact boundary messages", async (
   const app = assemble({ vocabulary: concepts.vocabulary, instances: concepts.implementations(), composition: {} });
   const Converting = app.concepts.Converting;
   expect(
-    await Converting.declare({ name: "bad", kind: "rst", extensions: [], raw: true, separator: "" }),
+    await Converting.declareProfile({ name: "bad", kind: "rst", extensions: [], raw: true, separator: "" }),
   ).toEqual({
     error: "UNSUPPORTED_PROFILE_KIND",
     detail: "This rendering profile kind is not supported.",
   });
   expect(
-    await Converting.declare({ name: "bad", kind: "markdown", extensions: ["unknown"], raw: true, separator: "" }),
+    await Converting.declareProfile({ name: "bad", kind: "markdown", extensions: ["unknown"], raw: true, separator: "" }),
   ).toEqual({ error: "UNSUPPORTED_EXTENSION", detail: "This Markdown extension is not supported." });
   expect(
-    await Converting.declare({ name: "bad", kind: "verbatim", extensions: [], raw: false, separator: "" }),
+    await Converting.declareProfile({ name: "bad", kind: "verbatim", extensions: [], raw: false, separator: "" }),
   ).toEqual({
     error: "INCOMPATIBLE_PROFILE",
     detail: "A verbatim profile requires no extensions and raw true.",
@@ -424,7 +424,7 @@ test("registry maps every refusal and supplies exact boundary messages", async (
     detail: "There is no such current rendering profile.",
   });
 
-  const declared = await Converting.declare({
+  const declared = await Converting.declareProfile({
     name: "notes",
     kind: "markdown",
     extensions: ["footnotes"],
@@ -441,7 +441,7 @@ test("registry maps every refusal and supplies exact boundary messages", async (
       source: "Use[^a].\n\n[^a]: One\n\n[^A]: Two",
     }),
   ).toEqual({ error: "CONVERSION_FAILED", detail: "This text could not be converted." });
-  expect(await Converting.release({ subject: 1 as unknown as string })).toEqual({
+  expect(await Converting.removeConversions({ subject: 1 as unknown as string })).toEqual({
     error: "INVALID_SUBJECT",
     detail: "A conversion subject must be text.",
   });

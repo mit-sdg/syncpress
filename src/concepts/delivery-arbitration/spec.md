@@ -1,4 +1,4 @@
-# Delivering
+# Delivery Arbitration
 
 ## Purpose
 
@@ -32,7 +32,7 @@ a set of Deliveries with
 ## Actions
 
 ```actions
-begin (task: Task) : return (task: Task, changed: Flag)
+beginDelivery (task: Task) : return (task: Task, changed: Flag)
   where task is not Text
   then
     refuse INVALID_TASK "A delivery task must be a well-formed text identity."
@@ -43,7 +43,7 @@ begin (task: Task) : return (task: Task, changed: Flag)
     add or activate its delivery without clearing an earlier interruption
     return task and changed true
 
-interrupt (task: Task) : return (task: Task, changed: Flag)
+recordInterruption (task: Task) : return (task: Task, changed: Flag)
   where task is not Text
   then
     refuse INVALID_TASK "A delivery task must be a well-formed text identity."

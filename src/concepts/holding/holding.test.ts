@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { AttendingConcept } from "./attending.ts";
-import { attending as registration } from "./registry.ts";
+import { HoldingConcept } from "./holding.ts";
+import { holding as registration } from "./registry.ts";
 
-describe("Attending", () => {
+describe("Holding", () => {
   test("its principle: each hold ends on its own operator stop request", async () => {
     let ask: ((reason: "interrupt" | "terminate") => void) | undefined;
     let listening = 0;
-    const attending = new AttendingConcept((ended) => {
+    const holding = new HoldingConcept((ended) => {
       ask = ended;
       listening += 1;
       return () => {
@@ -14,23 +14,23 @@ describe("Attending", () => {
       };
     });
 
-    const first = attending.hold();
+    const first = holding.awaitStop();
     await Promise.resolve();
-    expect(attending._holding()).toEqual({ holding: 1 });
+    expect(holding._holding()).toEqual({ holding: 1 });
     ask!("interrupt");
     const interrupted = await first;
-    expect(attending._hold({ hold: interrupted.hold })).toEqual([{ state: "released", reason: "interrupt" }]);
+    expect(holding._hold({ hold: interrupted.hold })).toEqual([{ state: "released", reason: "interrupt" }]);
     expect(listening).toBe(0);
 
-    const second = attending.hold();
+    const second = holding.awaitStop();
     await Promise.resolve();
     ask!("terminate");
     expect((await second).reason).toBe("terminate");
-    expect(attending._holding()).toEqual({ holding: 0 });
+    expect(holding._holding()).toEqual({ holding: 0 });
   });
 
   test("an unknown hold is absent", () => {
-    expect(new AttendingConcept()._hold({ hold: "hold:missing" })).toEqual([]);
+    expect(new HoldingConcept()._hold({ hold: "hold:missing" })).toEqual([]);
   });
 
   test("registry declares both state observations", () => {

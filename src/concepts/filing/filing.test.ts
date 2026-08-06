@@ -27,7 +27,7 @@ test("its principle: a complete host load atomically replaces one named tree", a
     await writeFile(join(directory, "picture.png"), "picture\n");
     const filing = new FilingConcept();
 
-    const first = await filing.loadTree({ name: "content", directory });
+    const first = await filing.replaceTreeFromDirectory({ name: "content", directory });
     expect(first).toMatchObject({ status: "loaded", count: 2, changed: true });
     if (first.status !== "loaded") throw new Error(first.detail);
     const page = filing._at({ root: first.root, path: "posts/page.md" })[0]!.file;
@@ -35,14 +35,14 @@ test("its principle: a complete host load atomically replaces one named tree", a
 
     await writeFile(join(directory, "posts", "page.md"), "second\n");
     await rm(join(directory, "picture.png"));
-    const second = await filing.loadTree({ name: "content", directory });
+    const second = await filing.replaceTreeFromDirectory({ name: "content", directory });
     expect(second).toMatchObject({ status: "loaded", root: first.root, count: 1, changed: true });
     expect(filing._at({ root: first.root, path: "posts/page.md" })[0]!.file).toBe(page);
     expect(filing._file({ file: picture })).toEqual([]);
     expect(filing._text({ file: page })).toEqual([{ text: "second\n" }]);
 
     await symlink(outside, join(directory, "linked"));
-    expect(await filing.loadTree({ name: "content", directory })).toEqual({
+    expect(await filing.replaceTreeFromDirectory({ name: "content", directory })).toEqual({
       status: "problem",
       code: "ENTRY_UNSUPPORTED",
       detail: "Only directories and ordinary files may be loaded.",
@@ -60,16 +60,16 @@ test("loads one required host file as a singleton tree", async () => {
     const source = join(directory, "site.yaml");
     await writeFile(source, "title: Ada\n");
     const filing = new FilingConcept();
-    const loaded = await filing.loadFile({ name: "project", source, path: "site.yaml" });
+    const loaded = await filing.replaceTreeFromFile({ name: "project", source, path: "site.yaml" });
     expect(loaded).toMatchObject({ status: "loaded", count: 1, changed: true });
     if (loaded.status !== "loaded") throw new Error(loaded.detail);
     expect(filing._text({ file: loaded.file })).toEqual([{ text: "title: Ada\n" }]);
-    expect(await filing.loadFile({ name: "project", source: join(directory, "missing"), path: "site.yaml" })).toEqual({
+    expect(await filing.replaceTreeFromFile({ name: "project", source: join(directory, "missing"), path: "site.yaml" })).toEqual({
       status: "problem",
       code: "FILE_MISSING",
       detail: "This required file is missing.",
     });
-    await expect(filing.loadFile({ name: "", source, path: "site.yaml" })).rejects.toBeInstanceOf(InvalidSource);
+    await expect(filing.replaceTreeFromFile({ name: "", source, path: "site.yaml" })).rejects.toBeInstanceOf(InvalidSource);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -77,10 +77,10 @@ test("loads one required host file as a singleton tree", async () => {
 
 test("opens stable named roots and keeps collision-prone addresses isolated", () => {
   const filing = new FilingConcept();
-  const firstRoot = filing.open({ name: "a:b" }).root;
-  const secondRoot = filing.open({ name: "a" }).root;
+  const firstRoot = filing.ensureRoot({ name: "a:b" }).root;
+  const secondRoot = filing.ensureRoot({ name: "a" }).root;
 
-  expect(filing.open({ name: "a:b" })).toEqual({ root: firstRoot });
+  expect(filing.ensureRoot({ name: "a:b" })).toEqual({ root: firstRoot });
   expect(firstRoot).not.toBe(secondRoot);
   expect(filing._root({ root: firstRoot })).toEqual([{ name: "a:b" }]);
   expect(filing._named({ name: "a" })).toEqual([{ root: secondRoot }]);
@@ -88,8 +88,8 @@ test("opens stable named roots and keeps collision-prone addresses isolated", ()
   expect(filing._named({ name: "missing" })).toEqual([]);
 
   // These two addresses produced the same delimiter-built ID in the old implementation.
-  const first = filing.place({ root: firstRoot, path: "c", content: bytes("one") });
-  const second = filing.place({ root: secondRoot, path: "b:c", content: bytes("two") });
+  const first = filing.putFile({ root: firstRoot, path: "c", content: bytes("one") });
+  const second = filing.putFile({ root: secondRoot, path: "b:c", content: bytes("two") });
   expect(first.file).not.toBe(second.file);
   expect(text(filing._file({ file: first.file })[0]!.content)).toBe("one");
   expect(text(filing._file({ file: second.file })[0]!.content)).toBe("two");
@@ -99,14 +99,14 @@ test("opens stable named roots and keeps collision-prone addresses isolated", ()
 
 test("places copied bytes, reports exact changes, and preserves address identity", () => {
   const filing = new FilingConcept();
-  const { root } = filing.open({ name: "content" });
-  const empty = filing.place({ root, path: "empty.bin", content: new Uint8Array() });
+  const { root } = filing.ensureRoot({ name: "content" });
+  const empty = filing.putFile({ root, path: "empty.bin", content: new Uint8Array() });
   expect(empty.digest).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   expect(filing._file({ file: empty.file })[0]!.content).toEqual(new Uint8Array());
-  expect(filing.place({ root, path: "empty.bin", content: new Uint8Array() }).changed).toBe(false);
+  expect(filing.putFile({ root, path: "empty.bin", content: new Uint8Array() }).changed).toBe(false);
 
   const input = Buffer.from("first");
-  const first = filing.place({ root, path: "posts/page.md", content: input });
+  const first = filing.putFile({ root, path: "posts/page.md", content: input });
 
   expect(first).toEqual({
     file: first.file,
@@ -121,10 +121,10 @@ test("places copied bytes, reports exact changes, and preserves address identity
   read.content.fill(0);
   expect(text(filing._file({ file: first.file })[0]!.content)).toBe("first");
 
-  const unchanged = filing.place({ root, path: "posts/page.md", content: bytes("first") });
+  const unchanged = filing.putFile({ root, path: "posts/page.md", content: bytes("first") });
   expect(unchanged).toEqual({ file: first.file, digest: first.digest, changed: false });
 
-  const changed = filing.place({ root, path: "posts/page.md", content: bytes("second") });
+  const changed = filing.putFile({ root, path: "posts/page.md", content: bytes("second") });
   expect(changed).toEqual({
     file: first.file,
     digest: "16367aacb67a4a017c8da8ab95682ccb390863780f7114dda0a0e0c55644c7c4",
@@ -140,15 +140,15 @@ test("places copied bytes, reports exact changes, and preserves address identity
   expect(filing._under({ root, prefix: "posts" })).toEqual([]);
   expect(() => filing.discard({ file: first.file })).toThrow(FileNotFound);
 
-  const replaced = filing.place({ root, path: "posts/page.md", content: bytes("second") });
+  const replaced = filing.putFile({ root, path: "posts/page.md", content: bytes("second") });
   expect(replaced).toEqual({ file: first.file, digest: changed.digest, changed: true });
 });
 
 test("reads strict UTF-8 text without consuming a BOM or exposing mutable bytes", () => {
   const filing = new FilingConcept();
-  const { root } = filing.open({ name: "content" });
+  const { root } = filing.ensureRoot({ name: "content" });
   const supplied = Uint8Array.from([0xef, 0xbb, 0xbf, ...bytes("Ada — café")]);
-  const page = filing.place({ root, path: "page.md", content: supplied });
+  const page = filing.putFile({ root, path: "page.md", content: supplied });
 
   supplied.fill(0);
   expect(filing._text({ file: page.file })).toEqual([{ text: "\uFEFFAda — café" }]);
@@ -157,7 +157,7 @@ test("reads strict UTF-8 text without consuming a BOM or exposing mutable bytes"
   observed.fill(0);
   expect(filing._text({ file: page.file })).toEqual([{ text: "\uFEFFAda — café" }]);
 
-  const empty = filing.place({ root, path: "empty.txt", content: new Uint8Array() });
+  const empty = filing.putFile({ root, path: "empty.txt", content: new Uint8Array() });
   expect(filing._text({ file: empty.file })).toEqual([{ text: "" }]);
 
   filing.discard({ file: page.file });
@@ -169,19 +169,19 @@ test("reads strict UTF-8 text without consuming a BOM or exposing mutable bytes"
 
 test("places canonical Base64 staging payloads as exact bytes", () => {
   const filing = new FilingConcept();
-  const { root } = filing.open({ name: "content" });
+  const { root } = filing.ensureRoot({ name: "content" });
   const bytes = Uint8Array.from([0, 1, 127, 128, 255]);
-  const placed = filing.placeBase64({ root, path: "binary.bin", encoded: Buffer.from(bytes).toString("base64") });
+  const placed = filing.putBase64File({ root, path: "binary.bin", encoded: Buffer.from(bytes).toString("base64") });
 
   expect(filing._file({ file: placed.file })[0]?.content).toEqual(bytes);
   for (const encoded of ["not base64", "AA", 1]) {
-    expect(() => filing.placeBase64({ root, path: "invalid.bin", encoded: encoded as string })).toThrow(InvalidEncoding);
+    expect(() => filing.putBase64File({ root, path: "invalid.bin", encoded: encoded as string })).toThrow(InvalidEncoding);
   }
 });
 
 test("strict UTF-8 text reads reject every malformed sequence without changing bytes", () => {
   const filing = new FilingConcept();
-  const { root } = filing.open({ name: "content" });
+  const { root } = filing.ensureRoot({ name: "content" });
   const malformed = [
     [0x80],
     [0xc0, 0x80],
@@ -192,7 +192,7 @@ test("strict UTF-8 text reads reject every malformed sequence without changing b
 
   for (const [index, sequence] of malformed.entries()) {
     const content = Uint8Array.from(sequence);
-    const placed = filing.place({ root, path: `bad-${index}.txt`, content });
+    const placed = filing.putFile({ root, path: `bad-${index}.txt`, content });
     expect(filing._text({ file: placed.file })).toEqual([]);
     expect(filing._file({ file: placed.file })[0]!.content).toEqual(content);
   }
@@ -200,12 +200,12 @@ test("strict UTF-8 text reads reject every malformed sequence without changing b
 
 test("refuses unknown roots, escaping paths, noncanonical paths, and non-byte content", () => {
   const filing = new FilingConcept();
-  const { root } = filing.open({ name: "content" });
+  const { root } = filing.ensureRoot({ name: "content" });
 
-  expect(() => filing.place({ root: "root:missing", path: "../x", content: bytes("x") })).toThrow(RootNotFound);
+  expect(() => filing.putFile({ root: "root:missing", path: "../x", content: bytes("x") })).toThrow(RootNotFound);
 
   for (const path of ["/absolute", "../escape", "a/../../escape"]) {
-    expect(() => filing.place({ root, path, content: bytes("x") })).toThrow(PathLeavesRoot);
+    expect(() => filing.putFile({ root, path, content: bytes("x") })).toThrow(PathLeavesRoot);
   }
 
   for (const path of [
@@ -220,16 +220,16 @@ test("refuses unknown roots, escaping paths, noncanonical paths, and non-byte co
     "cafe\u0301.md",
     "\ud800.md",
   ]) {
-    expect(() => filing.place({ root, path, content: bytes("x") })).toThrow(InvalidPath);
+    expect(() => filing.putFile({ root, path, content: bytes("x") })).toThrow(InvalidPath);
   }
 
   expect(() =>
-    filing.place({ root, path: "page.md", content: "not bytes" as unknown as Uint8Array }),
+    filing.putFile({ root, path: "page.md", content: "not bytes" as unknown as Uint8Array }),
   ).toThrow(TypeError);
   expect(filing._under({ root, prefix: "" })).toEqual([]);
 
   for (const path of [".well-known", "café.md", "names/a:b", "names/hash#tag", "names/query?tag"]) {
-    expect(filing.place({ root, path, content: bytes(path) }).changed).toBe(true);
+    expect(filing.putFile({ root, path, content: bytes(path) }).changed).toBe(true);
   }
 });
 
@@ -254,7 +254,7 @@ test("path helpers share one canonical directory grammar", () => {
 
 test("lists directory descendants in deterministic UTF-8 byte order", () => {
   const first = new FilingConcept();
-  const firstRoot = first.open({ name: "content" }).root;
+  const firstRoot = first.ensureRoot({ name: "content" }).root;
   const paths = [
     "posts/\u{10000}.md",
     "posts/\ue000.md",
@@ -264,7 +264,7 @@ test("lists directory descendants in deterministic UTF-8 byte order", () => {
     "postscript/other.md",
     "posts",
   ];
-  for (const path of paths) first.place({ root: firstRoot, path, content: bytes(path) });
+  for (const path of paths) first.putFile({ root: firstRoot, path, content: bytes(path) });
 
   const expected = ["posts/a.md", "posts/a/deep.md", "posts/z.md", "posts/\ue000.md", "posts/\u{10000}.md"];
   expect(first._under({ root: firstRoot, prefix: "posts" }).map(({ path }) => path)).toEqual(expected);
@@ -272,8 +272,8 @@ test("lists directory descendants in deterministic UTF-8 byte order", () => {
   expect(first._under({ root: "root:missing", prefix: "" })).toEqual([]);
 
   const second = new FilingConcept();
-  const secondRoot = second.open({ name: "content" }).root;
-  for (const path of [...paths].reverse()) second.place({ root: secondRoot, path, content: bytes(path) });
+  const secondRoot = second.ensureRoot({ name: "content" }).root;
+  for (const path of [...paths].reverse()) second.putFile({ root: secondRoot, path, content: bytes(path) });
   expect(second._under({ root: secondRoot, prefix: "posts" }).map(({ path }) => path)).toEqual(expected);
   expect(secondRoot).toBe(firstRoot);
   expect(second._at({ root: secondRoot, path: "posts/a.md" })[0]!.file).toBe(
@@ -283,13 +283,13 @@ test("lists directory descendants in deterministic UTF-8 byte order", () => {
 
 test("lists every held file by root in opening order and by path within a root", () => {
   const filing = new FilingConcept();
-  const content = filing.open({ name: "content" }).root;
-  const templates = filing.open({ name: "templates" }).root;
+  const content = filing.ensureRoot({ name: "content" }).root;
+  const templates = filing.ensureRoot({ name: "templates" }).root;
   expect(filing._files()).toEqual([]);
 
-  const page = filing.place({ root: templates, path: "page.html", content: bytes("page") });
-  const second = filing.place({ root: content, path: "posts/second.md", content: bytes("second") });
-  const about = filing.place({ root: content, path: "about.md", content: bytes("about") });
+  const page = filing.putFile({ root: templates, path: "page.html", content: bytes("page") });
+  const second = filing.putFile({ root: content, path: "posts/second.md", content: bytes("second") });
+  const about = filing.putFile({ root: content, path: "about.md", content: bytes("about") });
 
   expect(filing._files()).toEqual([
     { file: about.file, root: content, path: "about.md" },
@@ -306,15 +306,15 @@ test("lists every held file by root in opening order and by path within a root",
 
 test("resolves URI references within one root and reports every other outcome", () => {
   const filing = new FilingConcept();
-  const root = filing.open({ name: "content" }).root;
-  const otherRoot = filing.open({ name: "other" }).root;
-  const page = filing.place({ root, path: "posts/page.md", content: bytes("page") });
-  const picture = filing.place({ root, path: "posts/picture one.png", content: bytes("image") });
-  const shared = filing.place({ root, path: "shared.bin", content: bytes("shared") });
-  const hash = filing.place({ root, path: "posts/hash#tag.txt", content: bytes("hash") });
-  const colon = filing.place({ root, path: "posts/a:b.txt", content: bytes("colon") });
-  const query = filing.place({ root, path: "posts/query?tag.txt", content: bytes("query") });
-  filing.place({ root: otherRoot, path: "posts/picture one.png", content: bytes("other image") });
+  const root = filing.ensureRoot({ name: "content" }).root;
+  const otherRoot = filing.ensureRoot({ name: "other" }).root;
+  const page = filing.putFile({ root, path: "posts/page.md", content: bytes("page") });
+  const picture = filing.putFile({ root, path: "posts/picture one.png", content: bytes("image") });
+  const shared = filing.putFile({ root, path: "shared.bin", content: bytes("shared") });
+  const hash = filing.putFile({ root, path: "posts/hash#tag.txt", content: bytes("hash") });
+  const colon = filing.putFile({ root, path: "posts/a:b.txt", content: bytes("colon") });
+  const query = filing.putFile({ root, path: "posts/query?tag.txt", content: bytes("query") });
+  filing.putFile({ root: otherRoot, path: "posts/picture one.png", content: bytes("other image") });
 
   expect(filing._resolve({ file: page.file, address: "./picture%20one.png?download=1#preview" })).toEqual([
     { target: picture.file, path: "posts/picture one.png" },
@@ -360,17 +360,17 @@ test("registry exposes all declared refusals with their normative messages", asy
   const app = assemble({ vocabulary: concepts.vocabulary, instances: concepts.implementations(), composition: {} });
   const Filing = app.concepts.Filing;
 
-  expect(await Filing.place({ root: "missing", path: "page.md", content: bytes("x") })).toEqual({
+  expect(await Filing.putFile({ root: "missing", path: "page.md", content: bytes("x") })).toEqual({
     error: "ROOT_NOT_FOUND",
     detail: "There is no such root.",
   });
 
-  const opened = (await Filing.open({ name: "content" })) as { root: string };
-  expect(await Filing.place({ root: opened.root, path: "/page.md", content: bytes("x") })).toEqual({
+  const opened = (await Filing.ensureRoot({ name: "content" })) as { root: string };
+  expect(await Filing.putFile({ root: opened.root, path: "/page.md", content: bytes("x") })).toEqual({
     error: "PATH_LEAVES_ROOT",
     detail: "A file path must stay inside its root.",
   });
-  expect(await Filing.place({ root: opened.root, path: "./page.md", content: bytes("x") })).toEqual({
+  expect(await Filing.putFile({ root: opened.root, path: "./page.md", content: bytes("x") })).toEqual({
     error: "INVALID_PATH",
     detail: "A file path must use the canonical portable form.",
   });

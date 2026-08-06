@@ -109,7 +109,7 @@ a set of Conversions with
 ## Actions
 
 ```actions
-declare (name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)
+declareProfile (name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)
   where name, kind, extensions, raw, or separator has the wrong value kind; name is empty; or an extension is duplicated
   then
     refuse INVALID_PROFILE "This rendering profile is malformed."
@@ -150,7 +150,7 @@ convert (subject: Subject, part: Part, profile: Profile, source: JavaScriptStrin
     atomically replace the conversion for subject and part
     return its stable slot identity and output
 
-release (subject: Subject) : return (subject: Subject, count: Number)
+removeConversions (subject: Subject) : return (subject: Subject, count: Number)
   where subject is not text
   then
     refuse INVALID_SUBJECT "A conversion subject must be text."

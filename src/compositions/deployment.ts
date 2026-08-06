@@ -5,7 +5,7 @@ import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PHASE_SEQUENCE, TRUSTED_COLLECTI
 
 const {
   Cataloging,
-  Depending,
+  DependencyTracking,
   Deploying,
   Diagnosing,
   Emitting,
@@ -77,14 +77,14 @@ const SitemapUrls = former(
 
 /** Start a finite deployment queue as part of the emit phase itself. */
 export const EmitPhaseStartsDeployment = reaction(({ policy }) =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "emit", transitioned: true }))
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "emit", transitioned: true }))
     .where(Governing._publishing({}).is({ policy }))
     .then(Deploying.start({ policy })),
 );
 
 /** A required not-found page must be authored before generated routes are claimed. */
 export const MissingRequiredNotFoundPagesDiagnose = reaction(() =>
-  when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "emit", transitioned: true }))
+  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "emit", transitioned: true }))
     .where(
       Governing._deployment({}).is({ requireNotFound: true }),
       no(Routing._owner({ address: "/404.html" })),
@@ -103,11 +103,11 @@ export const ActivatedNojekyllWorkBegins = reaction(({ action, result, work, pro
       ActivatedDeploymentWork({ action, result }).is({ work }),
       Deploying._work({ work }).is({ kind: "nojekyll", producer }),
     )
-    .then(Emitting.begin({ producer })),
+    .then(Emitting.beginAttempt({ producer })),
 );
 
 export const BegunNojekyllWorkIntends = reaction(({ producer, attempt, path }) =>
-  when(Emitting.begin({ producer }).responds({ attempt }))
+  when(Emitting.beginAttempt({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ kind: "nojekyll", path }),
     )
@@ -128,19 +128,19 @@ export const ActivatedRoutedDeploymentWorkClaims = reaction(({ action, result, w
 export const GeneratedClaimsBeginDependencies = reaction(({ owner }) =>
   when(Routing.claim({ owner }).responds({}))
     .where(Deploying._forOwner({ owner }))
-    .then(Depending.begin({ subject: owner })),
+    .then(DependencyTracking.beginAttempt({ subject: owner })),
 );
 
 export const GeneratedDependenciesTrackConfiguration = reaction(({ owner, attempt }) =>
-  when(Depending.begin({ subject: owner }).responds({ attempt }))
+  when(DependencyTracking.beginAttempt({ subject: owner }).responds({ attempt }))
     .where(Deploying._forOwner({ owner }))
-    .then(Depending.use({ subject: owner, attempt, input: CONFIGURATION_PATH })),
+    .then(DependencyTracking.recordDependency({ subject: owner, attempt, input: CONFIGURATION_PATH })),
 );
 
 export const GeneratedDependenciesSettle = reaction(({ owner, attempt }) =>
-  when(Depending.use({ subject: owner, attempt, input: CONFIGURATION_PATH }).responds({}))
+  when(DependencyTracking.recordDependency({ subject: owner, attempt, input: CONFIGURATION_PATH }).responds({}))
     .where(Deploying._forOwner({ owner }))
-    .then(Depending.settle({ subject: owner, attempt })),
+    .then(DependencyTracking.settleAttempt({ subject: owner, attempt })),
 );
 
 /** Local redirect targets use routing projection and canonical origin when available. */
@@ -152,7 +152,7 @@ export const ClaimedLocalRedirectsPrepare = reaction(({ owner, work, raw, target
       AbsoluteSiteUrl({ address: raw }).is({ url: canonical }),
       compute(computations.deploymentRedirectDocument, { target, canonical }, content),
     )
-    .then(Deploying.redirect({ work, target, canonical, content })),
+    .then(Deploying.prepareRedirect({ work, target, canonical, content })),
 );
 
 export const ClaimedUnoriginatedRedirectsPrepare = reaction(({ owner, work, raw, target, content }) =>
@@ -163,7 +163,7 @@ export const ClaimedUnoriginatedRedirectsPrepare = reaction(({ owner, work, raw,
       no(AbsoluteSiteUrl({ address: raw })),
       compute(computations.deploymentRedirectDocument, { target, canonical: target }, content),
     )
-    .then(Deploying.redirect({ work, target, canonical: target, content })),
+    .then(Deploying.prepareRedirect({ work, target, canonical: target, content })),
 );
 
 export const ClaimedExternalRedirectsPrepare = reaction(({ owner, work, target, content }) =>
@@ -173,21 +173,21 @@ export const ClaimedExternalRedirectsPrepare = reaction(({ owner, work, target, 
       computations.targetHasKind({ target, kind: "external" }),
       compute(computations.deploymentRedirectDocument, { target, canonical: target }, content),
     )
-    .then(Deploying.redirect({ work, target, canonical: target, content })),
+    .then(Deploying.prepareRedirect({ work, target, canonical: target, content })),
 );
 
 export const PreparedRedirectsBegin = reaction(({ work, producer }) =>
-  when(Deploying.redirect({ work }).responds({}))
+  when(Deploying.prepareRedirect({ work }).responds({}))
     .where(Deploying._work({ work }).is({ producer }))
-    .then(Emitting.begin({ producer })),
+    .then(Emitting.beginAttempt({ producer })),
 );
 
 export const BegunRedirectsIntend = reaction(({ producer, attempt, work, address, path, content }) =>
-  when(Emitting.begin({ producer }).responds({ attempt }))
+  when(Emitting.beginAttempt({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "redirect", from: address }),
       AddressOutputPath({ address }).is({ path }),
-      earlier(Deploying.redirect, { work }, { content }),
+      earlier(Deploying.prepareRedirect, { work }, { content }),
     )
     .then(Emitting.intend({ producer, attempt, path, content, medium: "text/html" })),
 );
@@ -201,7 +201,7 @@ export const ActivatedPaginationPlansDivide = reaction(({ action, result, deploy
       Cataloging._named({ name: collectionName }).is({ catalog }),
       Templating._template({ name: templateName }).is({ template }),
     )
-    .then(Deploying.divide({ deployment, work, template, entries: CatalogEntries({ catalog }) })),
+    .then(Deploying.expandPagination({ deployment, work, template, entries: CatalogEntries({ catalog }) })),
 );
 
 export const ActivatedPaginationPlansWithoutCollectionsDiagnose = reaction(({ action, result, work, collectionName }) =>
@@ -276,12 +276,12 @@ export const ClaimedPaginationPagesPrepareContext = reaction(
           next,
         }, context),
       )
-      .then(Deploying.context({ work, context })),
+    .then(Deploying.preparePageContext({ work, context })),
 );
 
 export const PaginationContextsRender = reaction(({ work, owner, template, context }) =>
-  when(Deploying.context({ work }).responds({ owner, template, context })).then(
-    Templating.render({
+  when(Deploying.preparePageContext({ work }).responds({ owner, template, context })).then(
+    Templating.renderTemplate({
       template,
       subject: owner,
       context,
@@ -291,7 +291,7 @@ export const PaginationContextsRender = reaction(({ work, owner, template, conte
 );
 
 export const RenderedPaginationLayoutsScan = reaction(({ owner, output }) =>
-  when(Templating.render({ subject: owner }).responds({ output }))
+  when(Templating.renderTemplate({ subject: owner }).responds({ output }))
     .where(Deploying._forOwner({ owner }).is({ kind: "pagination-page" }))
     .then(Referencing.scan({ subject: owner, part: DEPLOYMENT_LAYOUT, text: output })),
 );
@@ -303,13 +303,13 @@ export const AbsoluteDeploymentLayoutReferencesRebase = reaction(({ source, refe
       computations.targetHasKind({ target: raw, kind: "absolute" }),
       SiteUrl({ target: raw }).is({ url }),
     )
-    .then(Referencing.answer({ reference, form: "address", value: url })),
+    .then(Referencing.resolve({ reference, form: "address", value: url })),
 );
 
 export const NonlocalDeploymentLayoutReferencesHold = reaction(({ source, reference, raw }) =>
   when(Referencing.scan({ part: DEPLOYMENT_LAYOUT }).responds({ source }))
     .where(HeldDeploymentLayoutReference({ source }).is({ reference, raw }))
-    .then(Referencing.answer({ reference, form: "address", value: raw })),
+    .then(Referencing.resolve({ reference, form: "address", value: raw })),
 );
 
 // These effects share an owner discovered by a state read, so they cannot form
@@ -331,7 +331,7 @@ export const UnprojectableDeploymentLayoutReferencesDiagnose = reaction(({ sourc
         message: "A generated layout reference could not be projected.",
         source: CONFIGURATION_PATH,
       }).named("diagnose"),
-      Deploying.rejectOwner({ owner }).named("reject"),
+      Deploying.rejectOwnerWork({ owner }).named("reject"),
     ),
 );
 
@@ -350,24 +350,24 @@ export const InvalidDeploymentLayoutReferencesDiagnose = reaction(({ source, own
         message: "A generated layout reference must be site-absolute, external, or fragment-only.",
         source: CONFIGURATION_PATH,
       }).named("diagnose"),
-      Deploying.rejectOwner({ owner }).named("reject"),
+      Deploying.rejectOwnerWork({ owner }).named("reject"),
     ),
 );
 
 export const EmptyPaginationLayoutScansBegin = reaction(({ owner, producer }) =>
   when(Referencing.scan({ subject: owner, part: DEPLOYMENT_LAYOUT }).responds({ completed: true }))
     .where(Deploying._forOwner({ owner }).is({ producer }))
-    .then(Emitting.begin({ producer })),
+    .then(Emitting.beginAttempt({ producer })),
 );
 
 export const FinishedPaginationLayoutAnswersBegin = reaction(({ owner, producer }) =>
-  when(Referencing.answer({}).responds({ subject: owner, part: DEPLOYMENT_LAYOUT, completed: true }))
+  when(Referencing.resolve({}).responds({ subject: owner, part: DEPLOYMENT_LAYOUT, completed: true }))
     .where(Deploying._forOwner({ owner }).is({ producer }))
-    .then(Emitting.begin({ producer })),
+    .then(Emitting.beginAttempt({ producer })),
 );
 
 export const BegunPaginationPagesIntend = reaction(({ producer, attempt, address, path, text }) =>
-  when(Emitting.begin({ producer }).responds({ attempt }))
+  when(Emitting.beginAttempt({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ kind: "pagination-page", address }),
       AddressOutputPath({ address }).is({ path }),
@@ -377,23 +377,23 @@ export const BegunPaginationPagesIntend = reaction(({ producer, attempt, address
 );
 
 export const PaginationTemplateFailuresDiagnose = reaction(({ owner, error, detail }) =>
-  when(Templating.render({ subject: owner }).refuses({ error, detail }))
+  when(Templating.renderTemplate({ subject: owner }).refuses({ error, detail }))
     .where(Deploying._forOwner({ owner }).is({ kind: "pagination-page" }))
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).responds({}))
-    .then(Deploying.rejectOwner({ owner })),
+    .then(Deploying.rejectOwnerWork({ owner })),
 );
 
 export const DeploymentReferenceScanFailuresDiagnose = reaction(({ owner, error, detail }) =>
   when(Referencing.scan({ subject: owner, part: DEPLOYMENT_LAYOUT }).refuses({ error, detail }))
     .where(Deploying._forOwner({ owner }))
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).responds({}))
-    .then(Deploying.rejectOwner({ owner })),
+    .then(Deploying.rejectOwnerWork({ owner })),
 );
 
 // This owner is also discovered by a state read, so the same non-publishable
 // partial-failure rule used above applies.
 export const DeploymentReferenceAnswerFailuresDiagnose = reaction(({ reference, error, detail, source, owner }) =>
-  when(Referencing.answer({ reference }).refuses({ error, detail }))
+  when(Referencing.resolve({ reference }).refuses({ error, detail }))
     .where(
       Referencing._reference({ reference }).is({ source }),
       Referencing._source({ source }).is({ subject: owner, part: DEPLOYMENT_LAYOUT }),
@@ -401,7 +401,7 @@ export const DeploymentReferenceAnswerFailuresDiagnose = reaction(({ reference, 
     )
     .then(
       Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).named("diagnose"),
-      Deploying.rejectOwner({ owner }).named("reject"),
+      Deploying.rejectOwnerWork({ owner }).named("reject"),
     ),
 );
 
@@ -424,11 +424,11 @@ export const SnapshottedSitemapUrlsPrepare = reaction(({ work, urls, content }) 
 export const PreparedSitemapsBegin = reaction(({ work, producer }) =>
   when(Deploying.prepareSitemap({ work }).responds({}))
     .where(Deploying._work({ work }).is({ producer }))
-    .then(Emitting.begin({ producer })),
+    .then(Emitting.beginAttempt({ producer })),
 );
 
 export const BegunSitemapsIntend = reaction(({ producer, attempt, work, path, content }) =>
-  when(Emitting.begin({ producer }).responds({ attempt }))
+  when(Emitting.beginAttempt({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "sitemap" }),
       earlier(Deploying.prepareSitemap, { work }, { path, content }),
@@ -498,11 +498,11 @@ export const InvalidFeedEntriesDiagnose = reaction(({ work }) =>
 export const PreparedFeedsBegin = reaction(({ work, producer }) =>
   when(Deploying.prepareFeed({ work }).responds({ origin: true, valid: true }))
     .where(Deploying._work({ work }).is({ producer }))
-    .then(Emitting.begin({ producer })),
+    .then(Emitting.beginAttempt({ producer })),
 );
 
 export const BegunFeedsIntend = reaction(({ producer, attempt, work, path, content }) =>
-  when(Emitting.begin({ producer }).responds({ attempt }))
+  when(Emitting.beginAttempt({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "feed" }),
       earlier(Deploying.prepareFeed, { work }, { path, content, origin: true }),
@@ -517,11 +517,11 @@ export const IntendedDeploymentArtifactsCommit = reaction(({ producer, attempt }
       CommittableDeploymentWork({ producer }),
       Emitting._open({ producer }).is({ attempt }),
     )
-    .then(Emitting.commit({ producer, attempt })),
+    .then(Emitting.commitAttempt({ producer, attempt })),
 );
 
 export const CommittedDeploymentArtifactsComplete = reaction(({ producer, attempt, work }) =>
-  when(Emitting.commit({ producer, attempt }).responds({}))
+  when(Emitting.commitAttempt({ producer, attempt }).responds({}))
     .where(
       CommittableDeploymentWork({ producer }).is({ work }),
       Emitting._attempt({ producer }).is({ attempt }),
@@ -533,18 +533,18 @@ export const GeneratedRouteCollisionsDiagnose = reaction(({ owner, detail }) =>
   when(Routing.claim({ owner }).refuses({ error: "ADDRESS_TAKEN", detail }))
     .where(Deploying._forOwner({ owner }))
     .then(Diagnosing.report({ severity: "error", code: "ROUTE_COLLISION", message: detail, source: CONFIGURATION_PATH }).responds({}))
-    .then(Deploying.rejectOwner({ owner })),
+    .then(Deploying.rejectOwnerWork({ owner })),
 );
 
 export const InvalidGeneratedRoutesDiagnose = reaction(({ owner, detail }) =>
   when(Routing.claim({ owner }).refuses({ error: "INVALID_ADDRESS", detail }))
     .where(Deploying._forOwner({ owner }))
     .then(Diagnosing.report({ severity: "error", code: "INVALID_ADDRESS", message: detail, source: CONFIGURATION_PATH }).responds({}))
-    .then(Deploying.rejectOwner({ owner })),
+    .then(Deploying.rejectOwnerWork({ owner })),
 );
 
 export const DeploymentBeginFailuresDiagnose = reaction(({ producer, work, error, detail }) =>
-  when(Emitting.begin({ producer }).refuses({ error, detail }))
+  when(Emitting.beginAttempt({ producer }).refuses({ error, detail }))
     .where(CommittableDeploymentWork({ producer }).is({ work }))
     .then(Deploying.reject({ work }).responds({}))
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
@@ -556,13 +556,13 @@ export const DeploymentIntentFailuresFailAndAbort = reaction(({ producer, attemp
       CommittableDeploymentWork({ producer }),
       Emitting._open({ producer }).is({ attempt }),
     )
-    .then(Deploying.fail({ producer, path, code: error, detail }).responds({}))
-    .then(Emitting.abort({ producer, attempt })),
+    .then(Deploying.failWork({ producer, path, code: error, detail }).responds({}))
+    .then(Emitting.abortAttempt({ producer, attempt })),
 );
 
 /** Failure state is durable before diagnostics, so interrupted reporting cannot publish. */
 export const DescribedDeploymentOutputFailuresDiagnose = reaction(({ path, code, message }) =>
-  when(Deploying.fail({ path }).responds({ code, message })).then(
+  when(Deploying.failWork({ path }).responds({ code, message })).then(
     Diagnosing.report({
       severity: "error",
       code,
@@ -575,10 +575,10 @@ export const DescribedDeploymentOutputFailuresDiagnose = reaction(({ path, code,
 export const DeploymentOutputFailuresRelateProducers = reaction(({ diagnostic, path, producer }) =>
   when(Diagnosing.report({ code: "PATH_CONTESTED" }).responds({ diagnostic }))
     .where(
-      earlier(Deploying.fail, {}, { path }),
+      earlier(Deploying.failWork, {}, { path }),
       Emitting._producers({ path }).is({ producer }),
     )
-    .then(Diagnosing.relate({
+    .then(Diagnosing.addRelatedLocation({
       diagnostic,
       source: producer,
       note: "Competing output producer.",
@@ -586,7 +586,7 @@ export const DeploymentOutputFailuresRelateProducers = reaction(({ diagnostic, p
 );
 
 export const DeploymentCommitFailuresDiagnose = reaction(({ producer, attempt, work, error, detail }) =>
-  when(Emitting.commit({ producer, attempt }).refuses({ error, detail }))
+  when(Emitting.commitAttempt({ producer, attempt }).refuses({ error, detail }))
     .where(
       CommittableDeploymentWork({ producer }).is({ work }),
       Emitting._open({ producer }).is({ attempt }),

@@ -23,10 +23,10 @@ function taskText(value: unknown): string {
 }
 
 /** Keep aggregate answer arbitration local to one task identity. */
-export class DeliveringConcept {
+export class DeliveryArbitrationConcept {
   readonly #deliveries = new Map<string, Delivery>();
 
-  begin({ task }: { task: unknown }) {
+  beginDelivery({ task }: { task: unknown }) {
     const identity = taskText(task);
     const delivery = this.#deliveries.get(identity);
     if (delivery?.active) return { task: identity, changed: false };
@@ -34,7 +34,7 @@ export class DeliveringConcept {
     return { task: identity, changed: true };
   }
 
-  interrupt({ task }: { task: unknown }) {
+  recordInterruption({ task }: { task: unknown }) {
     const identity = taskText(task);
     const delivery = this.#deliveries.get(identity);
     if (delivery?.interrupted) return { task: identity, changed: false };

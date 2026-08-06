@@ -34,14 +34,14 @@ export const OpenSiteWatch = endpoint("/watch/open", ({ directory, settling, out
       computations.isTextValue({ value: output }),
       PublicationTransactionPrefix({ destination: output }).is({ prefix }),
     )
-    .then(Watching.observe({ directory, settling, excluded: output, prefix }).responds({ watch }))
+    .then(Watching.open({ directory, settling, excluded: output, prefix }).responds({ watch }))
     .then(respond({ watch })),
   { validators: { input: validOpenWatchInput } },
 );
 
 export const AttendSiteWatch = endpoint("/watch/attend", ({ watch, within, changed, watching }) =>
   receive({ watch, within })
-    .then(Watching.attend({ watch, within }).responds({ changed, watching }))
+    .then(Watching.waitForChange({ watch, within }).responds({ changed, watching }))
     .then(respond({ changed, watching })),
 );
 

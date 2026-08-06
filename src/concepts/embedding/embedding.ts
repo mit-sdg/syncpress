@@ -269,7 +269,7 @@ export class EmbeddingConcept {
     return { embedding, changed: true, completed: expects === 0 };
   }
 
-  offer({ embedding, address, format, width, order }: OfferInput) {
+  provideCandidate({ embedding, address, format, width, order }: OfferInput) {
     requireText(embedding);
     const record = this.#embeddingsByID.get(embedding);
     if (record === undefined) throw new EmbeddingNotFound();

@@ -223,7 +223,7 @@ scan (subject: Subject, part: Part, text: Text) : return (source: Source, count:
     return source, how many references were added, whether a source was replaced,
       and completed true exactly when count is zero
 
-answer (reference: Reference, form: Form, value: Text) : return (reference: Reference, source: Source, subject: Subject, part: Part, changed: Flag, completed: Flag)
+resolve (reference: Reference, form: Form, value: Text) : return (reference: Reference, source: Source, subject: Subject, part: Part, changed: Flag, completed: Flag)
   where reference or value is not Text
   then
     refuse INVALID_TEXT "Subjects, parts, identities, HTML, and answers must be well-formed text."

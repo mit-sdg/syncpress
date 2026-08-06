@@ -25,14 +25,14 @@ describe("Commanding", () => {
   test("its principle: an invocation can be read, answered, and assigned an outcome", () => {
     const { commanding, exits, written } = recorded(["publish", "notes"]);
 
-    expect(commanding.capture({ arguments: null })).toEqual({ words: ["publish", "notes"] });
-    expect(commanding.capture({ arguments: null })).toEqual({ words: ["publish", "notes"] });
-    expect(() => commanding.capture({ arguments: ["inspect", "entry"] })).toThrow(InvocationCaptured);
-    commanding.write({ stream: "output", text: "Published notes." });
-    commanding.write({ stream: "error", text: "One entry was skipped." });
-    expect(commanding.exit({ code: 2 })).toEqual({ code: 2, changed: true });
-    expect(commanding.exit({ code: 2 })).toEqual({ code: 2, changed: false });
-    expect(() => commanding.exit({ code: 1 })).toThrow(ExitSelected);
+    expect(commanding.captureArguments({ arguments: null })).toEqual({ words: ["publish", "notes"] });
+    expect(commanding.captureArguments({ arguments: null })).toEqual({ words: ["publish", "notes"] });
+    expect(() => commanding.captureArguments({ arguments: ["inspect", "entry"] })).toThrow(InvocationCaptured);
+    commanding.writeLine({ stream: "output", text: "Published notes." });
+    commanding.writeLine({ stream: "error", text: "One entry was skipped." });
+    expect(commanding.setExitStatus({ code: 2 })).toEqual({ code: 2, changed: true });
+    expect(commanding.setExitStatus({ code: 2 })).toEqual({ code: 2, changed: false });
+    expect(() => commanding.setExitStatus({ code: 1 })).toThrow(ExitSelected);
 
     expect(written).toEqual([
       ["output", "Published notes."],
@@ -46,7 +46,7 @@ describe("Commanding", () => {
   test("captures only ordinary dense text lists and returns a copy", () => {
     const { commanding } = recorded();
     const words = ["build"];
-    const captured = commanding.capture({ arguments: words });
+    const captured = commanding.captureArguments({ arguments: words });
     words.push("later");
     expect(captured).toEqual({ words: ["build"] });
 
@@ -54,20 +54,20 @@ describe("Commanding", () => {
     const extra = ["build"] as string[] & { option?: string };
     extra.option = "watch";
     for (const value of [sparse, extra, ["build", 1]]) {
-      expect(() => commanding.capture({ arguments: value as string[] })).toThrow(InvalidArguments);
+      expect(() => commanding.captureArguments({ arguments: value as string[] })).toThrow(InvalidArguments);
     }
   });
 
   test("validates stream names and text before writing", () => {
     const { commanding, written } = recorded();
-    expect(() => commanding.write({ stream: "log", text: "hello" })).toThrow(InvalidStream);
-    expect(() => commanding.write({ stream: "output", text: "\ud800" })).toThrow(InvalidText);
+    expect(() => commanding.writeLine({ stream: "log", text: "hello" })).toThrow(InvalidStream);
+    expect(() => commanding.writeLine({ stream: "output", text: "\ud800" })).toThrow(InvalidText);
     expect(written).toEqual([]);
   });
 
   test("validates exit status before changing the environment", () => {
     const { commanding, exits } = recorded();
-    for (const code of [-1, 1.5, 256]) expect(() => commanding.exit({ code })).toThrow(InvalidExitCode);
+    for (const code of [-1, 1.5, 256]) expect(() => commanding.setExitStatus({ code })).toThrow(InvalidExitCode);
     expect(exits).toEqual([]);
   });
 

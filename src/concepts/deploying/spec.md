@@ -132,7 +132,7 @@ reject (work: Work) : return (deployment: Deployment, work?: Work, completed: Fl
   then
     make it failed, advance, and atomically activate and return the next work or completed true
 
-rejectOwner (owner: Owner) : return (deployment: Deployment, work?: Work, completed: Flag)
+rejectOwnerWork (owner: Owner) : return (deployment: Deployment, work?: Work, completed: Flag)
   where the latest deployment has no current work for owner
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -143,7 +143,7 @@ rejectOwner (owner: Owner) : return (deployment: Deployment, work?: Work, comple
   then
     reject it and atomically activate and return the next work or completed true
 
-rejectProducer (producer: Producer) : return (deployment: Deployment, work?: Work, completed: Flag)
+rejectProducerWork (producer: Producer) : return (deployment: Deployment, work?: Work, completed: Flag)
   where the latest deployment has no current work for producer
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -154,7 +154,7 @@ rejectProducer (producer: Producer) : return (deployment: Deployment, work?: Wor
   then
     reject it and atomically activate and return the next work or completed true
 
-divide (deployment: Deployment, work: Work, template: Template, entries: Entries) : return (deployment: Deployment, work: Work, pages: Number)
+expandPagination (deployment: Deployment, work: Work, template: Template, entries: Entries) : return (deployment: Deployment, work: Work, pages: Number)
   where entries are not a dense list of structured-cloneable identified cards with routed URLs
   then
     refuse INVALID_ENTRIES "Deployment entries must be a dense list of structured-cloneable identified cards."
@@ -168,7 +168,7 @@ divide (deployment: Deployment, work: Work, template: Template, entries: Entries
   then
     replace it atomically with at least one ordered pending page, activate the first page, and return it
 
-redirect (work: Work, target: Url, canonical: Url, content: Text) : return (content: Text)
+prepareRedirect (work: Work, target: Url, canonical: Url, content: Text) : return (content: Text)
   where work is not current
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -185,7 +185,7 @@ redirect (work: Work, target: Url, canonical: Url, content: Text) : return (cont
   then
     make it prepared and return the independently computed content
 
-context (work: Work, context: Value) : return (owner: Owner, template: Template, context: Value)
+preparePageContext (work: Work, context: Value) : return (owner: Owner, template: Template, context: Value)
   where work is not current
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -259,7 +259,7 @@ prepareSitemap (work: Work, content: Text) : return (path: Path, content: Text)
   then
     make it prepared and return its path and independently computed content
 
-fail (producer: Producer, path: Path, code: Code, detail: Text) : return (deployment: Deployment, work?: Work, completed: Flag, path: Path, code: Code, message: Text)
+failWork (producer: Producer, path: Path, code: Code, detail: Text) : return (deployment: Deployment, work?: Work, completed: Flag, path: Path, code: Code, message: Text)
   where the latest deployment has no current work for producer
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."

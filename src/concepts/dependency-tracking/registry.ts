@@ -1,9 +1,9 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { AttemptExhausted, DependingConcept, InvalidText, NotBuilding, StaleAttempt } from "./depending.ts";
+import { AttemptExhausted, DependencyTrackingConcept, InvalidText, NotBuilding, StaleAttempt } from "./dependency-tracking.ts";
 import spec from "./spec.md" with { type: "text" };
 
-export const depending = registerConcept({
-  class: DependingConcept,
+export const dependencyTracking = registerConcept({
+  class: DependencyTrackingConcept,
   spec,
   refusals: {
     ATTEMPT_EXHAUSTED: AttemptExhausted,

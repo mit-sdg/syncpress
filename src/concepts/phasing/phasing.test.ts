@@ -13,8 +13,8 @@ import {
 } from "./phasing.ts";
 import { phasing as registration } from "./registry.ts";
 
-function advance(phasing: PhasingConcept, cursor: { job: string; attempt: string }) {
-  const result = phasing.advance(cursor);
+function completePhase(phasing: PhasingConcept, cursor: { job: string; attempt: string }) {
+  const result = phasing.completePhase(cursor);
   if (result.attempt !== null) cursor.attempt = result.attempt;
   return result;
 }
@@ -35,10 +35,10 @@ test("its principle: exact attempts move independent sequences without duplicate
   expect(first).toMatchObject({ phase: "draft" });
   expect(second).toMatchObject({ phase: "draft" });
   const draftAttempt = first.attempt;
-  const reviewed = advance(phasing, first);
+  const reviewed = completePhase(phasing, first);
   expect(reviewed).toMatchObject({ job: first.job, phase: "review", transitioned: true });
-  expect(phasing.advance({ job: first.job, attempt: draftAttempt })).toEqual({ ...reviewed, transitioned: false });
-  expect(advance(phasing, first)).toMatchObject({ job: first.job, phase: "publish", transitioned: true });
+  expect(phasing.completePhase({ job: first.job, attempt: draftAttempt })).toEqual({ ...reviewed, transitioned: false });
+  expect(completePhase(phasing, first)).toMatchObject({ job: first.job, phase: "publish", transitioned: true });
   expect(phasing._job({ job: second.job })).toEqual([{
     sequence: otherSequence,
     name: "translation",
@@ -47,9 +47,9 @@ test("its principle: exact attempts move independent sequences without duplicate
     state: "running",
   }]);
 
-  const finished = advance(phasing, first);
+  const finished = completePhase(phasing, first);
   expect(finished).toEqual({ job: first.job, name: "article", phase: null, attempt: null, transitioned: true });
-  expect(phasing.advance(first)).toEqual({ ...finished, transitioned: false });
+  expect(phasing.completePhase(first)).toEqual({ ...finished, transitioned: false });
   expect(phasing._job({ job: first.job })).toEqual([{
     sequence: declared.sequence,
     name: "article",
@@ -67,7 +67,7 @@ test("its principle: exact attempts move independent sequences without duplicate
   expect(() => phasing.abandon({ job: second.job, attempt: second.attempt, reason: "again" })).toThrow(JobNotRunning);
 });
 
-test("advance announces seven barriers exactly once after a starting phase", () => {
+test("completePhase announces seven barriers exactly once after a starting phase", () => {
   const phasing = new PhasingConcept();
   const barriers = Array.from({ length: 7 }, (_, index) => `step-${index + 1}`);
   const sequence = phasing.declare({ name: "seven steps", phases: ["waiting", ...barriers] }).sequence;
@@ -76,7 +76,7 @@ test("advance announces seven barriers exactly once after a starting phase", () 
   expect(started.phase).toBe("waiting");
 
   while (true) {
-    const { phase } = advance(phasing, started);
+    const { phase } = completePhase(phasing, started);
     if (phase === null) break;
     announced.push(phase);
   }
@@ -104,13 +104,13 @@ test("changed declarations affect new jobs but running jobs keep their starting 
   });
   expect(() => phasing.start({ sequence: declared.sequence })).toThrow(SequenceActive);
 
-  expect(advance(phasing, oldJob).phase).toBe("two");
-  expect(advance(phasing, oldJob).phase).toBe("three");
-  expect(advance(phasing, oldJob).phase).toBeNull();
+  expect(completePhase(phasing, oldJob).phase).toBe("two");
+  expect(completePhase(phasing, oldJob).phase).toBe("three");
+  expect(completePhase(phasing, oldJob).phase).toBeNull();
   const newJob = phasing.start({ sequence: declared.sequence });
   expect(newJob.phase).toBe("new");
-  expect(advance(phasing, newJob).phase).toBe("done");
-  expect(advance(phasing, newJob).phase).toBeNull();
+  expect(completePhase(phasing, newJob).phase).toBe("done");
+  expect(completePhase(phasing, newJob).phase).toBeNull();
 });
 
 test("empty and repeated phases are refused without replacing a valid plan", () => {
@@ -160,7 +160,7 @@ test("actions validate text and exact attempts without corrupting running jobs",
   expect(() => phasing.start({ sequence: 1 as unknown as string })).toThrow(SequenceNotFound);
 
   const started = phasing.start({ sequence });
-  expect(() => phasing.advance({ job: started.job, attempt: "stale" })).toThrow(StaleAttempt);
+  expect(() => phasing.completePhase({ job: started.job, attempt: "stale" })).toThrow(StaleAttempt);
   expect(() => phasing.abandon({ job: started.job, attempt: "stale", reason: "stop" })).toThrow(StaleAttempt);
   expect(() => phasing.abandon({ job: started.job, attempt: started.attempt, reason: 1 })).toThrow(InvalidText);
   expect(() => phasing.abandon({ job: started.job, attempt: started.attempt, reason: "\ud800" })).toThrow(InvalidText);
@@ -171,13 +171,13 @@ test("actions validate text and exact attempts without corrupting running jobs",
     attempt: started.attempt,
     state: "running",
   }]);
-  expect(advance(phasing, started).phase).toBe("two");
+  expect(completePhase(phasing, started).phase).toBe("two");
 });
 
 test("unknown jobs are refused by actions and absent from optional queries", () => {
   const phasing = new PhasingConcept();
-  expect(() => phasing.advance({ job: "missing", attempt: "missing" })).toThrow(JobNotRunning);
-  expect(() => phasing.advance({ job: null as unknown as string, attempt: "missing" })).toThrow(JobNotRunning);
+  expect(() => phasing.completePhase({ job: "missing", attempt: "missing" })).toThrow(JobNotRunning);
+  expect(() => phasing.completePhase({ job: null as unknown as string, attempt: "missing" })).toThrow(JobNotRunning);
   expect(() => phasing.abandon({ job: "missing", attempt: "missing", reason: 1 })).toThrow(JobNotRunning);
   expect(phasing._job({ job: "missing" })).toEqual([]);
   expect(phasing._job({ job: null as never })).toEqual([]);
@@ -195,7 +195,7 @@ test("running and latest jobs are scoped to their sequence", () => {
   expect(phasing._running({ sequence: firstSequence })).toEqual([
     { job: first.job, name: "first", phase: first.phase, attempt: first.attempt },
   ]);
-  advance(phasing, first);
+  completePhase(phasing, first);
   expect(phasing._running({ sequence: firstSequence })).toEqual([]);
   expect(phasing._latest({ sequence: firstSequence })).toEqual([{
     job: first.job,

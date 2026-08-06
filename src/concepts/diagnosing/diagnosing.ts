@@ -180,7 +180,7 @@ export class DiagnosingConcept {
     return { diagnostic };
   }
 
-  relate({
+  addRelatedLocation({
     diagnostic,
     source,
     line,
@@ -218,7 +218,7 @@ export class DiagnosingConcept {
     return { relation };
   }
 
-  retract({ scope, source }: { scope?: unknown; source?: unknown }) {
+  retractGroup({ scope, source }: { scope?: unknown; source?: unknown }) {
     const normalizedScope = optionalText(scope);
     const normalizedSource = optionalText(source);
     let count = 0;

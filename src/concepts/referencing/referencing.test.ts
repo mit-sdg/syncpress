@@ -206,7 +206,7 @@ test("serializes hostile address answers safely for quoted, unquoted, empty, val
   const values = ["old&x", `q\" '&<>`, `/app.js?x=\"&`, "/empty path?x='", `a\"&.png`, "b'<.png"];
 
   const outcomes = references.map((reference, index) =>
-    referencing.answer({ reference: reference.reference, form: "address", value: values[index]! }),
+    referencing.resolve({ reference: reference.reference, form: "address", value: values[index]! }),
   );
   expect(outcomes.slice(0, -1).every(({ completed }) => !completed)).toBe(true);
   expect(outcomes.at(-1)).toMatchObject({ changed: true, completed: true });
@@ -229,14 +229,14 @@ test("refuses overlapping markup and trusts one non-overlapping whole-element re
   const [outer, primary, candidate, separate] = referencing._references({ source: scanned.source });
   const innerMarkup = `<picture data-safe="'&"><img></picture>`;
 
-  referencing.answer({ reference: primary!.reference, form: "markup", value: innerMarkup });
-  expect(() => referencing.answer({ reference: candidate!.reference, form: "markup", value: "<other></other>" })).toThrow(OverlappingMarkup);
-  expect(() => referencing.answer({ reference: outer!.reference, form: "markup", value: "<outer></outer>" })).toThrow(OverlappingMarkup);
+  referencing.resolve({ reference: primary!.reference, form: "markup", value: innerMarkup });
+  expect(() => referencing.resolve({ reference: candidate!.reference, form: "markup", value: "<other></other>" })).toThrow(OverlappingMarkup);
+  expect(() => referencing.resolve({ reference: outer!.reference, form: "markup", value: "<outer></outer>" })).toThrow(OverlappingMarkup);
   expect(referencing._unanswered({ source: scanned.source }).map(({ reference }) => reference)).toContain(candidate!.reference);
 
-  referencing.answer({ reference: outer!.reference, form: "address", value: "/outer" });
-  referencing.answer({ reference: candidate!.reference, form: "address", value: "/two.png" });
-  const completed = referencing.answer({
+  referencing.resolve({ reference: outer!.reference, form: "address", value: "/outer" });
+  referencing.resolve({ reference: candidate!.reference, form: "address", value: "/two.png" });
+  const completed = referencing.resolve({
     reference: separate!.reference,
     form: "markup",
     value: `<trusted data-x="'&"></trusted>`,
@@ -259,24 +259,24 @@ test("makes completion terminal while keeping identical repeated answers idempot
   const scanned = referencing.scan({ subject: "page", part: "answers", text: '<a href="one">One</a><a href="two">Two</a>' });
   const [first, second] = referencing._references({ source: scanned.source });
   expect(scanned.completed).toBe(false);
-  expect(referencing.answer({ reference: first!.reference, form: "address", value: "/one" })).toMatchObject({
+  expect(referencing.resolve({ reference: first!.reference, form: "address", value: "/one" })).toMatchObject({
     changed: true,
     completed: false,
   });
-  expect(referencing.answer({ reference: first!.reference, form: "address", value: "/one" })).toMatchObject({
+  expect(referencing.resolve({ reference: first!.reference, form: "address", value: "/one" })).toMatchObject({
     changed: false,
     completed: false,
   });
-  expect(referencing.answer({ reference: second!.reference, form: "address", value: "/two" })).toMatchObject({
+  expect(referencing.resolve({ reference: second!.reference, form: "address", value: "/two" })).toMatchObject({
     changed: true,
     completed: true,
   });
-  expect(referencing.answer({ reference: first!.reference, form: "address", value: "/one" })).toMatchObject({
+  expect(referencing.resolve({ reference: first!.reference, form: "address", value: "/one" })).toMatchObject({
     changed: false,
     completed: false,
   });
-  expect(() => referencing.answer({ reference: first!.reference, form: "address", value: "/one-corrected" })).toThrow(SourceFinished);
-  expect(() => referencing.answer({ reference: first!.reference, form: "markup", value: "/one" })).toThrow(SourceFinished);
+  expect(() => referencing.resolve({ reference: first!.reference, form: "address", value: "/one-corrected" })).toThrow(SourceFinished);
+  expect(() => referencing.resolve({ reference: first!.reference, form: "markup", value: "/one" })).toThrow(SourceFinished);
   expect(referencing._finished({ subject: "page", part: "answers" })[0]!.text).toBe(
     '<a href="/one">One</a><a href="/two">Two</a>',
   );
@@ -297,11 +297,11 @@ test("rescans and drops atomically while keeping punctuation-heavy subjects and 
   const replacementReference = referencing._references({ source: replacement.source })[0]!.reference;
   expect(replacement).toMatchObject({ source: first.source, count: 1, replaced: true, completed: false });
   expect(replacementReference).not.toBe(oldReference);
-  expect(() => referencing.answer({ reference: oldReference, form: "address", value: "/old" })).toThrow(ReferenceNotFound);
+  expect(() => referencing.resolve({ reference: oldReference, form: "address", value: "/old" })).toThrow(ReferenceNotFound);
 
   expect(referencing.drop({ subject: "a:b", part: "c" })).toEqual({ source: first.source, count: 1, dropped: true });
   expect(referencing._source({ source: first.source })).toEqual([]);
-  expect(() => referencing.answer({ reference: replacementReference, form: "address", value: "/new" })).toThrow(ReferenceNotFound);
+  expect(() => referencing.resolve({ reference: replacementReference, form: "address", value: "/new" })).toThrow(ReferenceNotFound);
   expect(referencing.drop({ subject: "a:b", part: "c" })).toEqual({ source: first.source, count: 0, dropped: false });
 
   const restored = referencing.scan({ subject: "a:b", part: "c", text: '<img src="new.png">' });
@@ -321,9 +321,9 @@ test("uses HTML recovery without inventing references and rewrites source-backed
     { raw: "two.png", role: "image" },
     { raw: "poster.jpg", role: "poster" },
   ]);
-  referencing.answer({ reference: references[0]!.reference, form: "address", value: "/ONE" });
-  referencing.answer({ reference: references[1]!.reference, form: "address", value: "/two" });
-  referencing.answer({ reference: references[2]!.reference, form: "address", value: "/poster" });
+  referencing.resolve({ reference: references[0]!.reference, form: "address", value: "/ONE" });
+  referencing.resolve({ reference: references[1]!.reference, form: "address", value: "/two" });
+  referencing.resolve({ reference: references[2]!.reference, form: "address", value: "/poster" });
   expect(referencing._finished({ subject: "page", part: "malformed" })[0]!.text).toBe(
     '<div><a href="/ONE">One<img src="/two" src=ignored><p><video poster="/poster">',
   );
@@ -337,19 +337,19 @@ test("validates action inputs and leaves queries total for invalid lookup values
   expect(() => referencing.scan({ subject: 1 as unknown as string, part: "body", text: "" })).toThrow(InvalidText);
   expect(() => referencing.scan({ subject: "page", part: "body", text: "\uD800" })).toThrow(InvalidText);
   expect(() => referencing.drop({ subject: "page", part: null as unknown as string })).toThrow(InvalidText);
-  expect(() => referencing.answer({ reference: "missing", form: "other" as never, value: "x" })).toThrow(InvalidForm);
-  expect(() => referencing.answer({ reference: "missing", form: "address", value: 1 as unknown as string })).toThrow(InvalidText);
-  expect(() => referencing.answer({ reference: "missing", form: "address", value: "x" })).toThrow(ReferenceNotFound);
+  expect(() => referencing.resolve({ reference: "missing", form: "other" as never, value: "x" })).toThrow(InvalidForm);
+  expect(() => referencing.resolve({ reference: "missing", form: "address", value: 1 as unknown as string })).toThrow(InvalidText);
+  expect(() => referencing.resolve({ reference: "missing", form: "address", value: "x" })).toThrow(ReferenceNotFound);
 
   const scalar = referencing.scan({ subject: "page", part: "scalar", text: '<a href="old">Old</a>' });
   const scalarReference = referencing._references({ source: scalar.source })[0]!;
-  expect(() => referencing.answer({ reference: scalarReference.reference, form: "address", value: "bad\0address" })).toThrow(
+  expect(() => referencing.resolve({ reference: scalarReference.reference, form: "address", value: "bad\0address" })).toThrow(
     UnrepresentableAddress,
   );
   const set = referencing.scan({ subject: "page", part: "set", text: '<img srcset="old.png 1x">' });
   const candidate = referencing._references({ source: set.source })[0]!;
   for (const value of ["", ",leading.png", "trailing.png,", "one.png 1x, injected.png"]) {
-    expect(() => referencing.answer({ reference: candidate.reference, form: "address", value })).toThrow(UnrepresentableAddress);
+    expect(() => referencing.resolve({ reference: candidate.reference, form: "address", value })).toThrow(UnrepresentableAddress);
   }
   expect(referencing._unanswered({ source: scalar.source })).toHaveLength(1);
   expect(referencing._unanswered({ source: set.source })).toHaveLength(1);
@@ -391,11 +391,11 @@ test("registry exposes every declared refusal with its normative message", async
     error: "INVALID_TEXT",
     detail: "Subjects, parts, identities, HTML, and answers must be well-formed text.",
   });
-  expect(await app.concepts.Referencing.answer({ reference: "missing", form: "bad" as never, value: "x" })).toEqual({
+  expect(await app.concepts.Referencing.resolve({ reference: "missing", form: "bad" as never, value: "x" })).toEqual({
     error: "INVALID_FORM",
     detail: "Answer form must be address or markup.",
   });
-  expect(await app.concepts.Referencing.answer({ reference: "missing", form: "address", value: "x" })).toEqual({
+  expect(await app.concepts.Referencing.resolve({ reference: "missing", form: "address", value: "x" })).toEqual({
     error: "REFERENCE_NOT_FOUND",
     detail: "There is no such reference.",
   });
