@@ -1,4 +1,5 @@
 import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Node } from "yaml";
+import { isPortableGlob } from "../../compositions/computations.ts";
 
 export type ConfigurationProblem = {
   code: "INVALID_CONFIGURATION";
@@ -72,6 +73,8 @@ type Mapping = Map<string, Node | null>;
 const TOP_LEVEL_KEYS = new Set(["site", "paths", "defaults", "collections", "images", "markdown", "deploy"]);
 const PATH_KEYS = new Set<keyof SitePolicy["paths"]>(["content", "templates", "public", "assets", "output"]);
 const DEPLOY_KEYS = new Set(["nojekyll", "requireNotFound", "sitemap", "feed", "redirects", "pagination"]);
+const SORT_KEYS = new Set(["by", "order"]);
+const CONDITION_KEYS = new Set(["field", "equals", "contains", "exists"]);
 const DEFAULT_PATHS = {
   content: "content",
   templates: "templates",
@@ -88,6 +91,7 @@ const DEFAULT_IMAGES = { widths: [480, 960, 1440], formats: ["avif", "webp", "or
 const addressEncoder = new TextEncoder();
 const literalAddressCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@-]$/;
 const forbiddenAddressSegmentCharacter = /[\\/\u0000-\u001f\u007f]/u;
+const catalogFieldPattern = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
 
 function addressText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();
@@ -142,6 +146,17 @@ function canonicalOrigin(value: unknown): string | undefined {
   return (parsed.protocol === "http:" || parsed.protocol === "https:") && parsed.origin === value.replace(/\/$/, "")
     ? parsed.origin
     : undefined;
+}
+
+function catalogField(value: string): boolean {
+  return addressText(value) && catalogFieldPattern.test(value);
+}
+
+function catalogValue(value: SiteValue): boolean {
+  if (typeof value === "string") return addressText(value);
+  if (value === null || typeof value !== "object") return true;
+  if (Array.isArray(value)) return value.every(catalogValue);
+  return Object.entries(value).every(([key, member]) => addressText(key) && catalogValue(member));
 }
 
 export class InvalidConfiguration extends Error {
@@ -315,6 +330,7 @@ function parseDefaults(node: Node | null | undefined, problems: ConfigurationPro
     }
     const match = stringValue(entries, "match", undefined, problems, counter);
     if (match === undefined) problem(problems, counter, rule as Node | null, "Each defaults entry needs a match string.");
+    else if (!isPortableGlob(match)) problem(problems, counter, entries.get("match"), `defaults[${index}].match must be a valid portable glob.`);
     const values = entries.get("values");
     const normalizedValues = normalizedMapping(values);
     if (normalizedValues === undefined) problem(problems, counter, values, "Each defaults entry needs a values mapping.");
@@ -340,6 +356,8 @@ function parseCollections(node: Node | null | undefined, problems: Configuration
     const match = stringValue(rule, "match", undefined, problems, counter);
     if (match === undefined) {
       problem(problems, counter, ruleNode, `collections.${name} needs a match string.`);
+    } else if (!isPortableGlob(match)) {
+      problem(problems, counter, rule.get("match"), `collections.${name}.match must be a valid portable glob.`);
     }
     let sortBy: string | null = null;
     let direction: "asc" | "desc" = "asc";
@@ -349,7 +367,12 @@ function parseCollections(node: Node | null | undefined, problems: Configuration
       if (values === undefined) {
         problem(problems, counter, sort, `collections.${name}.sort must be a mapping.`);
       } else {
-        sortBy = stringValue(values, "by", undefined, problems, counter) ?? null;
+        checkKnownKeys(values, SORT_KEYS, `collections.${name}.sort`, problems, counter);
+        const by = stringValue(values, "by", undefined, problems, counter);
+        if (!values.has("by")) problem(problems, counter, sort, `collections.${name}.sort needs a by field.`);
+        else if (by !== undefined && !catalogField(by)) {
+          problem(problems, counter, values.get("by"), `collections.${name}.sort.by must use dotted ASCII segments.`);
+        } else if (by !== undefined) sortBy = by;
         const order = stringValue(values, "order", "asc", problems, counter);
         if (order !== "asc" && order !== "desc") problem(problems, counter, values.get("order"), "sort.order must be asc or desc.");
         else direction = order;
@@ -362,19 +385,24 @@ function parseCollections(node: Node | null | undefined, problems: Configuration
       if (values === undefined) {
         problem(problems, counter, where, `collections.${name}.where must be a mapping.`);
       } else {
+        checkKnownKeys(values, CONDITION_KEYS, `collections.${name}.where`, problems, counter);
         const field = stringValue(values, "field", undefined, problems, counter);
         if (field === undefined) problem(problems, counter, where, `collections.${name}.where needs a field string.`);
+        else if (!catalogField(field)) {
+          problem(problems, counter, values.get("field"), `collections.${name}.where.field must use dotted ASCII segments.`);
+        }
         const predicates = ["equals", "contains", "exists"].filter((key) => values.has(key));
         if (predicates.length !== 1) problem(problems, counter, where, `collections.${name}.where needs exactly one predicate.`);
-        if (values.has("exists") && booleanValue(values, "exists", false, problems, counter) !== true) {
+        const validExists = !values.has("exists") || booleanValue(values, "exists", false, problems, counter) === true;
+        if (!validExists) {
           problem(problems, counter, values.get("exists"), "where.exists must be true.");
         }
-        if (field !== undefined && predicates.length === 1) {
+        if (field !== undefined && catalogField(field) && predicates.length === 1 && validExists) {
           const predicate = predicates[0]!;
           if (predicate === "exists") condition = { test: "exists", field };
           else {
             const value = normalizeNode(values.get(predicate));
-            if (value === undefined) {
+            if (value === undefined || !catalogValue(value)) {
               problem(
                 problems,
                 counter,
@@ -596,14 +624,17 @@ export function parseSitePolicy(source: string): { policy: SitePolicy; problems:
     problem(problems, counter, root.get("site"), "site must contain only supported configuration values.");
   }
   const siteValues = normalizedSite ?? {};
+  let declaredOrigin: string | undefined;
   if (site !== undefined) {
     const base = stringValue(site, "basePath", "/", problems, counter);
     if (parseAddress(base)?.directory !== true) {
       problem(problems, counter, site.get("basePath"), "site.basePath must be a canonical directory address.");
     }
-    const declaredOrigin = stringValue(site, "origin", undefined, problems, counter);
-    if (declaredOrigin !== undefined && canonicalOrigin(declaredOrigin) === undefined) {
-      problem(problems, counter, site.get("origin"), "site.origin must be a canonical HTTP or HTTPS origin.");
+    declaredOrigin = stringValue(site, "origin", undefined, problems, counter);
+    if (declaredOrigin !== undefined) {
+      const origin = canonicalOrigin(declaredOrigin);
+      if (origin === undefined) problem(problems, counter, site.get("origin"), "site.origin must be a canonical HTTP or HTTPS origin.");
+      else defineValue(siteValues, "origin", origin);
     }
   }
 
@@ -622,8 +653,7 @@ export function parseSitePolicy(source: string): { policy: SitePolicy; problems:
   const feed = parseFeed(deploy?.get("feed"), problems, counter);
   const redirects = parseRedirects(deploy?.get("redirects"), problems, counter);
   const pagination = parsePagination(deploy?.get("pagination"), problems, counter);
-  const origin = stringValue(site, "origin", undefined, problems, counter);
-  if ((sitemap || feed !== undefined) && origin === undefined) {
+  if ((sitemap || feed !== undefined) && declaredOrigin === undefined) {
     problem(problems, counter, deployNode ?? document.contents, "site.origin is required when sitemap or feed generation is enabled.");
   }
 
@@ -675,6 +705,12 @@ export class GoverningConcept {
 
   _paths(): { content: string; templates: string; public: string; assets: string; output: string }[] {
     return this.#valid(({ paths }) => ({ ...paths }));
+  }
+
+  _sources(): SiteSource[] {
+    return this.#assessment === undefined || this.#assessment.problems.length > 0
+      ? []
+      : siteSources(this.#assessment.policy);
   }
 
   _site(): { site: SiteValues; base: string }[] {

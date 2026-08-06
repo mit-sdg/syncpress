@@ -20,7 +20,41 @@ untouched. That failed fill or render is also available by its subject with its
 normalized refusal code and any available location. A later successful fill or
 render for that subject clears the failure.
 
-## Liquid And HTML
+## Types
+
+```types
+Name = JavaScriptString
+  A template name, distinct from the Template identity that owns the name.
+
+Subject = JavaScriptString
+  An application-supplied filling or rendering owner.
+
+Origin = Text
+  An identity that may own a registered template name.
+
+Digest = Text
+  A SHA-256 digest.
+
+Code = "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "RECURSIVE_TEMPLATE" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND"
+
+Keys = List<JavaScriptString>
+  A nonempty literal context path.
+
+WildcardPath = record
+  wildcard: Keys
+
+TrustedPath = Keys | WildcardPath
+Paths = List<TrustedPath>
+
+Values = external
+  A JSON-like context record supplied by the application.
+
+Owner = Template | Filling | Rendering
+Tree = List<Name>
+
+DiagnosticSource = JavaScriptString
+  A diagnostic source label, not the identity of a scanned HTML Source.
+```
 
 This concept fills Liquid templates and returns text intended to be HTML. It
 uses the built-in tags, expressions, and filters of the installed LiquidJS
@@ -53,8 +87,6 @@ unsupported construct is refused even in a branch that would not execute.
 LiquidJS's `lenientIf` permits one optional value: a condition of `if`, `elsif`,
 or `unless`, or the input to `default`. Printing it, iterating it, using it in a
 compound expression, or otherwise evaluating it refuses `UNDEFINED_VARIABLE`.
-
-## Values, Paths, And Trust
 
 Contexts are JSON-like Values assembled elsewhere. An exact path is a nonempty,
 ordinary dense array of literal string segments with the standard array
@@ -90,34 +122,51 @@ an identity-like filter. `capture` also produces ordinary text, so interpolating
 a captured trusted value escapes it. Template authors cannot create a trusted
 value.
 
-## Dependencies And Reads
-
-A Use is one supported literal `render` name. `_uses` is direct. `_tree` is the
-transitive closure in depth-first, first-mention order and includes each name
-once. A cycle is rejected before evaluation. Missing definitions are permitted
-while templates are being defined, but `fill` and `render` require their entire
-trees to exist.
-
-A Read is a nonempty literal path into the supplied context. A path means that
-the value at that path, or a descendant of that value, may be inspected. This
-prefix meaning is necessary for a value passed as a render argument. Reads are
-analyzed with partials, render arguments, assignments, and local scopes in
-effect. Thus a partial's global reads contribute to its caller, while a partial
-argument does not become a false global. Reads are unique and returned in
-ascending lexicographic path order.
-
-For a Template, `_tree` and `_reads` describe its current source and currently
-defined tree. For a Filling or Rendering, they are snapshots of the tree and
-effective reads used by that successful evaluation. Redefining or forgetting a
-template does not rewrite those historical snapshots.
-
-## Identity And Lifetime
-
 Names and subjects are arbitrary JavaScript strings. Identities are
 deterministic, injective length-prefixed encodings, so punctuation and control
 characters cannot collide. A template keeps its identity when its source
 changes. A filling keeps its identity for its subject. A rendering keeps its
 identity for its exact template and subject pair.
+
+## State
+
+```state
+a set of Templates with
+  a name Name
+  a source JavaScriptString
+  a digest Digest
+  a directUses set of Name
+  a directReads set of Keys
+  an optional origin Origin
+
+a set of Fillings with
+  a subject Subject
+  a digest Digest
+  an output JavaScriptString
+  a directUses set of Name
+  a dependency Tree
+  an effectiveReads set of Keys
+
+a set of Renderings with
+  a template Template
+  a subject Subject
+  an output JavaScriptString
+  a dependency Tree
+  an effectiveReads set of Keys
+
+a set of Failures with
+  a subject Subject
+  a code Code
+  an optional templateName Name
+  an optional line PositiveInteger
+  an optional column PositiveInteger
+```
+
+## Actions
+
+Missing definitions are permitted while templates are being defined, but
+`fill` and `render` require their entire trees to exist. A cycle is rejected
+before evaluation.
 
 `define` validates before changing state. Defining exactly the same source
 returns `changed false`; defining different valid source replaces its direct
@@ -125,66 +174,29 @@ uses and reads and returns `changed true`. `fill` evaluates unnamed one-off
 source and never adds it to the template name table. `render` evaluates a named
 template. Successful fill and render replace only the result with the same key.
 
-Every action is failure-atomic. A failed definition retains the previous
-definition. A failed fill or render retains the previous output and dependency
-snapshot and replaces any Failure for its subject. Its code is the normalized
-uppercase refusal code, and its template name, line, and column come from the
-failure location when available. A successful fill or render clears any Failure
-for its subject. Defining or forgetting templates does not clear Failures.
-Forgetting a template removes its definition and renderings directly of that
-template. Successful outputs owned by other templates or fillings stay as
-historical results; the composition is responsible for invalidating and
-rebuilding their subjects.
+Definition and forgetting refusals leave their prior state unchanged. A failed
+definition retains the previous definition. A failed fill or render retains the
+previous output and dependency snapshot but replaces any Failure for its subject
+before refusing. Its code is the normalized uppercase refusal code, and its
+template name, line, and column come from the failure location when available. A
+successful fill or render clears any Failure for its subject. Defining or
+forgetting templates does not clear Failures. Forgetting a template removes its
+definition and renderings directly of that template. Successful outputs owned by
+other templates or fillings stay as historical results; the composition is
+responsible for invalidating and rebuilding their subjects.
 
 Locations are one-based Liquid source line and column numbers. `fill` may name
 its authored source and provide its positive original starting line, so a body
-after front matter can report its original document coordinate. A named source also
-identifies its template name. Unsupported syntax points to the construct;
+after front matter can report its original document coordinate. A named source
+also identifies its template name. Unsupported syntax points to the construct;
 a missing use points to the render site; a recursive error points to the edge
 that closes the cycle; and evaluation errors retain the location and underlying
 Liquid detail when available.
 
-## State
-
-```state
-a set of Templates with
-  a name Name
-  a source Text
-  a digest Digest
-  a set of direct Uses
-  a set of direct Reads
-
-a set of Fillings with
-  a subject Subject
-  a digest Digest
-  an output Text
-  a set of direct Uses
-  a dependency Tree
-  a set of effective Reads
-
-a set of Renderings with
-  a template Template
-  a subject Subject
-  an output Text
-  a dependency Tree
-  a set of effective Reads
-
-a set of Failures with
-  a subject Subject
-  a code Code
-  an optional template name Name
-  an optional line Number
-  an optional column Number
-```
-
-At most one template has a name, one filling has a subject, and one rendering
-has a template and subject. At most one Failure has a subject.
 An optionally registered origin is the sole source allowed to replace its name.
 
-## Actions
-
 ```actions
-define (name: Name, source: Text) : return (template: Template, changed: Flag)
+define (name: Name, source: JavaScriptString) : return (template: Template, changed: Flag)
   where another origin owns name and source differs
   then
     refuse TEMPLATE_NAME_TAKEN "Another source already owns this template name."
@@ -202,7 +214,7 @@ define (name: Name, source: Text) : return (template: Template, changed: Flag)
     replace any template with name and its direct metadata
     return template and changed true
 
-register (name: Name, source: Text, origin: Origin) : return (template: Template, changed: Flag)
+register (name: Name, source: JavaScriptString, origin: Origin) : return (template: Template, changed: Flag)
   where origin is not Text
   then
     refuse INVALID_TEMPLATE_ORIGIN "A template origin must be well-formed text."
@@ -228,61 +240,78 @@ forget (name: Name) : return (template: Template)
     release its registered origin if present
     return template
 
-fill (subject: Subject, source: Text, context: Values, trusted: Paths, sourceName: OptionalName, sourceLine: OptionalNumber) : return (filling: Filling, output: Text)
+fill (subject: Subject, source: JavaScriptString, context: Values, trusted: Paths, sourceName?: Name, sourceLine?: PositiveInteger) : return (filling: Filling, output: JavaScriptString)
   where source is not valid Liquid in the supported engine
   then
+    replace any Failure for subject with code TEMPLATE_SYNTAX and any available location
     refuse TEMPLATE_SYNTAX "This Liquid template cannot be parsed."
   where source uses a Liquid feature excluded above
   then
+    replace any Failure for subject with code UNSUPPORTED_TEMPLATE and any available location
     refuse UNSUPPORTED_TEMPLATE "This Liquid feature is unsupported because its dependencies or escaping cannot be determined."
   where a trusted entry is not an exact path or wildcard declaration as defined above
   then
+    replace any Failure for subject with code INVALID_TRUSTED_PATH and any available location
     refuse INVALID_TRUSTED_PATH "A trusted path must contain one or more literal string segments."
   where an exact trusted path or selected wildcard value does not name an own string value
   then
+    replace any Failure for subject with code INVALID_TRUSTED_VALUE and any available location
     refuse INVALID_TRUSTED_VALUE "A trusted path must name a string in the supplied context."
   where some literal name in the source's tree is not defined
   then
+    replace any Failure for subject with code USED_TEMPLATE_NOT_FOUND and any available location
     refuse USED_TEMPLATE_NOT_FOUND "A rendered template is not defined."
   where the source's tree is recursive
   then
+    replace any Failure for subject with code RECURSIVE_TEMPLATE and any available location
     refuse RECURSIVE_TEMPLATE "The template dependency tree is recursive."
   where strict evaluation reads an undefined value
   then
+    replace any Failure for subject with code UNDEFINED_VARIABLE and any available location
     refuse UNDEFINED_VARIABLE "This Liquid template reads a context value that is not defined."
   where evaluation otherwise fails
   then
+    replace any Failure for subject with code TEMPLATE_FAILED and any available location
     refuse TEMPLATE_FAILED "This Liquid template could not be evaluated."
   where evaluation succeeds
   then
     replace any filling for subject with its dependency snapshot
+    clear any Failure for subject
     return filling and output
 
-render (template: Template, subject: Subject, context: Values, trusted: Paths) : return (rendering: Rendering, output: Text)
+render (template: Template, subject: Subject, context: Values, trusted: Paths) : return (rendering: Rendering, output: JavaScriptString)
   where template is not in Templates
   then
+    replace any Failure for subject with code TEMPLATE_NOT_FOUND and any available location
     refuse TEMPLATE_NOT_FOUND "There is no such template."
   where a trusted entry is not an exact path or wildcard declaration as defined above
   then
+    replace any Failure for subject with code INVALID_TRUSTED_PATH and any available location
     refuse INVALID_TRUSTED_PATH "A trusted path must contain one or more literal string segments."
   where an exact trusted path or selected wildcard value does not name an own string value
   then
+    replace any Failure for subject with code INVALID_TRUSTED_VALUE and any available location
     refuse INVALID_TRUSTED_VALUE "A trusted path must name a string in the supplied context."
   where some literal name in the template's tree is not defined
   then
+    replace any Failure for subject with code USED_TEMPLATE_NOT_FOUND and any available location
     refuse USED_TEMPLATE_NOT_FOUND "A rendered template is not defined."
   where the template's tree is recursive
   then
+    replace any Failure for subject with code RECURSIVE_TEMPLATE and any available location
     refuse RECURSIVE_TEMPLATE "The template dependency tree is recursive."
   where strict evaluation reads an undefined value
   then
+    replace any Failure for subject with code UNDEFINED_VARIABLE and any available location
     refuse UNDEFINED_VARIABLE "This Liquid template reads a context value that is not defined."
   where evaluation otherwise fails
   then
+    replace any Failure for subject with code TEMPLATE_FAILED and any available location
     refuse TEMPLATE_FAILED "This Liquid template could not be evaluated."
   where evaluation succeeds
   then
     replace any rendering for template and subject with its dependency snapshot
+    clear any Failure for subject
     return rendering and output
 ```
 
@@ -290,27 +319,69 @@ render (template: Template, subject: Subject, context: Values, trusted: Paths) :
 
 ```queries
 _template (name: Name) : optional (template: Template, digest: Digest)
+  Returns the current Template for the name, or no row when the name has no
+  current Template.
+
 _uses (owner: Owner) : many (used: Name)
+  A use is one supported literal render name. Returns the direct uses of a
+  Template or Filling, with no specified order. A Rendering or unknown owner
+  returns no rows.
+
 _tree (owner: Owner) : many (used: Name)
+  Returns the transitive use closure of a Template, Filling, or Rendering in
+  depth-first, first-mention order, with each name once. For a Template, the
+  result describes its current source and currently defined tree. For a Filling
+  or Rendering, it is the tree snapshot used by that successful evaluation;
+  redefining or forgetting a template does not rewrite the snapshot. An unknown
+  owner returns no rows.
+
 _usedBy (name: Name) : many (owner: Owner)
+  Returns Template and Filling owners that directly use the name. An unknown name
+  returns no rows. No order is specified.
+
 _reads (owner: Owner) : many (path: Keys)
-_failure (subject: Subject) : optional (code: Code, templateName: OptionalName, line: OptionalNumber, column: OptionalNumber)
-_failureLocation (subject: Subject, fallbackSource: Source) : optional (source: Source, line: OptionalNumber, column: OptionalNumber)
-_filling (subject: Subject) : optional (filling: Filling, output: Text)
-_rendering (template: Template, subject: Subject) : optional (rendering: Rendering, output: Text)
-_of (rendering: Rendering) : optional (template: Template, subject: Subject, output: Text)
+  A read is a nonempty literal context path. It means that the value at the path,
+  or a descendant of that value, may be inspected; the prefix meaning accounts
+  for values passed as render arguments. Analysis includes partials, render
+  arguments, assignments, and local scopes: a partial's global reads contribute
+  to its caller, but a partial argument does not become a false global read.
+  Returns unique paths in ascending lexicographic path order and a fresh Keys
+  list in every row. For a Template, the paths describe its current source and
+  currently defined tree. For a Filling or Rendering, they are the effective-read
+  snapshot used by that successful evaluation; redefining or forgetting a
+  template does not rewrite the snapshot. An unknown owner returns no rows.
+  Apart from these fresh path lists, query rows contain no mutable values.
+
+_failure (subject: Subject) : optional (code: Code, templateName: Name | undefined, line: PositiveInteger | undefined, column: PositiveInteger | undefined)
+  Returns the latest failed fill or render for exactly the subject, or no row
+  when none is recorded. The code is one of the declared refusal codes.
+  templateName, line, and column are present and undefined when no corresponding
+  location is available.
+
+_failureLocation (subject: Subject, fallbackSource: DiagnosticSource) : optional (source: DiagnosticSource, line: PositiveInteger | undefined, column: PositiveInteger | undefined)
+  Returns no row when the subject has no recorded failure. For a recorded
+  failure, resolves a named location to that source and otherwise uses
+  fallbackSource. This lets a host composition report one diagnostic without
+  duplicating source-selection policy. Line and column are present and undefined
+  when unavailable.
+
+_filling (subject: Subject) : optional (filling: Filling, output: JavaScriptString)
+  Returns the last successful filling for the subject, or no row when that result
+  is absent.
+
+_rendering (template: Template, subject: Subject) : optional (rendering: Rendering, output: JavaScriptString)
+  Returns the last successful rendering for the template-and-subject key, or no
+  row when that result is absent.
+
+_of (rendering: Rendering) : optional (template: Template, subject: Subject, output: JavaScriptString)
+  Returns the last successful result for the Rendering identity, or no row when
+  that identity is unknown or absent.
 ```
 
-`_uses` and `_usedBy` accept Templates and Fillings and concern direct uses.
-`_tree` and `_reads` additionally accept Renderings so a composition can record
-the exact dependencies of a successful output. `_failure` is read-only and
-answers the latest failed fill or render for exactly its subject. Its code is one
-of the declared refusal codes. Its `templateName`, `line`, and `column` fields
-are always present in a row and are undefined when the failure has no available
-location. `_failureLocation` resolves a recorded named location to that source,
-or uses its supplied fallback source, so host compositions can report one
-diagnostic without duplicating source-selection policy.
+## Contracts
 
-Templating does not decide where sources came from, what a subject means, which
-context paths are trusted, which reads matter to invalidation, or where the HTML
-text goes.
+```contracts
+contract template-result-and-failure-keys
+  At most one Template exists per Name, one Filling per Subject, one Rendering
+  per Template and Subject, and one Failure per Subject.
+```

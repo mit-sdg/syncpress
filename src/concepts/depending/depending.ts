@@ -138,6 +138,17 @@ export class DependingConcept {
     return { result: result.result };
   }
 
+  abandon({ subject, attempt }: { subject: unknown; attempt: unknown }) {
+    requireText(subject);
+    const result = this.#results.get(subject);
+    if (result?.state !== "building") throw new NotBuilding();
+    if (attempt !== result.attempt) throw new StaleAttempt();
+
+    this.#discardAttempt(result);
+    result.state = "stale";
+    return { result: result.result };
+  }
+
   touch({ input }: { input: unknown }) {
     requireText(input);
     let frontier = [input];

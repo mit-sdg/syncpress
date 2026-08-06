@@ -15,7 +15,27 @@ excerpt even when it occurs at the beginning; no separator means no excerpt. A
 verbatim profile returns its source exactly. Replacing a profile revokes its old
 identity and conversions, and an unknown profile is refused.
 
-## Profiles And Markdown
+## Types
+
+```types
+Name = JavaScriptString
+  A profile name. A current profile name is nonempty and is distinct from its Profile identity.
+
+Kind = "markdown" | "verbatim"
+
+Extension = "tables" | "footnotes" | "strikethrough" | "autolinks"
+
+Extensions = List<Extension>
+
+Subject = JavaScriptString
+  An application-supplied conversion owner.
+
+Part = JavaScriptString
+  A named conversion part within a Subject.
+
+Digest = Text
+  A SHA-256 digest.
+```
 
 A profile has a `kind` of exactly `markdown` or `verbatim`. The kind selects the
 engine; a profile's name never does.
@@ -48,9 +68,7 @@ exact source. Its separator still controls excerpts.
 
 Only the four extension names above are accepted. Extensions are a set:
 declaration order is irrelevant, while a duplicate is malformed. Declaration
-copies its options, and profile queries return fresh extension arrays.
-
-## Excerpts, Identity, And Caching
+copies its options.
 
 An empty separator disables excerpts. Otherwise the first exact, case-sensitive
 occurrence splits the source. The excerpt is the independently converted prefix,
@@ -60,27 +78,13 @@ The separator remains part of the full source and is converted rather than
 removed. Conversion does not evaluate Liquid or any other template notation, so
 an application may evaluate Liquid before converting without interference.
 
-At most one current profile has a name and one conversion has a `(subject,
-part)` slot. Profile identity is the SHA-256 digest of a canonical tuple
-containing its name and normalized settings. Conversion identity is the SHA-256
-digest of the canonical `(subject, part)` tuple, so punctuation in either value
-cannot create delimiter collisions. Both identities are stable across concept
-instances.
-
-A conversion cache hit requires the same current profile and exact source text
-in the same slot. A changed source replaces the slot while preserving its stable
-slot identity. Redeclaring normalized settings unchanged returns the same
-profile with `changed` false. Changed settings revoke the previous profile,
-remove every conversion made with it, mint the new settings identity, and return
-`changed` true. A revoked profile cannot be converted with. Declaring its exact
-settings again later reactivates the same content-addressed profile identity.
+Profile identity is the SHA-256 digest of a canonical tuple containing its name
+and normalized settings. Conversion identity is the SHA-256 digest of the
+canonical `(subject, part)` tuple, so punctuation in either value cannot create
+delimiter collisions. Both identities are stable across concept instances.
 
 The stored digest is SHA-256 of the exact source. Cache equality also compares
 the source text itself rather than relying on digest equality alone.
-
-Declaration and conversion are atomic. A refused declaration changes nothing.
-If Markdown processing fails, including because a footnote definition is empty
-or duplicated, the prior conversion in that slot remains unchanged.
 
 ## State
 
@@ -88,24 +92,24 @@ or duplicated, the prior conversion in that slot remains unchanged.
 a set of Profiles with
   a name Name
   a kind Kind
-  a set of Extensions
+  an extensions set of Extension
   a raw Flag
-  a separator Text
+  a separator JavaScriptString
 
 a set of Conversions with
   a subject Subject
   a part Part
   a profile Profile
-  a source Text
+  a source JavaScriptString
   a digest Digest
-  an output Text
-  an optional excerpt Text
+  an output JavaScriptString
+  an optional excerpt JavaScriptString
 ```
 
 ## Actions
 
 ```actions
-declare (name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: Text) : return (profile: Profile, changed: Flag)
+declare (name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)
   where name, kind, extensions, raw, or separator has the wrong value kind; name is empty; or an extension is duplicated
   then
     refuse INVALID_PROFILE "This rendering profile is malformed."
@@ -127,7 +131,7 @@ declare (name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: T
     add the new profile with copied, normalized settings
     return it and changed true
 
-convert (subject: Subject, part: Part, profile: Profile, source: Text) : return (conversion: Conversion, output: Text)
+convert (subject: Subject, part: Part, profile: Profile, source: JavaScriptString) : return (conversion: Conversion, output: JavaScriptString)
   where profile is not a current profile
   then
     refuse PROFILE_NOT_FOUND "There is no such current rendering profile."
@@ -139,6 +143,7 @@ convert (subject: Subject, part: Part, profile: Profile, source: Text) : return 
     return its stored conversion and output
   where Markdown processing fails
   then
+    leave any prior Conversion in that Subject and Part unchanged
     refuse CONVERSION_FAILED "This text could not be converted."
   where conversion succeeds and is not cached
   then
@@ -158,18 +163,29 @@ release (subject: Subject) : return (subject: Subject, count: Number)
 ## Queries
 
 ```queries
-_profile (name: Name) : optional (profile: Profile, kind: Kind, extensions: Extensions, raw: Flag, separator: Text)
-_conversion (conversion: Conversion) : optional (subject: Subject, part: Part, profile: Profile, digest: Digest, output: Text)
-_for (subject: Subject, part: Part) : optional (conversion: Conversion, profile: Profile, digest: Digest, output: Text)
-_excerpt (subject: Subject, part: Part) : optional (conversion: Conversion, excerpt: Text)
+_profile (name: Name) : optional (profile: Profile, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString)
+  Returns only the current Profile for the name, or no row when the name has no
+  current Profile. The extensions list is a fresh copy. No query returns a
+  mutable value that aliases stored state.
+
+_conversion (conversion: Conversion) : optional (subject: Subject, part: Part, profile: Profile, digest: Digest, output: JavaScriptString)
+  Looks up a current Conversion identity. An identity with no current record
+  returns no row.
+
+_for (subject: Subject, part: Part) : optional (conversion: Conversion, profile: Profile, digest: Digest, output: JavaScriptString)
+  Returns the current conversion in the subject-and-part slot, or no row when
+  the slot has no current record.
+
+_excerpt (subject: Subject, part: Part) : optional (conversion: Conversion, excerpt: JavaScriptString)
+  Returns no row when the slot has no current conversion or its source contained
+  no separator. A separator at the beginning produces a row with an empty
+  excerpt.
 ```
 
-`_excerpt` is absent when the source contained no separator and present with
-empty text when the separator occurred at the beginning.
+## Contracts
 
-Converting does not choose a profile for a subject, evaluate templates, sanitize
-HTML, or decide where output and excerpts are inserted.
-
-Declaration checks malformed value kinds and duplicates first, then profile
-kind, then unsupported extensions, then verbatim compatibility. That order fixes
-the refusal when one request violates more than one rule.
+```contracts
+contract current-profile-and-conversion-keys
+  At most one current Profile exists per Name, and at most one Conversion exists
+  per Subject and Part.
+```

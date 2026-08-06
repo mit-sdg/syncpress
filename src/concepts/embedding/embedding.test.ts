@@ -244,20 +244,27 @@ test("declarations validate every field before changing state", () => {
     accessor,
     hidden,
     symbol,
+    { title: 1 },
+    { title: malformed },
+    { title: "null\u0000text" },
+  ];
+  for (const attributes of invalidAttributes) expect(() => declare(new EmbeddingConcept(), { attributes })).toThrow(InvalidAttributes);
+
+  for (const attributes of [
     { Title: "uppercase" },
     { onload: "alert(1)" },
     { style: "background:url(unsafe)" },
     { src: "/override.png" },
     { loading: "eager" },
-    { title: 1 },
-    { title: malformed },
-    { title: "null\u0000text" },
     { crossorigin: "unsafe" },
     { dir: "sideways" },
     { fetchpriority: "urgent" },
     { referrerpolicy: "everything" },
-  ];
-  for (const attributes of invalidAttributes) expect(() => declare(new EmbeddingConcept(), { attributes })).toThrow(InvalidAttributes);
+  ]) {
+    const filtered = new EmbeddingConcept();
+    const declaration = declare(filtered, { attributes });
+    expect(filtered._markup({ embedding: declaration.embedding })[0]!.markup).not.toContain(Object.values(attributes)[0]!);
+  }
 
   const concept = new EmbeddingConcept();
   const original = declare(concept, { subject: "kept" });
@@ -361,7 +368,7 @@ test("canonical media types and every declared refusal are registered", () => {
     ["INVALID_COUNT", "Expected offer count must be a nonnegative safe integer."],
     ["INVALID_ADDRESS", "Image addresses must be safe site-absolute srcset addresses."],
     ["INVALID_FORMAT", "Image format must be one of the canonical supported formats."],
-    ["INVALID_ATTRIBUTES", "Image attributes must be a plain record of approved text attributes."],
+    ["INVALID_ATTRIBUTES", "Image attributes must be a plain record of text attributes."],
     ["INVALID_TEXT", "Subjects, identities, and alternative text must be well-formed text; alternative text must contain no null character."],
     ["EMBEDDING_NOT_FOUND", "There is no such embedding."],
     ["INVALID_ADDRESS", "Image addresses must be safe site-absolute srcset addresses."],

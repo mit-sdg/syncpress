@@ -1,6 +1,4 @@
 const INVALID_OWNER = "An owner must be a well-formed text identity.";
-const INVALID_BASE = "A base must be a canonical directory address.";
-const INVALID_ORIGIN = "An origin must be a canonical HTTP or HTTPS origin.";
 const INVALID_ADDRESS = "An address must be a canonical site-absolute path.";
 const ADDRESS_TAKEN = "Another owner has already claimed this address.";
 const NOT_CLAIMED = "This owner has claimed no address.";
@@ -9,20 +7,6 @@ export class InvalidOwner extends Error {
   constructor() {
     super(INVALID_OWNER);
     this.name = "InvalidOwner";
-  }
-}
-
-export class InvalidBase extends Error {
-  constructor() {
-    super(INVALID_BASE);
-    this.name = "InvalidBase";
-  }
-}
-
-export class InvalidOrigin extends Error {
-  constructor() {
-    super(INVALID_ORIGIN);
-    this.name = "InvalidOrigin";
   }
 }
 
@@ -98,26 +82,6 @@ function parseAddress(address: unknown): ParsedAddress | undefined {
 function requireOwner(value: unknown): asserts value is string {
   if (!isText(value)) throw new InvalidOwner();
 }
-function project(base: string, target: unknown): string | undefined {
-  if (!isText(target) || !target.startsWith("/") || target.startsWith("//")) return undefined;
-  return base === "/" ? target : `${base.slice(0, -1)}${target}`;
-}
-
-function parseOrigin(origin: unknown): string | undefined {
-  if (origin === undefined) return undefined;
-  if (!isText(origin)) throw new InvalidOrigin();
-  let parsed: URL;
-  try {
-    parsed = new URL(origin);
-  } catch {
-    throw new InvalidOrigin();
-  }
-  if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.origin !== origin.replace(/\/$/, "")) {
-    throw new InvalidOrigin();
-  }
-  return parsed.origin;
-}
-
 function compareText(left: string, right: string): number {
   const leftBytes = encoder.encode(left);
   const rightBytes = encoder.encode(right);
@@ -133,27 +97,10 @@ function claimIdentity(owner: string): string {
   return `claim:${JSON.stringify(owner)}`;
 }
 
-/** Maintain one canonical hierarchical address space and project it below a base. */
+/** Maintain one canonical hierarchical address space. */
 export class RoutingConcept {
-  #base = "/";
-  #origin: string | undefined;
   readonly #claimsByOwner = new Map<string, Claim>();
   readonly #claimsByAddress = new Map<string, Claim>();
-
-  rebase({ base }: { base: unknown }) {
-    const parsed = parseAddress(base);
-    if (parsed === undefined || !parsed.directory) throw new InvalidBase();
-    const changed = this.#base !== parsed.address;
-    this.#base = parsed.address;
-    return { base: parsed.address, changed };
-  }
-
-  reorigin({ origin }: { origin?: unknown }) {
-    const next = parseOrigin(origin);
-    const changed = this.#origin !== next;
-    this.#origin = next;
-    return { origin: next, changed };
-  }
 
   claim({ owner, address }: { owner: unknown; address: unknown }) {
     requireOwner(owner);
@@ -185,10 +132,10 @@ export class RoutingConcept {
     return { claim: claim.claim, address: claim.address };
   }
 
-  _address({ owner }: { owner: unknown }): { address: string; url: string }[] {
+  _address({ owner }: { owner: unknown }): { address: string }[] {
     if (!isText(owner)) return [];
     const claim = this.#claimsByOwner.get(owner);
-    return claim === undefined ? [] : [{ address: claim.address, url: project(this.#base, claim.address)! }];
+    return claim === undefined ? [] : [{ address: claim.address }];
   }
 
   _owner({ address }: { address: string }): { owner: string }[] {
@@ -196,17 +143,6 @@ export class RoutingConcept {
     if (parsed === undefined) return [];
     const claim = this.#claimsByAddress.get(parsed.address);
     return claim === undefined ? [] : [{ owner: claim.owner }];
-  }
-
-  _url({ target }: { target: unknown }): { url: string }[] {
-    const url = project(this.#base, target);
-    return url === undefined ? [] : [{ url }];
-  }
-
-  _absolute({ address }: { address: unknown }): { url: string }[] {
-    const parsed = parseAddress(address);
-    if (this.#origin === undefined || parsed === undefined) return [];
-    return [{ url: `${this.#origin}${project(this.#base, parsed.address)!}` }];
   }
 
   _claims(): { owner: string; address: string }[] {

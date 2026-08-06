@@ -46,10 +46,9 @@ type PaginationPageWork = BaseWork & {
   number: number;
   pages: number;
   address: string;
-  previous?: string;
-  next?: string;
+  previous: string | null;
+  next: string | null;
   cards: unknown[];
-  content: string;
   title: string;
   sourcePath: string;
 };
@@ -59,8 +58,8 @@ type FeedWork = BaseWork & {
   producer: string;
   path: string;
   collection: string;
-  title?: string;
-  description?: string;
+  title: string | null;
+  description: string | null;
 };
 type Work = NojekyllWork | RedirectWork | PaginationPlanWork | PaginationPageWork | SitemapWork | FeedWork;
 type Deployment = { deployment: string; works: Work[]; position: number };
@@ -76,13 +75,6 @@ export class DeploymentActive extends Error {
   constructor() {
     super("A deployment was already started.");
     this.name = "DeploymentActive";
-  }
-}
-
-export class WorkNotPending extends Error {
-  constructor() {
-    super("Current deployment work has already been activated.");
-    this.name = "WorkNotPending";
   }
 }
 
@@ -135,6 +127,13 @@ export class InvalidRedirect extends Error {
   }
 }
 
+export class InvalidPreparation extends Error {
+  constructor() {
+    super("Deployment preparation must match the current work snapshot.");
+    this.name = "InvalidPreparation";
+  }
+}
+
 const addressEncoder = new TextEncoder();
 const literalAddressCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@-]$/;
 const forbiddenSegmentCharacter = /[\\/\u0000-\u001f\u007f]/u;
@@ -179,16 +178,6 @@ function isCanonicalAddress(value: unknown): value is string {
 
 function isCanonicalPath(value: unknown): value is string {
   return isText(value) && value !== "" && !value.startsWith("/") && value.split("/").every(isPathSegment);
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function text(value: unknown, otherwise = ""): string {
-  return typeof value === "string" ? value : otherwise;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -303,7 +292,7 @@ function deploymentEntries(value: unknown): CollectionEntry[] {
 
 function paginationEntries(value: unknown): CollectionEntry[] {
   const entries = deploymentEntries(value);
-  if (entries.some(({ card }) => !isRecord(card) || text(card.url) === "")) throw new InvalidEntries();
+  if (entries.some(({ card }) => !isRecord(card) || !isText(card.url) || card.url === "")) throw new InvalidEntries();
   return entries;
 }
 
@@ -312,92 +301,6 @@ function sitemapUrls(value: unknown): Array<{ url: string }> {
     throw new InvalidUrls();
   }
   return value as Array<{ url: string }>;
-}
-
-function htmlEscape(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function isXmlCharacter(codePoint: number): boolean {
-  return codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd ||
-    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
-    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
-    codePoint >= 0x10000;
-}
-
-function xmlEscape(value: string): string {
-  const normalized = [...value]
-    .map((character) => isXmlCharacter(character.codePointAt(0)!) ? character : "\uFFFD")
-    .join("");
-  return normalized
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function validCalendarDate(year: number, month: number, day: number): boolean {
-  if (month < 1 || month > 12 || day < 1) return false;
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return day <= days[month - 1]!;
-}
-
-function atomTimestamp(value: string): string | undefined {
-  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (date !== null) {
-    const [, years, months, days] = date;
-    if (!validCalendarDate(Number(years), Number(months), Number(days))) return undefined;
-    return `${value}T00:00:00Z`;
-  }
-  const timestamp = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
-  if (timestamp === null) return undefined;
-  const [, years, months, days, hours, minutes, seconds, offset] = timestamp;
-  if (
-    !validCalendarDate(Number(years), Number(months), Number(days)) ||
-    Number(hours) > 23 ||
-    Number(minutes) > 59 ||
-    Number(seconds) > 59 ||
-    (offset !== "Z" && (Number(offset.slice(1, 3)) > 23 || Number(offset.slice(4, 6)) > 59))
-  ) return undefined;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? undefined : parsed.toISOString();
-}
-
-function basedUrl(site: Record<string, unknown>, address: string): string | undefined {
-  const origin = text(site.origin);
-  if (origin === "") return undefined;
-  const base = text(site.basePath, "/");
-  const projected = base === "/" ? address : `${base.replace(/\/$/, "")}${address}`;
-  try {
-    const url = new URL(projected, origin);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function outputUrl(site: Record<string, unknown>, path: string): string | undefined {
-  const encoded = `/${path.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
-  return basedUrl(site, encoded);
-}
-
-function paginationBody(entries: readonly CollectionEntry[]): string {
-  const items = entries.map(({ card }) => {
-    const values = record(card);
-    const data = record(values.data);
-    const url = text(values.url);
-    const title = text(data.title, "Untitled page");
-    const excerpt = text(values.excerpt);
-    return `<li><a href="${htmlEscape(url)}">${htmlEscape(title)}</a>${excerpt === "" ? "" : `<div>${excerpt}</div>`}</li>`;
-  }).join("");
-  return `<ul class="syncpress-pagination-items">${items}</ul>`;
 }
 
 function deploymentIdentity(order: number): string {
@@ -441,6 +344,7 @@ export class DeployingConcept {
 
   #result(state: Deployment): { deployment: string; work?: string; completed: boolean } {
     const current = state.works[state.position];
+    if (current?.status === "pending") current.status = "active";
     return {
       deployment: state.deployment,
       ...(current === undefined ? {} : { work: current.work }),
@@ -482,19 +386,22 @@ export class DeployingConcept {
       add({ work: workIdentity(deployment, "sitemap"), deployment, status: "pending", kind: "sitemap", producer: "deployment:sitemap", path: "sitemap.xml" });
     }
     if (policy.feed !== undefined) {
-      add({ work: workIdentity(deployment, "feed"), deployment, status: "pending", kind: "feed", producer: "deployment:feed", ...policy.feed });
+      add({
+        work: workIdentity(deployment, "feed"),
+        deployment,
+        status: "pending",
+        kind: "feed",
+        producer: "deployment:feed",
+        collection: policy.feed.collection,
+        path: policy.feed.path,
+        title: policy.feed.title ?? null,
+        description: policy.feed.description ?? null,
+      });
     }
     const state = { deployment, works, position: 0 };
     this.#deployments.set(deployment, state);
     this.#latest = deployment;
     return this.#result(state);
-  }
-
-  dispatch({ deployment, work }: { deployment: string; work: string }): { deployment: string; work: string } {
-    const current = this.#current(deployment, work).work;
-    if (current.status !== "pending") throw new WorkNotPending();
-    current.status = "active";
-    return { deployment, work };
   }
 
   complete({ work }: { work: string }): { deployment: string; work?: string; completed: boolean } {
@@ -564,10 +471,9 @@ export class DeployingConcept {
         number,
         pages,
         address: plan.route.replace(":page", String(number)),
-        ...(number === 1 ? {} : { previous: plan.route.replace(":page", String(number - 1)) }),
-        ...(number === pages ? {} : { next: plan.route.replace(":page", String(number + 1)) }),
+        previous: number === 1 ? null : plan.route.replace(":page", String(number - 1)),
+        next: number === pages ? null : plan.route.replace(":page", String(number + 1)),
         cards: slice.map(({ card }) => structuredClone(card)),
-        content: paginationBody(slice),
         title: plan.title,
         sourcePath: `[generated]/${plan.name}/${number}`,
       });
@@ -575,46 +481,26 @@ export class DeployingConcept {
     current.deployment.works.splice(current.deployment.position, 1, ...pageWorks);
     this.#works.delete(plan.work);
     for (const page of pageWorks) this.#works.set(page.work, page);
+    pageWorks[0]!.status = "active";
     return { deployment, work: pageWorks[0]!.work, pages };
   }
 
-  redirect({ work, target, canonical }: { work: string; target: string; canonical: string }): { content: string } {
+  redirect({ work, target, canonical, content }: { work: string; target: string; canonical: string; content: string }): { content: string } {
     const current = this.#active(work, "redirect") as RedirectWork;
     if (!validRedirectProjection(current.to, target, canonical)) throw new InvalidRedirect();
-    const safeTarget = htmlEscape(target);
-    const result = {
-      content: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=${safeTarget}"><link rel="canonical" href="${htmlEscape(canonical)}"></head><body><p>Moved to <a href="${safeTarget}">${safeTarget}</a>.</p></body></html>\n`,
-    };
+    if (!isText(content)) throw new InvalidPreparation();
     current.status = "prepared";
-    return result;
+    return { content };
   }
 
-  context({ work, site, collections, canonicalUrl }: { work: string; site: unknown; collections: unknown; canonicalUrl?: string }): { owner: string; template: string; context: unknown } {
+  context({ work, context }: { work: string; context: unknown }): { owner: string; template: string; context: unknown } {
     const current = this.#active(work, "pagination-page") as PaginationPageWork;
     let result: { owner: string; template: string; context: unknown };
     try {
       result = structuredClone({
         owner: current.owner,
         template: current.template,
-        context: {
-          site,
-          collections,
-          page: {
-            data: { section: "Collection page", title: current.title, description: "" },
-            url: current.address,
-            ...(canonicalUrl == null ? {} : { canonicalUrl }),
-            source: { path: current.sourcePath },
-            content: current.content,
-          },
-          pagination: {
-            collection: current.collection,
-            current: current.number,
-            pages: current.pages,
-            items: current.cards,
-            previous: current.previous,
-            next: current.next,
-          },
-        },
+        context,
       });
     } catch {
       throw new InvalidContext();
@@ -623,49 +509,59 @@ export class DeployingConcept {
     return result;
   }
 
-  feed({ work, site, entries: rawEntries }: { work: string; site: unknown; entries: unknown }): { path: string; content: string; invalid: number; valid: boolean; origin: boolean } {
-    const entries = deploymentEntries(rawEntries);
+  snapshotFeed({ work, site, entries: rawEntries }: { work: string; site: unknown; entries: unknown }): {
+    work: string;
+    path: string;
+    title: string | null;
+    description: string | null;
+    site: unknown;
+    entries: CollectionEntry[];
+  } {
     const current = this.#active(work, "feed") as FeedWork;
-    const siteRecord = record(site);
-    const feedUrl = outputUrl(siteRecord, current.path);
-    let invalid = 0;
-    let updated = "1970-01-01T00:00:00Z";
-    const rendered: string[] = [];
-    for (const { card } of entries) {
-      const values = record(card);
-      const data = record(values.data);
-      const link = basedUrl(siteRecord, text(values.url));
-      const date = atomTimestamp(text(data.date));
-      if (link === undefined || date === undefined) {
-        invalid += 1;
-        continue;
-      }
-      if (date > updated) updated = date;
-      const title = text(data.title, "Untitled page");
-      const summary = text(values.excerpt, text(data.description));
-      rendered.push(`<entry><id>${xmlEscape(link)}</id><title>${xmlEscape(title)}</title><link href="${xmlEscape(link)}"/><updated>${date}</updated>${summary === "" ? "" : `<summary type="html">${xmlEscape(summary)}</summary>`}</entry>`);
+    const entries = deploymentEntries(rawEntries);
+    try {
+      return {
+        work,
+        path: current.path,
+        title: current.title,
+        description: current.description,
+        site: structuredClone(site),
+        entries: structuredClone(entries),
+      };
+    } catch {
+      throw new InvalidPreparation();
     }
-    const title = current.title ?? text(siteRecord.title, "Syncpress");
-    const subtitle = current.description ?? text(siteRecord.description);
-    const id = feedUrl ?? "";
+  }
+
+  prepareFeed({ work, preparation }: { work: string; preparation: unknown }): { path: string; content: string; invalid: number; valid: boolean; origin: boolean } {
+    const current = this.#active(work, "feed") as FeedWork;
+    if (
+      !isRecord(preparation) || preparation.path !== current.path || !isText(preparation.content) ||
+      !Number.isSafeInteger(preparation.invalid) || (preparation.invalid as number) < 0 ||
+      typeof preparation.valid !== "boolean" || preparation.valid !== (preparation.invalid === 0) ||
+      typeof preparation.origin !== "boolean"
+    ) throw new InvalidPreparation();
     const result = {
       path: current.path,
-      invalid,
-      valid: invalid === 0,
-      origin: feedUrl !== undefined,
-      content: `<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom"><id>${xmlEscape(id)}</id><title>${xmlEscape(title)}</title>${subtitle === "" ? "" : `<subtitle>${xmlEscape(subtitle)}</subtitle>`}<updated>${updated}</updated><link href="${xmlEscape(id)}"/>${rendered.join("")}</feed>\n`,
+      content: preparation.content,
+      invalid: preparation.invalid as number,
+      valid: preparation.valid,
+      origin: preparation.origin,
     };
-    current.status = "prepared";
+    if (result.valid && result.origin) current.status = "prepared";
     return result;
   }
 
-  sitemap({ work, urls: rawUrls }: { work: string; urls: unknown }): { path: string; content: string } {
+  snapshotSitemap({ work, urls: rawUrls }: { work: string; urls: unknown }): { work: string; path: string; urls: Array<{ url: string }> } {
     const urls = sitemapUrls(rawUrls);
     const current = this.#active(work, "sitemap") as SitemapWork;
-    const result = {
-      path: current.path,
-      content: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map(({ url }) => `<url><loc>${xmlEscape(url)}</loc></url>`).join("")}</urlset>\n`,
-    };
+    return { work, path: current.path, urls: structuredClone(urls) };
+  }
+
+  prepareSitemap({ work, content }: { work: string; content: string }): { path: string; content: string } {
+    const current = this.#active(work, "sitemap") as SitemapWork;
+    if (!isText(content)) throw new InvalidPreparation();
+    const result = { path: current.path, content };
     current.status = "prepared";
     return result;
   }

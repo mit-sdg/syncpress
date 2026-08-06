@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { GoverningConcept } from "./governing.ts";
+import { GoverningConcept, InvalidConfiguration } from "./governing.ts";
 import { governing as registration } from "./registry.ts";
 
 test("its principle: replace one isolated, location-aware policy assessment", () => {
@@ -149,6 +149,96 @@ test("unsupported nested site values cannot silently erase author data", () => {
   }));
 });
 
+test("normalizes a trailing origin slash in the authoritative policy and queries", () => {
+  const governing = new GoverningConcept();
+  const assessed = governing.assess({ source: "site:\n  origin: https://example.test/\n" });
+
+  expect(assessed.policy.site.origin).toBe("https://example.test");
+  expect(governing._policy()[0]?.policy.site.origin).toBe("https://example.test");
+  expect(governing._site()[0]?.site.origin).toBe("https://example.test");
+  expect(governing._origin()).toEqual([{ origin: "https://example.test" }]);
+});
+
+test("reports configured portable glob failures at their YAML values", () => {
+  const governing = new GoverningConcept();
+  expect(() => governing.assess({
+    source: [
+      "defaults:",
+      "  - match: posts/**{",
+      "    values: {}",
+      "collections:",
+      "  posts:",
+      '    match: "[z-a]"',
+      "",
+    ].join("\n"),
+  })).toThrow(InvalidConfiguration);
+
+  expect(governing._problems()).toEqual([
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "defaults[0].match must be a valid portable glob.",
+      line: 2,
+      column: 12,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.match must be a valid portable glob.",
+      line: 6,
+      column: 12,
+    },
+  ]);
+});
+
+test("reports catalog field and condition contract failures at their YAML values", () => {
+  const governing = new GoverningConcept();
+  expect(() => governing.assess({
+    source: [
+      "collections:",
+      "  posts:",
+      "    match: posts/**",
+      "    sort:",
+      "      by: data..date",
+      "    where:",
+      "      field: data metadata",
+      "      exists: true",
+      "      unexpected: true",
+      "  malformed:",
+      "    match: posts/**",
+      "    where:",
+      "      field: data.title",
+      '      equals: "\\uD800"',
+      "",
+    ].join("\n"),
+  })).toThrow(InvalidConfiguration);
+
+  expect(governing._problems()).toEqual([
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.sort.by must use dotted ASCII segments.",
+      line: 5,
+      column: 11,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.where.unexpected is not a supported setting.",
+      line: 9,
+      column: 19,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.where.field must use dotted ASCII segments.",
+      line: 7,
+      column: 14,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.malformed.where.equals must be a supported configuration value.",
+      line: 14,
+      column: 15,
+    },
+  ]);
+});
+
 test("publishing strings satisfy the deployment owner's nonempty contract", () => {
   const governing = new GoverningConcept();
   expect(() => governing.assess({
@@ -177,10 +267,27 @@ test("publishing strings satisfy the deployment owner's nonempty contract", () =
   ]);
 });
 
+test("the source plan is rediscoverable and disappears with an invalid assessment", () => {
+  const governing = new GoverningConcept();
+  expect(governing._sources()).toEqual([]);
+
+  const assessed = governing.assess({ source: "paths:\n  content: pages\n" });
+  expect(governing._sources()).toEqual(assessed.sources);
+  expect(governing._sources()).toEqual([
+    { name: "content", path: "pages" },
+    { name: "templates", path: "templates" },
+    { name: "public", path: "public" },
+  ]);
+
+  expect(() => governing.assess({ source: "paths:\n  content: ../outside\n" })).toThrow(InvalidConfiguration);
+  expect(governing._sources()).toEqual([]);
+});
+
 test("registry promises distinguish the current assessment from its problems", () => {
   expect(registration.specification.queries.map(({ name, promise }) => [name, promise])).toEqual([
     ["_policy", "optional"],
     ["_paths", "optional"],
+    ["_sources", "many"],
     ["_site", "optional"],
     ["_origin", "optional"],
     ["_markdown", "optional"],

@@ -9,6 +9,26 @@ refactoring appear when documented behavior changes.
 
 - Upgraded to sync engine beta 5 and moved phase progression from the host loop
   into deferred reactions at causal-flow settlement frontiers.
+- Moved every remaining host interaction into a semantic concept. Filing now
+  replaces complete host-backed trees atomically; Locating observes a run's path
+  plan; Watching owns change observation and failure; Serving owns preview
+  publication and HTTP safety; generic Commanding owns command-line invocation,
+  streams, and exit status; Attending owns process stop holds; and Emitting
+  serializes destination reconciliation. Syncpress grammar, report wording,
+  build sequencing, and package sessions remain application composition.
+- `syncpress dev` now names the site directory as it was written on the command
+  line rather than as an absolute path.
+- Report project problems as build diagnostics. A missing site directory, an
+  unreadable configuration, a source directory that escapes the site through a
+  symbolic link, and an output directory that overlaps a source are now reported
+  with every other diagnostic instead of ending the run early, and they still
+  leave the previous output destination unchanged.
+
+### Added
+
+- `BuildResult.outputDirectory`: the directory a build published into, with
+  symbolic links resolved. `watchSite` already passed the same value to
+  `onBuild`.
 
 ### Documentation
 

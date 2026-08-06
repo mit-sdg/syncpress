@@ -3,6 +3,7 @@ import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { lstat, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { publicationTransactionPrefix } from "../../compositions/computations.ts";
 import {
   AttemptExhausted,
   DestinationNotDirected,
@@ -24,6 +25,8 @@ import { emitting as emittingRegistration } from "./registry.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (content: Uint8Array) => new TextDecoder().decode(content);
+const direct = (emitting: StrictEmittingConcept, destination: string) =>
+  emitting.direct({ destination, prefix: publicationTransactionPrefix(destination) ?? "" });
 
 class EmittingConcept extends StrictEmittingConcept {
   readonly #open = new Map<string, number>();
@@ -60,7 +63,7 @@ test("its principle: complete attempts preserve the last valid artifact set", as
     await writeFile(join(destination, "old.html"), bytes("stale"));
 
     const emitting = new EmittingConcept();
-    expect(await emitting.direct({ destination })).toEqual({ destination, existing: 1 });
+    expect(await direct(emitting, destination)).toEqual({ destination, existing: 1 });
     expect(() => emitting.commit({ producer: "missing" })).toThrow(NotBegun);
 
     const sharedIntent = emitting.intend({
@@ -203,7 +206,7 @@ test("aborting releases staged reservations without changing active or emitted a
     await mkdir(destination);
 
     const emitting = new EmittingConcept();
-    await emitting.direct({ destination });
+    await direct(emitting, destination);
     emitting.intend({ producer: "owner", path: "current.bin", content: bytes("current"), medium: "x/test" });
     emitting.intend({ producer: "owner", path: "kept.bin", content: bytes("kept"), medium: "x/test" });
     await emitting.reconcile();
@@ -326,7 +329,7 @@ test("copies binary input, removes stale entry kinds and empty directories, and 
     await symlink(outside, join(destination, "assets"));
 
     const emitting = new EmittingConcept();
-    expect(await emitting.direct({ destination })).toEqual({ destination, existing: 1 });
+    expect(await direct(emitting, destination)).toEqual({ destination, existing: 1 });
     const input = Buffer.from([0, 255, 1, 128]);
     emitting.intend({ producer: "binary", path: "assets/blob.bin", content: input, medium: "application/octet-stream" });
     input.fill(7);
@@ -349,6 +352,26 @@ test("copies binary input, removes stale entry kinds and empty directories, and 
   }
 });
 
+test("serializes reconciliation across instances directed at one destination", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "syncpress-emitting-shared-"));
+  const destination = join(temporary, "dist");
+  try {
+    const first = new EmittingConcept();
+    const second = new EmittingConcept();
+    await Promise.all([direct(first, destination), direct(second, destination)]);
+    first.intend({ producer: "first", path: "first.txt", content: "first", medium: "text/plain" });
+    second.intend({ producer: "second", path: "second.txt", content: "second", medium: "text/plain" });
+
+    await expect(Promise.all([first.reconcile(), second.reconcile()])).resolves.toEqual([
+      { written: 1, replaced: 0, kept: 0, removed: 0 },
+      { written: 1, replaced: 0, kept: 0, removed: 1 },
+    ]);
+    expect(await readdir(destination)).toEqual(["second.txt"]);
+  } finally {
+    await rm(temporary, { force: true, recursive: true });
+  }
+});
+
 test("inspection order is UTF-8 byte order and independent of insertion order", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "syncpress-emitting-"));
   try {
@@ -359,7 +382,7 @@ test("inspection order is UTF-8 byte order and independent of insertion order", 
     }
 
     const emitting = new EmittingConcept();
-    await emitting.direct({ destination });
+    await direct(emitting, destination);
     const paths = ["\u{10000}.new", "\ue000.new", "z.new"];
     for (const path of paths) {
       emitting.intend({ producer: "owner", path, content: bytes(path), medium: "x/test" });
@@ -407,15 +430,15 @@ test("directing is non-destructive and failed tree preparation leaves the destin
 
     const undirected = new EmittingConcept();
     await expect(undirected.reconcile()).rejects.toBeInstanceOf(DestinationNotDirected);
-    expect(await undirected.direct({ destination: missing })).toEqual({ destination: missing, existing: 0 });
+    expect(await direct(undirected, missing)).toEqual({ destination: missing, existing: 0 });
     await expect(lstat(missing)).rejects.toMatchObject({ code: "ENOENT" });
     undirected.intend({ producer: "empty", path: "empty.bin", content: new Uint8Array(), medium: "application/octet-stream" });
     expect(await undirected.reconcile()).toEqual({ written: 1, replaced: 0, kept: 0, removed: 0 });
     expect(await readFile(join(missing, "empty.bin"))).toEqual(Buffer.alloc(0));
 
     const emitting = new EmittingConcept();
-    await emitting.direct({ destination });
-    await expect(emitting.direct({ destination: invalid })).rejects.toBeInstanceOf(InvalidDestination);
+    await direct(emitting, destination);
+    await expect(direct(emitting, invalid)).rejects.toBeInstanceOf(InvalidDestination);
     emitting.intend({ producer: "short", path: "keep.txt", content: bytes("new"), medium: "text/plain" });
     emitting.intend({
       producer: "long",
@@ -432,7 +455,7 @@ test("directing is non-destructive and failed tree preparation leaves the destin
     expect(await emitting.reconcile()).toEqual({ written: 0, replaced: 1, kept: 0, removed: 0 });
     expect(text(await readFile(join(destination, "keep.txt")))).toBe("new");
 
-    await expect(emitting.direct({ destination: join(temporary, "x".repeat(300)) })).rejects.toBeInstanceOf(
+    await expect(direct(emitting, join(temporary, "x".repeat(300)))).rejects.toBeInstanceOf(
       DestinationUnavailable,
     );
   } finally {
@@ -494,7 +517,7 @@ test("registry exposes every refusal, query promise, and normative message", asy
   const Emitting = app.concepts.Emitting;
   const reconcile = Emitting.reconcile as unknown as (input: Record<string, never>) => Promise<unknown>;
 
-  expect(await Emitting.direct({ destination: "" })).toEqual({
+  expect(await Emitting.direct({ destination: "", prefix: "" })).toEqual({
     error: "INVALID_DESTINATION",
     detail: "A destination must name a directory other than the filesystem root.",
   });

@@ -1,11 +1,15 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { syncpressComputations } from "../../computations.ts";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { syncpressComputations } from "../../compositions/computations.ts";
 import {
   FileNotFound,
   FilingConcept,
   InvalidEncoding,
   InvalidPath,
+  InvalidSource,
   PathLeavesRoot,
   RootNotFound,
 } from "./filing.ts";
@@ -13,6 +17,63 @@ import { filing } from "./registry.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (content: Uint8Array) => new TextDecoder().decode(content);
+
+test("its principle: a complete host load atomically replaces one named tree", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "filing-load-"));
+  const outside = await mkdtemp(join(tmpdir(), "filing-outside-"));
+  try {
+    await mkdir(join(directory, "posts"));
+    await writeFile(join(directory, "posts", "page.md"), "first\n");
+    await writeFile(join(directory, "picture.png"), "picture\n");
+    const filing = new FilingConcept();
+
+    const first = await filing.loadTree({ name: "content", directory });
+    expect(first).toMatchObject({ status: "loaded", count: 2, changed: true });
+    if (first.status !== "loaded") throw new Error(first.detail);
+    const page = filing._at({ root: first.root, path: "posts/page.md" })[0]!.file;
+    const picture = filing._at({ root: first.root, path: "picture.png" })[0]!.file;
+
+    await writeFile(join(directory, "posts", "page.md"), "second\n");
+    await rm(join(directory, "picture.png"));
+    const second = await filing.loadTree({ name: "content", directory });
+    expect(second).toMatchObject({ status: "loaded", root: first.root, count: 1, changed: true });
+    expect(filing._at({ root: first.root, path: "posts/page.md" })[0]!.file).toBe(page);
+    expect(filing._file({ file: picture })).toEqual([]);
+    expect(filing._text({ file: page })).toEqual([{ text: "second\n" }]);
+
+    await symlink(outside, join(directory, "linked"));
+    expect(await filing.loadTree({ name: "content", directory })).toEqual({
+      status: "problem",
+      code: "ENTRY_UNSUPPORTED",
+      detail: "Only directories and ordinary files may be loaded.",
+    });
+    expect(filing._text({ file: page })).toEqual([{ text: "second\n" }]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("loads one required host file as a singleton tree", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "filing-file-"));
+  try {
+    const source = join(directory, "site.yaml");
+    await writeFile(source, "title: Ada\n");
+    const filing = new FilingConcept();
+    const loaded = await filing.loadFile({ name: "project", source, path: "site.yaml" });
+    expect(loaded).toMatchObject({ status: "loaded", count: 1, changed: true });
+    if (loaded.status !== "loaded") throw new Error(loaded.detail);
+    expect(filing._text({ file: loaded.file })).toEqual([{ text: "title: Ada\n" }]);
+    expect(await filing.loadFile({ name: "project", source: join(directory, "missing"), path: "site.yaml" })).toEqual({
+      status: "problem",
+      code: "FILE_MISSING",
+      detail: "This required file is missing.",
+    });
+    await expect(filing.loadFile({ name: "", source, path: "site.yaml" })).rejects.toBeInstanceOf(InvalidSource);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("opens stable named roots and keeps collision-prone addresses isolated", () => {
   const filing = new FilingConcept();
@@ -177,7 +238,6 @@ test("path helpers share one canonical directory grammar", () => {
   expect(syncpressComputations.joinPath({ prefix: "posts/design", name: "page.md" })).toBe("posts/design/page.md");
   expect(syncpressComputations.directoryPath({ path: "page.md" })).toBe("");
   expect(syncpressComputations.directoryPath({ path: "posts/design/page.md" })).toBe("posts/design");
-  expect(syncpressComputations.pathName({ path: "posts/design/page.md" })).toBe("page.md");
   expect(syncpressComputations.relativePath({ path: "posts/design/page.md", prefix: "posts" })).toBe("design/page.md");
   expect(syncpressComputations.relativePath({ path: "other/page.md", prefix: "posts" })).toBeNull();
 
@@ -189,7 +249,6 @@ test("path helpers share one canonical directory grammar", () => {
   }
   for (const path of ["", "./page.md", "posts//page.md", "../page.md"]) {
     expect(syncpressComputations.directoryPath({ path })).toBeNull();
-    expect(syncpressComputations.pathName({ path })).toBeNull();
   }
 });
 
@@ -220,6 +279,29 @@ test("lists directory descendants in deterministic UTF-8 byte order", () => {
   expect(second._at({ root: secondRoot, path: "posts/a.md" })[0]!.file).toBe(
     first._at({ root: firstRoot, path: "posts/a.md" })[0]!.file,
   );
+});
+
+test("lists every held file by root in opening order and by path within a root", () => {
+  const filing = new FilingConcept();
+  const content = filing.open({ name: "content" }).root;
+  const templates = filing.open({ name: "templates" }).root;
+  expect(filing._files()).toEqual([]);
+
+  const page = filing.place({ root: templates, path: "page.html", content: bytes("page") });
+  const second = filing.place({ root: content, path: "posts/second.md", content: bytes("second") });
+  const about = filing.place({ root: content, path: "about.md", content: bytes("about") });
+
+  expect(filing._files()).toEqual([
+    { file: about.file, root: content, path: "about.md" },
+    { file: second.file, root: content, path: "posts/second.md" },
+    { file: page.file, root: templates, path: "page.html" },
+  ]);
+
+  filing.discard({ file: second.file });
+  expect(filing._files()).toEqual([
+    { file: about.file, root: content, path: "about.md" },
+    { file: page.file, root: templates, path: "page.html" },
+  ]);
 });
 
 test("resolves URI references within one root and reports every other outcome", () => {

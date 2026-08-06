@@ -33,7 +33,7 @@ Reconciliation prepares a complete tree beside the destination, moves the previo
 
 ### `build --watch`
 
-Watch mode performs a strict initial build, monitors the project recursively, and coalesces bursts of changes. A change during a rebuild queues another rebuild. Output reconciliation events are ignored. Failed rebuilds report diagnostics and retain the last successful output.
+Watch mode performs a strict initial build, monitors the project recursively, and coalesces bursts of changes. The watcher is retained, but the initial build and every rebuild use separate fresh strict applications. A change during a rebuild queues another rebuild. Output reconciliation events are ignored. Failed rebuilds report diagnostics and retain the last successful output.
 
 ### `dev`
 

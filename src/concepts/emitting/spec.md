@@ -18,87 +18,63 @@ other be removed. Two producers may share one path when their bytes agree, but
 different bytes or a file-versus-directory overlap are refused. Retracting a
 producer gives up all of its paths.
 
-## Content, Paths, And Identity
+## Types
 
-Every artifact is stored as bytes. `intend` accepts either bytes, which are
-copied, or well-formed text, which is encoded as UTF-8. Its digest is the
-lowercase, 64-character hexadecimal SHA-256 digest of those exact stored bytes.
-Byte equality, not digest equality, decides whether two producers agree and
-whether a destination file is already current. `medium` is opaque metadata for
-inspection and does not change the bytes written.
+```types
+Root = external
+  A nonempty native host path supplied as Text. `direct` uses one Root as the
+  destination and another distinct sibling Root as its transaction prefix.
 
-An artifact path is a platform-neutral logical path, not a native filesystem
-path. It is one or more NFC-normalized Unicode segments separated by `/`. Every
-segment is non-empty, consists only of Unicode scalar values, is neither `.` nor
-`..`, and contains no backslash, NUL, ASCII control character, or DEL. An
-absolute path or a path that climbs above the destination leaves it. A safe but
-non-canonical spelling is invalid rather than normalized. No two paths in one
-active or staged set may be ancestors or descendants, because a destination
-cannot hold both a file and a directory there. A new stage may replace its own
-producer's active file with descendants, or its active descendants with a file,
-because those two sets never become active together.
+Path = Text
+  For an artifact, a platform-neutral logical path with one or more
+  NFC-normalized Unicode segments separated by `/`. Each segment is nonempty,
+  contains only Unicode scalar values, is neither `.` nor `..`, and contains no
+  backslash, NUL, ASCII control character, or DEL. An absolute path or a path
+  that climbs above the destination leaves it; a safe non-canonical spelling is
+  invalid rather than normalized.
 
-Each `(producer, path)` pair has one deterministic, collision-free intent
-identity. Replacing its bytes keeps that identity; retracting and later
-recreating the pair may recreate it. Producer identities are supplied and are
-never interpreted. A Claim is an optional well-formed text identity naming the
-logical source of one intent. When omitted it is the Producer. Different Claims
-under one Producer may share one path only when their bytes agree, which lets a
-transactional producer distinguish same-page logical output collisions without
-changing its atomic attempt boundary.
+ObservedPath = JavaScriptString
+  A relative path observed in a host destination. It need not be a canonical
+  artifact Path.
 
-## Attempts And Reconciliation
+Producer = Text
+  An opaque well-formed Text identity.
 
-An intent made outside an attempt becomes active immediately. This is useful for
-a producer that independently maintains one path. `begin` instead opens a
-complete replacement attempt: its intents are staged, active intents remain
-unchanged, and starting another attempt abandons the unfinished stage. `commit`
-atomically makes the staged set that producer's whole active set. An empty
-committed attempt therefore drops all of its active intents. A producer that
-recomputes a set of paths must use an attempt so an omission has meaning.
+Content = Bytes | Text
+  Artifact bytes, or well-formed Text to encode as UTF-8.
 
-`abort` explicitly abandons an open attempt. It discards only that stage, closes
-the attempt, and releases every staged reservation while leaving active intents
-and destination state untouched. The latest attempt number remains recorded, so
-the next `begin` advances rather than reusing an aborted number.
+Digest = Text
+  The lowercase, 64-character hexadecimal SHA-256 digest of exact stored bytes.
 
-Staged intents reserve their paths for collision detection but are absent from
-artifact queries and reconciliation until committed; only `_producers` reports
-their reservation ownership. This guarantees that an unfinished attempt cannot
-add, replace, or remove any destination artifact. Attempt zero is the initial,
-direct-intent state; `_attempt` reports the latest number whether or not an
-attempt is currently open, while `_open` reports it only while staged work is
-open.
+Medium = Text
+  Opaque, well-formed metadata retained for inspection; it does not affect
+  stored bytes.
 
-`direct` only inspects a destination; an absent destination is not created until
-reconciliation. It records every regular file and non-directory entry already
-there. Reconciliation re-inspects the destination, prepares the complete
-intended tree beside it, and installs that tree only after preparation succeeds.
-After atomically moving an existing destination aside, it verifies that tree is
-still the exact snapshot used during preparation. A concurrent process that
-changed the destination is restored and reconciliation is refused rather than
-allowing an older build to overwrite newer output.
-If preparation or installation is refused, the prior tree is restored. This
-makes a successful reconciliation an all-or-nothing publication action rather
-than a sequence that first deletes stale files. Structural directories are
-created exactly as needed and empty directories are removed. The four returned
-counts concern artifact entries, not structural directories.
+Kind = external
+  The observed host kind of an existing non-directory destination entry.
 
-All many-result queries answer in ascending UTF-8 byte order: paths by path and
-producers by producer. `_producers(path)` includes active and staged producers
-whose exact, ancestor, or descendant reservation would contest that path for
-another producer. It answers active owners when any exist and otherwise staged
-owners, so ordinary inspection is committed while a refusal can still identify
-a staged incumbent. If agreeing active producers state different media,
-`_intent` uses the medium of the first producer in that order, making inspection
-stable.
+Intent = identity
+  A deterministic identity derived from Producer and Path.
+```
+
+Emitting copies byte content and UTF-8-encodes text content. Exact byte equality,
+not digest equality, decides whether producers agree and whether a destination
+file is current. No two paths in one active or staged set may be ancestors or
+descendants. A stage may replace its producer's active file with descendants,
+or active descendants with a file, because the active and staged sets do not
+become current together.
+
+Different claim identities under one Producer may share one Path only when
+their bytes agree.
 
 ## State
 
 ```state
-an optional Destination Root
+an element Publication with
+  an optional destination Root
+  an optional prefix Root
 
-a set of Producers with
+a set of ProducerStates with
   a producer Producer
   an attempt Number
   an open Flag
@@ -106,15 +82,17 @@ a set of Producers with
 a set of Intents with
   an intent Intent
   a producer Producer
+  a claim Text
   a path Path
   a content Bytes
   a digest Digest
   a medium Medium
   an attempt Number
 
-a set of Staged Intents with
+a set of StagedIntents with
   an intent Intent
   a producer Producer
+  a claim Text
   a path Path
   a content Bytes
   a digest Digest
@@ -122,21 +100,17 @@ a set of Staged Intents with
   an attempt Number
 
 a set of Emitted with
-  a path Path
+  a path ObservedPath
   a kind Kind
   an optional content Bytes
   an optional digest Digest
 ```
 
-At most one producer record exists per producer. At most one active and one
-staged intent exist per producer and path. Several producers may actively intend
-one path only when their exact bytes agree.
-
 ## Actions
 
 ```actions
-direct (destination: Root) : return (destination: Root, existing: Number)
-  where destination is empty, malformed, the filesystem root, or an existing non-directory
+direct (destination: Root, prefix: Root) : return (destination: Root, existing: Number)
+  where destination or prefix is empty or malformed, destination is the filesystem root or an existing non-directory, or prefix is not a distinct sibling prefix
   then
     refuse INVALID_DESTINATION "A destination must name a directory other than the filesystem root."
   where destination cannot be inspected
@@ -146,7 +120,7 @@ direct (destination: Root) : return (destination: Root, existing: Number)
   then
     leave an absent destination absent
     record every regular file and non-directory entry it currently holds
-    replace the previously directed destination only after inspection succeeds
+    replace the previously directed destination and transaction prefix only after inspection succeeds
     return destination and the number of recorded entries
 
 begin (producer: Producer) : return (producer: Producer, attempt: Number)
@@ -163,8 +137,8 @@ begin (producer: Producer) : return (producer: Producer, attempt: Number)
     raise its attempt and open an empty staged set
     return producer and attempt
 
-intend (producer: Producer, attempt: OptionalNumber, path: Path, content: Content, medium: Medium, claim: Claim) : return (intent: Intent, path: Path, digest: Digest)
-  where producer has an open attempt and attempt does not identify it, or producer has no open attempt and attempt is present
+intend (producer: Producer, attempt?: Number, path: Path, content: Content, medium: Medium, claim?: Text | null) : return (intent: Intent, path: Path, digest: Digest)
+  where producer, claim, path, content, and medium are valid, but producer has an open attempt not identified by attempt or has no open attempt and attempt is present
   then
     refuse STALE_ATTEMPT "This producer attempt is no longer active."
   where producer is not well-formed text
@@ -191,6 +165,7 @@ intend (producer: Producer, attempt: OptionalNumber, path: Path, content: Conten
   where the artifact does not conflict
   then
     add the producer at attempt zero if absent
+    use producer as claim when claim is omitted, undefined, or null
     copy or encode content and compute its digest
     replace this producer's intent for path in its open stage, or in its active set when no attempt is open
     keep the intent identity for producer and path
@@ -243,6 +218,7 @@ reconcile () : return (written: Number, replaced: Number, kept: Number, removed:
     refuse DESTINATION_NOT_DIRECTED "No destination has been directed."
   where the complete intended tree cannot be prepared, installed, or restored
   then
+    leave retained intent state unchanged and attempt to restore the prior destination
     refuse RECONCILIATION_FAILED "The intended destination tree could not be installed."
   where reconciliation succeeds
   then
@@ -254,33 +230,56 @@ reconcile () : return (written: Number, replaced: Number, kept: Number, removed:
     return the four artifact-entry counts
 ```
 
-`intend` validates producer, claim, path containment, canonical path form, content,
-medium, and collisions in that order. Refused actions leave all intents
-unchanged. `direct` and `reconcile` likewise replace their recorded state only
-after their filesystem work succeeds.
-
 ## Queries
 
 ```queries
 _intent (path: Path) : optional (digest: Digest, medium: Medium)
+  Reads active intents at the exact canonical Path and ignores staged intents.
+  An invalid, noncanonical, or unreserved Path yields no row. Active Producers
+  at one Path agree on exact bytes; when their media differ, the first Producer
+  in ascending UTF-8 byte order supplies the medium. Emitting queries expose
+  digests and metadata rather than retained content; none returns mutable Bytes.
+
 _producers (path: Path) : many (producer: Producer)
+  Reports active Producers whose exact, ancestor, or descendant reservation
+  contests the exact canonical Path. Only when no active reservation contests
+  it are staged Producers reported. Invalid Paths yield no rows; Producers are
+  in ascending UTF-8 byte order.
+
 _byProducer (producer: Producer) : many (path: Path, digest: Digest, medium: Medium)
+  Reports only the Producer's active intents, in ascending UTF-8 byte order of
+  Path. An invalid or unknown Producer yields no rows; staged intents are
+  ignored.
+
 _attempt (producer: Producer) : optional (attempt: Number)
+  Reports the Producer's latest attempt number whether or not that attempt is
+  open. An invalid or unknown Producer yields no row.
+
 _open (producer: Producer) : optional (attempt: Number)
+  Reports the latest attempt only while it is open. An invalid, unknown, or
+  closed Producer yields no row.
+
 _pending () : many (path: Path, digest: Digest)
-_orphans () : many (path: Path)
+  Lists active artifacts whose emitted entry is absent, non-regular, or differs
+  in exact bytes, in ascending UTF-8 byte order of Path.
+
+_orphans () : many (path: ObservedPath)
+  Lists recorded destination entries with no active intent, in ascending UTF-8
+  byte order of observed path.
 ```
 
-`_intent` and `_byProducer` read active intents only. `_intent` has at most one
-row because all active producers at a path agree on exact bytes. `_producers`
-reports every active producer whose reservation contests the supplied path,
-including file-versus-directory overlaps; only when there is no such active
-reservation does it report staged producers. `_pending` lists active artifacts
-whose emitted entry is absent, non-regular, or byte-different.
-`_orphans` lists recorded destination entries with no active intent. Unknown or
-invalid identities and paths make optional and many queries answer no rows.
+## Contracts
 
-Emitting owns artifact bytes, collision-safe destination paths, producer
-attempts, and exact destination reconciliation. It does not decide what a
-producer represents, why an artifact is wanted, when an attempt should begin, or
-when reconciliation is allowed to run.
+```contracts
+contract intent-keys
+  At most one active and one staged Intent exist per Producer and Path. Active
+  Producers may share a Path only when their exact bytes agree. Replacing,
+  retracting, or recreating a pair preserves its Intent identity.
+
+contract publication-installation on direct, reconcile
+  `direct` records a destination only after complete inspection. `reconcile`
+  prepares a complete sibling tree, serializes same-destination work in a
+  process-local FIFO, and installs only after preparation and snapshot checks.
+  Separate processes must not share a transaction prefix. Host failure may
+  prevent restoration after the previous destination has moved.
+```

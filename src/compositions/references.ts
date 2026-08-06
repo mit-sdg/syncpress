@@ -6,10 +6,11 @@ import {
   JoinedPath,
   OutputPathAddress,
   RetargetedReference,
+  SiteUrl,
 } from "./calculations.ts";
 import { DIAGNOSTIC_SCOPES, PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
-const { Diagnosing, Documenting, Emitting, Filing, Matching, Referencing, Rendering, Routing } = conceptRefs;
+const { Diagnosing, Documenting, Emitting, Filing, Referencing, Rendering, Routing } = conceptRefs;
 
 const ASSET_MEDIUM = "application/octet-stream";
 
@@ -58,14 +59,13 @@ export const BesidePageOutput = view(
 
 const CopyableBodyAsset = view(
   "copyable body asset of source (source)",
-  ({ source }, { rendering, page, reference, raw, asset, name, content }, { pattern, sourcePath }) => [
+  ({ source }, { rendering, page, reference, raw, asset, name, content }, { sourcePath }) => [
     where(
       UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, asset, name, content }).is.not({ role: "image" }),
     ),
     where(
       UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", asset, sourcePath, name, content }),
-      Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-      computations.patternHasResult({ pattern, path: sourcePath, matched: false }),
+      computations.patternHasResult({ pattern: PAGE_PATTERNS.raster, path: sourcePath, matched: false }),
     ),
   ],
 ).many();
@@ -240,7 +240,7 @@ export const AbsoluteLayoutReferencesRebase = reaction(({ source, reference, raw
     .where(
       Referencing._references({ source }).is({ reference, raw }),
       computations.targetHasKind({ target: raw, kind: "absolute" }),
-      Routing._url({ target: raw }).is({ url }),
+      SiteUrl({ target: raw }).is({ url }),
     )
     .then(Referencing.answer({ reference, form: "address", value: url })),
 );

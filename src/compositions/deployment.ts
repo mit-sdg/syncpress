@@ -1,6 +1,6 @@
-import { earlier, each, former, no, reaction, view, when, where, whether } from "@mit-sdg/sync-engine/language";
+import { compute, earlier, each, former, no, reaction, returned, view, when, where, whether } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
-import { AddressOutputPath } from "./calculations.ts";
+import { AbsoluteSiteUrl, AddressOutputPath, SiteUrl } from "./calculations.ts";
 import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PHASE_SEQUENCE, TRUSTED_COLLECTION_EXCERPTS } from "./shared.ts";
 
 const {
@@ -18,6 +18,15 @@ const {
 
 const DEPLOYMENT_LAYOUT = "deployment-layout";
 
+const ActivatedDeploymentWork = view(
+  "active deployment work returned by queue transition (action, result)",
+  ({ action, result }, { work }) => where(
+    compute(computations.deploymentTransitionWork, { action, result }, work),
+    computations.isTextValue({ value: work }),
+    Deploying._work({ work }).is({ status: "active" }),
+  ),
+).optional();
+
 // Cataloging owns this order. each(...) preserves it in deployment snapshots.
 const CatalogEntries = former(
   "the deployment entries of catalog (catalog)",
@@ -31,7 +40,7 @@ const SitemapPage = view(
     where(
       Routing._claims({}).is({ owner, address }).is.not({ address: "/404.html" }),
       no(Deploying._forOwner({ owner }).is({ kind: "redirect" })),
-      Routing._absolute({ address }).is({ url }),
+      AbsoluteSiteUrl({ address }).is({ url }),
     ),
 ).many();
 
@@ -73,34 +82,6 @@ export const EmitPhaseStartsDeployment = reaction(({ policy }) =>
     .then(Deploying.start({ policy })),
 );
 
-export const StartedDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.start({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
-);
-
-export const CompletedDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.complete({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
-);
-
-export const FailedDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.fail({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
-);
-
-export const RejectedDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.reject({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
-);
-
-export const RejectedOwnerDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.rejectOwner({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
-);
-
-export const RejectedProducerDeploymentsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.rejectProducer({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
-);
-
-export const DividedPaginationsDispatch = reaction(({ deployment, work }) =>
-  when(Deploying.divide({}).responds({ deployment, work })).then(Deploying.dispatch({ deployment, work })),
-);
-
 /** A required not-found page must be authored before generated routes are claimed. */
 export const MissingRequiredNotFoundPagesDiagnose = reaction(() =>
   when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "emit", transitioned: true }))
@@ -116,9 +97,12 @@ export const MissingRequiredNotFoundPagesDiagnose = reaction(() =>
     })),
 );
 
-export const NojekyllWorkBegins = reaction(({ deployment, work, producer }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
-    .where(Deploying._work({ work }).is({ kind: "nojekyll", producer }))
+export const ActivatedNojekyllWorkBegins = reaction(({ action, result, work, producer }) =>
+  when(returned({ concept: "Deploying", action, result }))
+    .where(
+      ActivatedDeploymentWork({ action, result }).is({ work }),
+      Deploying._work({ work }).is({ kind: "nojekyll", producer }),
+    )
     .then(Emitting.begin({ producer })),
 );
 
@@ -131,9 +115,12 @@ export const BegunNojekyllWorkIntends = reaction(({ producer, attempt, path }) =
 );
 
 /** Redirect and pagination routes are claimed in queue order. */
-export const RoutedDeploymentWorkClaims = reaction(({ deployment, work, owner, address }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
-    .where(RoutedDeploymentWork({ work }).is({ owner, address }))
+export const ActivatedRoutedDeploymentWorkClaims = reaction(({ action, result, work, owner, address }) =>
+  when(returned({ concept: "Deploying", action, result }))
+    .where(
+      ActivatedDeploymentWork({ action, result }).is({ work }),
+      RoutedDeploymentWork({ work }).is({ owner, address }),
+    )
     .then(Routing.claim({ owner, address })),
 );
 
@@ -157,36 +144,39 @@ export const GeneratedDependenciesSettle = reaction(({ owner, attempt }) =>
 );
 
 /** Local redirect targets use routing projection and canonical origin when available. */
-export const ClaimedLocalRedirectsRender = reaction(({ owner, work, raw, target, canonical }) =>
+export const ClaimedLocalRedirectsPrepare = reaction(({ owner, work, raw, target, canonical, content }) =>
   when(Routing.claim({ owner }).responds({}))
     .where(
       Deploying._forOwner({ owner }).is({ work, kind: "redirect", to: raw }),
-      Routing._url({ target: raw }).is({ url: target }),
-      Routing._absolute({ address: raw }).is({ url: canonical }),
+      SiteUrl({ target: raw }).is({ url: target }),
+      AbsoluteSiteUrl({ address: raw }).is({ url: canonical }),
+      compute(computations.deploymentRedirectDocument, { target, canonical }, content),
     )
-    .then(Deploying.redirect({ work, target, canonical })),
+    .then(Deploying.redirect({ work, target, canonical, content })),
 );
 
-export const ClaimedUnoriginatedRedirectsRender = reaction(({ owner, work, raw, target }) =>
+export const ClaimedUnoriginatedRedirectsPrepare = reaction(({ owner, work, raw, target, content }) =>
   when(Routing.claim({ owner }).responds({}))
     .where(
       Deploying._forOwner({ owner }).is({ work, kind: "redirect", to: raw }),
-      Routing._url({ target: raw }).is({ url: target }),
-      no(Routing._absolute({ address: raw })),
+      SiteUrl({ target: raw }).is({ url: target }),
+      no(AbsoluteSiteUrl({ address: raw })),
+      compute(computations.deploymentRedirectDocument, { target, canonical: target }, content),
     )
-    .then(Deploying.redirect({ work, target, canonical: target })),
+    .then(Deploying.redirect({ work, target, canonical: target, content })),
 );
 
-export const ClaimedExternalRedirectsRender = reaction(({ owner, work, target }) =>
+export const ClaimedExternalRedirectsPrepare = reaction(({ owner, work, target, content }) =>
   when(Routing.claim({ owner }).responds({}))
     .where(
       Deploying._forOwner({ owner }).is({ work, kind: "redirect", to: target }),
       computations.targetHasKind({ target, kind: "external" }),
+      compute(computations.deploymentRedirectDocument, { target, canonical: target }, content),
     )
-    .then(Deploying.redirect({ work, target, canonical: target })),
+    .then(Deploying.redirect({ work, target, canonical: target, content })),
 );
 
-export const RenderedRedirectsBegin = reaction(({ work, producer }) =>
+export const PreparedRedirectsBegin = reaction(({ work, producer }) =>
   when(Deploying.redirect({ work }).responds({}))
     .where(Deploying._work({ work }).is({ producer }))
     .then(Emitting.begin({ producer })),
@@ -203,57 +193,90 @@ export const BegunRedirectsIntend = reaction(({ producer, attempt, work, address
 );
 
 /** Resolve a pagination plan before replacing it with page work. */
-export const PaginationPlansDivide = reaction(({ deployment, work, collectionName, catalog, templateName, template }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
+export const ActivatedPaginationPlansDivide = reaction(({ action, result, deployment, work, collectionName, catalog, templateName, template }) =>
+  when(returned({ concept: "Deploying", action, result }))
     .where(
-      Deploying._work({ work }).is({ kind: "pagination-plan", collection: collectionName, templateName }),
+      ActivatedDeploymentWork({ action, result }).is({ work }),
+      Deploying._work({ work }).is({ deployment, kind: "pagination-plan", collection: collectionName, templateName }),
       Cataloging._named({ name: collectionName }).is({ catalog }),
       Templating._template({ name: templateName }).is({ template }),
     )
     .then(Deploying.divide({ deployment, work, template, entries: CatalogEntries({ catalog }) })),
 );
 
-export const MissingPaginationCollectionsDiagnose = reaction(({ deployment, work, collectionName }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
+export const ActivatedPaginationPlansWithoutCollectionsDiagnose = reaction(({ action, result, work, collectionName }) =>
+  when(returned({ concept: "Deploying", action, result }))
     .where(
+      ActivatedDeploymentWork({ action, result }).is({ work }),
       Deploying._work({ work }).is({ kind: "pagination-plan", collection: collectionName }),
       no(Cataloging._named({ name: collectionName })),
     )
-    .then(Diagnosing.report({
-      severity: "error",
-      code: "PAGINATION_COLLECTION_NOT_FOUND",
-      message: "A pagination rule names no configured collection.",
-      source: CONFIGURATION_PATH,
-    }).responds({}))
-    .then(Deploying.reject({ work })),
+    .then(
+      Diagnosing.report({
+        severity: "error",
+        code: "PAGINATION_COLLECTION_NOT_FOUND",
+        message: "A pagination rule names no configured collection.",
+        source: CONFIGURATION_PATH,
+      }).named("diagnose"),
+      Deploying.reject({ work }).named("reject"),
+    ),
 );
 
-export const MissingPaginationTemplatesDiagnose = reaction(({ deployment, work, collectionName, templateName }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
+export const ActivatedPaginationPlansWithoutTemplatesDiagnose = reaction(({ action, result, work, collectionName, templateName }) =>
+  when(returned({ concept: "Deploying", action, result }))
     .where(
+      ActivatedDeploymentWork({ action, result }).is({ work }),
       Deploying._work({ work }).is({ kind: "pagination-plan", collection: collectionName, templateName }),
       Cataloging._named({ name: collectionName }),
       no(Templating._template({ name: templateName })),
     )
-    .then(Diagnosing.report({
-      severity: "error",
-      code: "TEMPLATE_NOT_FOUND",
-      message: "A pagination rule selects an undefined template.",
-      source: CONFIGURATION_PATH,
-    }).responds({}))
-    .then(Deploying.reject({ work })),
+    .then(
+      Diagnosing.report({
+        severity: "error",
+        code: "TEMPLATE_NOT_FOUND",
+        message: "A pagination rule selects an undefined template.",
+        source: CONFIGURATION_PATH,
+      }).named("diagnose"),
+      Deploying.reject({ work }).named("reject"),
+    ),
 );
 
-export const ClaimedPaginationPagesFormContext = reaction(
-  ({ owner, work, site, collections, address, canonicalUrl }) =>
+export const ClaimedPaginationPagesPrepareContext = reaction(
+  ({ owner, work, site, collections, address, canonicalUrl, sourcePath, title, collection, number, pages, cards, previous, next, context }) =>
     when(Routing.claim({ owner }).responds({}))
       .where(
-        Deploying._forOwner({ owner }).is({ work, kind: "pagination-page", address }),
+        Deploying._forOwner({ owner }).is({
+          work,
+          kind: "pagination-page",
+          address,
+          sourcePath,
+          title,
+          collection,
+          number,
+          pages,
+          cards,
+          previous,
+          next,
+        }),
         Governing._site({}).is({ site }),
         Cataloging._record({}).is({ catalogs: collections }),
-        whether(Routing._absolute({ address }).is({ url: canonicalUrl })),
+        whether(AbsoluteSiteUrl({ address }).is({ url: canonicalUrl })),
+        compute(computations.deploymentPaginationContext, {
+          site,
+          collections,
+          address,
+          canonicalUrl,
+          sourcePath,
+          title,
+          collection,
+          number,
+          pages,
+          cards,
+          previous,
+          next,
+        }, context),
       )
-      .then(Deploying.context({ work, site, collections, canonicalUrl })),
+      .then(Deploying.context({ work, context })),
 );
 
 export const PaginationContextsRender = reaction(({ work, owner, template, context }) =>
@@ -278,7 +301,7 @@ export const AbsoluteDeploymentLayoutReferencesRebase = reaction(({ source, refe
     .where(
       Referencing._references({ source }).is({ reference, raw }),
       computations.targetHasKind({ target: raw, kind: "absolute" }),
-      Routing._url({ target: raw }).is({ url }),
+      SiteUrl({ target: raw }).is({ url }),
     )
     .then(Referencing.answer({ reference, form: "address", value: url })),
 );
@@ -299,7 +322,7 @@ export const UnprojectableDeploymentLayoutReferencesDiagnose = reaction(({ sourc
       Deploying._forOwner({ owner }),
       Referencing._references({ source }).is({ raw }),
       computations.targetHasKind({ target: raw, kind: "absolute" }),
-      no(Routing._url({ target: raw })),
+      no(SiteUrl({ target: raw })),
     )
     .then(
       Diagnosing.report({
@@ -383,14 +406,23 @@ export const DeploymentReferenceAnswerFailuresDiagnose = reaction(({ reference, 
 );
 
 /** Sitemap and feed snapshots are formed only after all earlier route work has completed. */
-export const SitemapWorkPrepares = reaction(({ deployment, work }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
-    .where(Deploying._work({ work }).is({ kind: "sitemap" }))
-    .then(Deploying.sitemap({ work, urls: SitemapUrls({}) })),
+export const ActivatedSitemapWorkSnapshotsUrls = reaction(({ action, result, work }) =>
+  when(returned({ concept: "Deploying", action, result }))
+    .where(
+      ActivatedDeploymentWork({ action, result }).is({ work }),
+      Deploying._work({ work }).is({ kind: "sitemap" }),
+    )
+    .then(Deploying.snapshotSitemap({ work, urls: SitemapUrls({}) })),
+);
+
+export const SnapshottedSitemapUrlsPrepare = reaction(({ work, urls, content }) =>
+  when(Deploying.snapshotSitemap({ work }).responds({ urls }))
+    .where(compute(computations.deploymentSitemapDocument, { urls }, content))
+    .then(Deploying.prepareSitemap({ work, content })),
 );
 
 export const PreparedSitemapsBegin = reaction(({ work, producer }) =>
-  when(Deploying.sitemap({ work }).responds({}))
+  when(Deploying.prepareSitemap({ work }).responds({}))
     .where(Deploying._work({ work }).is({ producer }))
     .then(Emitting.begin({ producer })),
 );
@@ -399,38 +431,50 @@ export const BegunSitemapsIntend = reaction(({ producer, attempt, work, path, co
   when(Emitting.begin({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "sitemap" }),
-      earlier(Deploying.sitemap, { work }, { path, content }),
+      earlier(Deploying.prepareSitemap, { work }, { path, content }),
     )
     .then(Emitting.intend({ producer, attempt, path, content, medium: "application/xml" })),
 );
 
-export const FeedWorkPrepares = reaction(({ deployment, work, collectionName, catalog, site }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
-    .where(
-      Deploying._work({ work }).is({ kind: "feed", collection: collectionName }),
-      Cataloging._named({ name: collectionName }).is({ catalog }),
-      Governing._site({}).is({ site }),
-    )
-    .then(Deploying.feed({ work, site, entries: CatalogEntries({ catalog }) })),
+export const ActivatedFeedWorkSnapshotsInputs = reaction(
+  ({ action, result, work, collectionName, catalog, site }) =>
+    when(returned({ concept: "Deploying", action, result }))
+      .where(
+        ActivatedDeploymentWork({ action, result }).is({ work }),
+        Deploying._work({ work }).is({ kind: "feed", collection: collectionName }),
+        Cataloging._named({ name: collectionName }).is({ catalog }),
+        Governing._site({}).is({ site }),
+      )
+      .then(Deploying.snapshotFeed({ work, site, entries: CatalogEntries({ catalog }) })),
 );
 
-export const MissingFeedCollectionsDiagnose = reaction(({ deployment, work, collectionName }) =>
-  when(Deploying.dispatch({ deployment, work }).responds({}))
+export const SnapshottedFeedInputsPrepare = reaction(
+  ({ work, path, title, description, site, entries, preparation }) =>
+    when(Deploying.snapshotFeed({ work }).responds({ path, title, description, site, entries }))
+      .where(compute(computations.deploymentFeedPreparation, { path, title, description, site, entries }, preparation))
+      .then(Deploying.prepareFeed({ work, preparation })),
+);
+
+export const ActivatedFeedsWithoutCollectionsDiagnose = reaction(({ action, result, work, collectionName }) =>
+  when(returned({ concept: "Deploying", action, result }))
     .where(
+      ActivatedDeploymentWork({ action, result }).is({ work }),
       Deploying._work({ work }).is({ kind: "feed", collection: collectionName }),
       no(Cataloging._named({ name: collectionName })),
     )
-    .then(Diagnosing.report({
-      severity: "error",
-      code: "FEED_COLLECTION_NOT_FOUND",
-      message: "Feed names no configured collection.",
-      source: CONFIGURATION_PATH,
-    }).responds({}))
-    .then(Deploying.reject({ work })),
+    .then(
+      Diagnosing.report({
+        severity: "error",
+        code: "FEED_COLLECTION_NOT_FOUND",
+        message: "Feed names no configured collection.",
+        source: CONFIGURATION_PATH,
+      }).named("diagnose"),
+      Deploying.reject({ work }).named("reject"),
+    ),
 );
 
 export const OriginlessFeedsDiagnose = reaction(({ work }) =>
-  when(Deploying.feed({ work }).responds({ origin: false }))
+  when(Deploying.prepareFeed({ work }).responds({ origin: false }))
     .then(Diagnosing.report({
       severity: "error",
       code: "ORIGIN_REQUIRED",
@@ -441,7 +485,7 @@ export const OriginlessFeedsDiagnose = reaction(({ work }) =>
 );
 
 export const InvalidFeedEntriesDiagnose = reaction(({ work }) =>
-  when(Deploying.feed({ work }).responds({ origin: true, valid: false }))
+  when(Deploying.prepareFeed({ work }).responds({ origin: true, valid: false }))
     .then(Diagnosing.report({
       severity: "error",
       code: "INVALID_FEED_ENTRY",
@@ -452,7 +496,7 @@ export const InvalidFeedEntriesDiagnose = reaction(({ work }) =>
 );
 
 export const PreparedFeedsBegin = reaction(({ work, producer }) =>
-  when(Deploying.feed({ work }).responds({ origin: true, valid: true }))
+  when(Deploying.prepareFeed({ work }).responds({ origin: true, valid: true }))
     .where(Deploying._work({ work }).is({ producer }))
     .then(Emitting.begin({ producer })),
 );
@@ -461,7 +505,7 @@ export const BegunFeedsIntend = reaction(({ producer, attempt, work, path, conte
   when(Emitting.begin({ producer }).responds({ attempt }))
     .where(
       Deploying._forProducer({ producer }).is({ work, kind: "feed" }),
-      earlier(Deploying.feed, { work }, { path, content, origin: true }),
+      earlier(Deploying.prepareFeed, { work }, { path, content, origin: true }),
     )
     .then(Emitting.intend({ producer, attempt, path, content, medium: "application/atom+xml" })),
 );

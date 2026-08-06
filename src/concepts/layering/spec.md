@@ -15,7 +15,17 @@ the same whichever layer arrived first. Each value says which layer supplied it.
 Withdrawing the override reveals the defaults again. Two layers cannot use the
 same rank.
 
-## Values
+## Types
+
+```types
+Subject = JavaScriptString
+
+Value = null | Flag | Number | JavaScriptString | List<Value> | Values
+Values = Map<JavaScriptString, Value>
+  A plain mapping with literal JavaScript-string keys. Key order does not affect equality.
+
+Keys = List<JavaScriptString>
+```
 
 A Value is JSON/YAML-like: null, a boolean, a string, a finite binary64 number, a
 sequence of Values, or a plain mapping whose own properties are enumerable
@@ -43,59 +53,16 @@ order, and recursively equal items. Mappings compare by the same set of literal
 own keys and recursively equal values; mapping key order and ordinary-versus-null
 prototype do not affect equality.
 
-## Ranks And Identity
-
 A rank is any finite number. NaN and either infinity are invalid. Negative zero
 is rank zero. Layers resolve in ascending numeric rank regardless of arrival
 order, so the highest applicable rank wins. At most one layer exists for a
 subject and normalized rank.
-
-Layer identity is exactly `layer:` followed by the JSON encoding of the pair
-`[subject, rank]`. It is stable across concept instances, withdrawal and later
-recontribution. Distinct subject and normalized-rank pairs have distinct
-identities.
-
-Contribution is atomic. Rank validity is checked first, value validity second,
-and rank availability third. A refusal changes no state.
-
-## Merge
-
-Resolution begins with an empty mapping and applies layers in ascending rank.
-When both the existing and incoming values at a key are mappings, they merge
-recursively. Otherwise the incoming value replaces the existing value and its
-entire subtree. Sequences, strings, numbers, booleans, and null therefore replace
-rather than merge. An incoming mapping also replaces an existing non-mapping.
-There is no deletion marker because undefined is not a Value. A subject with no
-layers resolves to an empty mapping.
-
-## Paths And Absence
 
 A path is a dense sequence of literal string key segments. It traverses mappings
 only; sequences are values and their indexes are not path segments. An empty path
 names the complete resolved mapping. A dot inside a segment is an ordinary dot,
 not a separator. Empty and special-name segments are valid. A sparse, decorated,
 non-array, accessor-backed, or non-string path is invalid.
-
-`_value` is absent for an invalid path, a missing key, or traversal through a
-non-mapping. Explicit null is present. `_flag` returns a stored boolean and uses
-`otherwise` for an invalid, absent, or non-boolean value. `_equal` reports
-`present: false` and `equal: false` for an invalid or absent path. At a present
-path it applies structural Value equality; a comparison value outside the Value
-domain is unequal rather than a refusal.
-
-## Provenance
-
-Every resolved non-root path has one origin. A new value or a replacement makes
-that layer the origin of the path and every path in its new subtree, removing all
-origins from the replaced subtree. When one mapping merges into an existing
-mapping, the existing mapping container keeps the layer that established it;
-each added or replaced descendant records its own layer. Thus a composite mapping
-may have an older container origin and descendants from several newer layers.
-
-An absent path has no origin. The empty root path has no origin because the root
-is synthesized from all layers. Origins are recomputed from the remaining layers
-after withdrawal, so removing a replacement restores both earlier values and
-their earlier origins.
 
 ## State
 
@@ -125,6 +92,7 @@ contribute (subject: Subject, rank: Number, values: Values) : return (layer: Lay
   where rank and values are valid and rank is available
   then
     add a copied and normalized ranked contribution
+    return its Layer
 
 withdraw (subject: Subject, rank: Number) : return (layer: Layer)
   where rank is not finite
@@ -135,7 +103,7 @@ withdraw (subject: Subject, rank: Number) : return (layer: Layer)
     refuse NO_SUCH_LAYER "This record has no contribution at this rank."
   where rank is present
   then
-    remove it
+    remove and return its Layer
 
 clear (subject: Subject) : return (subject: Subject, count: Number)
   then
@@ -147,16 +115,50 @@ clear (subject: Subject) : return (subject: Subject, count: Number)
 
 ```queries
 _resolved (subject: Subject) : one (values: Values)
+  Starts with an empty mapping and applies layers in ascending rank. Existing and
+  incoming mappings at the same key merge recursively; every other incoming
+  value, including a mapping over a non-mapping, replaces the existing value and
+  its entire subtree. Sequences, strings, numbers, booleans, and null therefore
+  replace rather than merge. Undefined is not a Value, so there is no deletion
+  marker. A subject with no layers resolves to an empty mapping.
+
 _value (subject: Subject, path: Keys) : optional (value: Value)
+  Returns no row for an invalid path, a missing key, or traversal through a
+  non-mapping. Explicit null is present.
+
 _flag (subject: Subject, path: Keys, otherwise: Flag) : one (value: Flag)
+  Returns a stored boolean. An invalid, absent, or non-boolean value produces
+  `otherwise`.
+
 _equal (subject: Subject, path: Keys, value: Value) : one (present: Flag, equal: Flag)
+  For an invalid or absent path, both flags are false. At a present path,
+  comparison uses structural Value equality; a comparison value outside the
+  Value domain is unequal rather than a refusal.
+
 _origin (subject: Subject, path: Keys) : optional (rank: Number, layer: Layer)
+  Every resolved non-root path has one origin. A new value or replacement makes
+  the contributing layer the origin of the path and every path in its new
+  subtree, removing origins from the replaced subtree. A recursive mapping merge
+  preserves the existing container's origin while assigning each added or
+  replaced descendant to its contributing layer, so a composite mapping can
+  retain an older container origin and descendant origins from several newer
+  layers. An absent path and the synthesized empty root have no origin.
+  Withdrawal recomputes origins from the remaining layers, restoring earlier
+  values and origins.
+
 _leafOrigins (subject: Subject) : many (path: Keys, rank: Number, layer: Layer)
+  Lists scalar and empty-mapping leaves in resolved-tree traversal order.
+  Sequences are omitted because paths do not traverse them.
+
 _layers (subject: Subject) : many (layer: Layer, rank: Number, values: Values)
+  Lists layers in ascending numeric rank order.
 ```
 
-`_leafOrigins` lists scalar and empty-mapping leaves in resolved-tree traversal
-order, omitting sequences because paths do not traverse them. `_layers` uses ascending
-numeric rank order. Layering does not decide where
-contributions come from, what a resolved record controls, or what filtering or
-containment operations an application needs.
+## Contracts
+
+```contracts
+contract stable-layer-identity on contribute, withdraw
+  A Subject and normalized rank identify the same Layer across concept
+  instances, withdrawal, and later contribution. Distinct pairs identify
+  distinct Layers.
+```

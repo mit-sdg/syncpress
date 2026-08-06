@@ -3,7 +3,7 @@
 ## Purpose
 
 Keep the problems found during a task together, so people can see everything
-that needs attention and know when no errors remain.
+available in one stable, ordered report.
 
 ## Principle
 
@@ -15,7 +15,23 @@ related place again makes no copies. While either error remains the check is not
 clean. Retracting the first record's problems leaves the warning and makes the
 check clean; clearing leaves no problems at all.
 
-## Text And Locations
+## Types
+
+```types
+Scope = Text
+  The check that owns replacement of a diagnostic.
+
+Code = Text
+  An application-defined diagnostic code.
+
+DiagnosticSource = Text
+  An application-defined source location name.
+
+Severity = "error" | "warning"
+
+Position = PositiveInteger
+  A one-based line or column.
+```
 
 Text is a well-formed Unicode string. Scopes, codes, messages, sources, diagnostic
 identities, and relation notes must be Text. Empty Text and control characters
@@ -23,72 +39,46 @@ are valid; Diagnosing stores and compares these values but does not interpret
 their vocabulary. Actions refuse malformed Text before changing state. Lookup
 queries given malformed Text answer no row.
 
-A diagnostic scope is optional and identifies the check that owns replacement
-of the diagnostic. A diagnostic source is also optional. Omission and explicit
-undefined mean that the problem has no source. A line is optional and requires a source. A column is
-optional and requires a line. Present lines and columns are one-based positive
-safe integers. A related location always has a source and has the same optional
-line and column rules.
-
-Query rows always have own `scope`, `source`, `line`, and `column` properties when those
-fields are declared. A missing value is returned as undefined. This lets a row
-remain visible while a caller chooses whether to display each location detail.
-
-## Identity And Lifecycle
+A diagnostic scope and source are optional. Omission and explicit `undefined`
+both mean absence. A line is optional and requires a source. A column is
+optional and requires a line. A related location always has a source and follows
+the same optional line and column rules.
 
 A diagnostic is keyed by its optional scope, severity, code, optional source,
-optional line, and optional column. Its opaque identity is a deterministic, collision-safe encoding
-of that tuple, so punctuation and control characters cannot make two keys
-collide. The identity is stable across concept instances, scope-and-source retraction, and
-later reporting of the same key.
-
-Reporting an existing key returns its identity without changing its first
-message or its related locations. To replace what a check previously reported,
-a caller first retracts that scope and source and reports the current problems.
-Retracting a missing source does the same for diagnostics with no source in that
-scope. Repeated
-retraction is an idempotent no-op.
+optional line, and optional column. Its opaque identity is a deterministic,
+collision-safe encoding of that tuple, so punctuation and control characters
+cannot make two keys collide. The identity is stable across concept instances,
+scope-and-source retraction, and later reporting of the same key.
 
 A related location is keyed by its diagnostic, source, optional line, optional
 column, and note. Repeating it returns the same stable identity; another note or
-location remains a separate relation. Removing a diagnostic also removes all of
-its relations. A relation's source does not make its diagnostic belong to that
-source: retraction uses only each diagnostic's own optional scope and source.
-
-`clear` removes every diagnostic and relation and counts diagnostics, not
-relations. Reporting a cleared key reuses its stable identity but stores the new
-first message and starts with no relations. These rules support both a fresh
-task that clears once and repeated work that retracts only the source being
-checked again.
+location remains a separate relation. Relation identities are deterministic and
+stable under the same conditions.
 
 ## State
 
 ```state
 a set of Diagnostics with
   an optional scope Scope
-  a severity Severity                 -- error or warning
+  a severity Severity
   a code Code
   a message Text
-  an optional source Source
-  an optional line Number
-  an optional column Number
+  an optional source DiagnosticSource
+  an optional line Position
+  an optional column Position
 
 a set of Relations with
   a diagnostic Diagnostic
-  a source Source
-  an optional line Number
-  an optional column Number
+  a source DiagnosticSource
+  an optional line Position
+  an optional column Position
   a note Text
 ```
-
-At most one diagnostic exists per scope, severity, code, source, line, and column. At
-most one relation exists per diagnostic, source, line, column, and note. No
-relation exists without its diagnostic.
 
 ## Actions
 
 ```actions
-report (scope: OptionalScope, severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber) : return (diagnostic: Diagnostic)
+report (scope?: Scope, severity: Severity, code: Code, message: Text, source?: DiagnosticSource, line?: Position, column?: Position) : return (diagnostic: Diagnostic)
   where severity is neither error nor warning
   then
     refuse UNKNOWN_SEVERITY "A diagnostic is an error or a warning."
@@ -105,7 +95,7 @@ report (scope: OptionalScope, severity: Severity, code: Code, message: Text, sou
   then
     add it and return its stable identity
 
-relate (diagnostic: Diagnostic, source: Source, line: OptionalNumber, column: OptionalNumber, note: Text) : return (relation: Relation)
+relate (diagnostic: Diagnostic, source: DiagnosticSource, line?: Position, column?: Position, note: Text) : return (relation: Relation)
   where diagnostic, source, or note is not Text
   then
     refuse INVALID_TEXT "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."
@@ -122,7 +112,7 @@ relate (diagnostic: Diagnostic, source: Source, line: OptionalNumber, column: Op
   then
     add it and return its stable identity
 
-retract (scope: OptionalScope, source: OptionalSource) : return (scope: OptionalScope, source: OptionalSource, count: Number)
+retract (scope?: Scope, source?: DiagnosticSource) : return (scope: Scope | undefined, source: DiagnosticSource | undefined, count: Number)
   where a present scope or source is not Text
   then
     refuse INVALID_TEXT "Scopes, codes, messages, sources, diagnostic identities, and notes must be well-formed text."
@@ -140,29 +130,49 @@ clear () : return (count: Number)
 ## Queries
 
 ```queries
-_all () : many (diagnostic: Diagnostic, scope: OptionalScope, severity: Severity, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
-_errors () : many (diagnostic: Diagnostic, scope: OptionalScope, code: Code, message: Text, source: OptionalSource, line: OptionalNumber, column: OptionalNumber)
-_for (source: OptionalSource) : many (diagnostic: Diagnostic, scope: OptionalScope, severity: Severity, code: Code, message: Text, line: OptionalNumber, column: OptionalNumber)
-_related (diagnostic: Diagnostic) : many (source: Source, line: OptionalNumber, column: OptionalNumber, note: Text)
+_all () : many (diagnostic: Diagnostic, scope: Scope | undefined, severity: Severity, code: Code, message: Text, source: DiagnosticSource | undefined, line: Position | undefined, column: Position | undefined)
+  Orders errors before warnings, then by scope, source, line, column, and code.
+  Missing scopes, sources, lines, and columns sort before present values;
+  present scopes and sources and all codes use ascending UTF-8 byte order, and
+  positions use ascending numeric order. The uniqueness key makes this a total
+  order independent of reporting order. `scope`, `source`, `line`, and `column`
+  are always own properties; an absent value is `undefined`.
+
+_errors () : many (diagnostic: Diagnostic, scope: Scope | undefined, code: Code, message: Text, source: DiagnosticSource | undefined, line: Position | undefined, column: Position | undefined)
+  Returns the errors in their `_all` order. `scope`, `source`, `line`, and
+  `column` are always own properties; an absent value is `undefined`.
+
+_for (source?: DiagnosticSource) : many (diagnostic: Diagnostic, scope: Scope | undefined, severity: Severity, code: Code, message: Text, line: Position | undefined, column: Position | undefined)
+  Treats an omitted or explicit `undefined` source as the absent source and
+  returns no rows for a malformed source. Matching diagnostics retain their
+  `_all` order. `scope`, `line`, and `column` are always own properties; an
+  absent value is `undefined`.
+
+_related (diagnostic: Diagnostic) : many (source: DiagnosticSource, line: Position | undefined, column: Position | undefined, note: Text)
+  Returns no rows for an unknown or malformed Diagnostic. Orders by source in
+  ascending UTF-8 byte order, then line, column, and note, with missing
+  positions first. The uniqueness key makes this a total order. `line` and
+  `column` are always own properties; an absent value is `undefined`.
+
+_rendered () : one (text: Text)
+  Writes one entry per standing Diagnostic in `_all` order: upper-case
+  severity, code, optional source and position, and message. Entries are
+  newline-separated, and newlines in messages remain present. Returns one fixed
+  sentence when no Diagnostic stands.
+
 _clean () : one (clean: Flag)
+  Always returns one row. `clean` is true when no error stands, including when
+  warnings stand, and false otherwise.
 ```
 
-## Ordering And Cleanliness
+## Contracts
 
-`_all` orders errors before warnings. Within one severity, a missing scope comes
-before a present scope; present scopes use ascending UTF-8 byte order. Scope is
-followed by source, with a missing source before a present source and present
-sources using ascending UTF-8 byte order. Within
-one source, a missing line comes before a present line and lines rise
-numerically. Within one line, a missing column comes before a present column and
-columns rise numerically. Codes finally use ascending UTF-8 byte order. Because
-the complete ordering key is also the diagnostic uniqueness key, this is a total
-order independent of reporting order.
+```contracts
+contract diagnostic-keys
+  At most one Diagnostic exists per scope, Severity, Code, source, line, and
+  column, and at most one Relation exists per Diagnostic, DiagnosticSource,
+  line, column, and note.
 
-`_errors` and `_for` preserve the corresponding order from `_all`. `_related`
-orders by source in ascending UTF-8 byte order, then line, column, and note, with
-missing positions first. Its uniqueness key makes that order total too.
-
-`_clean` always returns exactly one row. It is true when no error stands, even if
-warnings stand, and false otherwise. A caller may use that level as a gate, but
-Diagnosing does not decide what a clean or unclean task is allowed to do.
+contract relation-owner
+  Every Relation refers to a present Diagnostic.
+```

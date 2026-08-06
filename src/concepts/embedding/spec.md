@@ -20,9 +20,22 @@ published markup cannot change silently. Repeating the same declaration keeps
 its versions, while changing the declaration starts it again. Withdrawing it
 removes the declaration and every version.
 
-## Inputs and HTML
+## Types
 
-Text is a well-formed Unicode string. Alternative text and preserved attribute
+```types
+Subject = Text
+  A well-formed Unicode string identifying an embedding.
+
+Address = Text
+  A safe site-absolute address for one image candidate.
+
+Format = "avif" | "gif" | "heif" | "jpeg" | "jxl" | "png" | "tiff" | "webp"
+
+Attributes = Map<Text, Text>
+  The approved authored image attributes retained by an embedding.
+```
+
+Text is a well-formed Unicode string. Alternative text and attribute names and
 values must additionally contain no null character. Intrinsic dimensions and
 offer widths are positive safe integers, and an offer width does not exceed its
 embedding's intrinsic width. Expected counts and orders are nonnegative safe
@@ -49,36 +62,22 @@ Formats are lowercase canonical names with these exact media types:
 | `webp` | `image/webp` |
 
 `attributes` is a plain or null-prototype record of own, enumerable text data
-properties. It may preserve `class`, `crossorigin`, `dir`, `fetchpriority`,
-`id`, `lang`, `referrerpolicy`, `role`, `sizes`, `title`, `aria-*`, and `data-*`.
-Names are lowercase. Enumerated attributes accept only their standard lowercase
-values. Accessors, non-enumerable properties, symbols, proxies, class instances,
-event handlers, `style`, and every other attribute are refused. The concept
-intentionally replaces authored `src`, `srcset`, `width`, `height`, `alt`,
-`loading`, and `decoding`:
-the output uses the declared original and dimensions, escaped alternative text,
-`loading="lazy"`, and `decoding="async"`. Preserved attributes follow those
-owned attributes in ascending UTF-8 name order. Every attribute value and
-address is HTML-escaped during serialization. A preserved `sizes` value is also
-copied to every generated `source`, so all format groups use the same responsive
-width rule.
+properties. The declaration copies `class`, `crossorigin`, `dir`,
+`fetchpriority`, `id`, `lang`, `referrerpolicy`, `role`, `sizes`, `title`,
+`aria-*`, and `data-*`. Preserved names are lowercase. Enumerated attributes
+accept only their standard lowercase values. Accessors, non-enumerable
+properties, symbols, proxies, non-plain records, and non-text or null-containing
+names or values make the record malformed and are refused. Event handlers,
+`style`, invalid enumerated values, and every other safe text attribute are
+omitted.
 
-The original address at its intrinsic width reserves one candidate in its
-declared format. A derived offer may use that format at another width, but no
-offer may reuse the original address or duplicate any format-width candidate.
-The `img` always uses the declared original as `src`; derived candidates in the
-original format join it in `srcset`. Other format groups become `source`
-elements. A group's position is its least offered order, with format as the tie
-break. The original-format group is the explicit fallback and is always last.
-Widths ascend within a group, followed by order and address as deterministic tie
-breaks. `_offers` lists derived offers by order, format, width, and address.
-
-`changed` says that the action changed the current declaration or offers.
-`completed` is an event, not the current level: it is true only when that action
-creates a new complete declaration revision. A new or changed zero-offer
-declaration completes on `declare`; a positive-count declaration completes on
-its final distinct `offer`. Identical declarations and offers return both flags
-false. Queries expose the current `complete` level.
+The concept intentionally replaces authored `src`, `srcset`, `width`, `height`,
+`alt`, `loading`, and `decoding`. The output uses the declared original and
+dimensions, escaped alternative text, `loading="lazy"`, and
+`decoding="async"`. Preserved attributes follow those owned attributes in
+ascending UTF-8 name order. Every attribute value and address is HTML-escaped
+during serialization. A preserved `sizes` value is also copied to every
+generated `source`, so all format groups use the same responsive width rule.
 
 ## State
 
@@ -86,31 +85,25 @@ false. Queries expose the current `complete` level.
 a set of Embeddings with
   a subject Subject
   an alternative Text
-  a width Number
-  a height Number
-  an expects Number
+  a width PositiveInteger
+  a height PositiveInteger
+  an expects NonnegativeInteger
   an original Address
   an originalFormat Format
-  preserved attributes Attributes
+  attributes Attributes
 
 a set of Offers with
   an embedding Embedding
   an address Address
   a format Format
-  a width Number
-  an order Number
+  a width PositiveInteger
+  an order NonnegativeInteger
 ```
-
-At most one embedding exists per subject, one offer per embedding and address,
-and one candidate per embedding, format, and width. Embedding and offer
-identities are deterministic opaque encodings of their keys. Identical
-redeclarations and replacements retain identities; withdrawal followed by a new
-declaration for the same subject reuses its embedding identity.
 
 ## Actions
 
 ```actions
-declare (subject: Subject, alternative: Text, width: Number, height: Number, expects: Number, original: Address, originalFormat: Format, attributes: Attributes) : return (embedding: Embedding, changed: Flag, completed: Flag)
+declare (subject: Subject, alternative: Text, width: PositiveInteger, height: PositiveInteger, expects: NonnegativeInteger, original: Address, originalFormat: Format, attributes: Attributes) : return (embedding: Embedding, changed: Flag, completed: Flag)
   where subject is not Text, or alternative is not serializable Text
   then
     refuse INVALID_TEXT "Subjects, identities, and alternative text must be well-formed text; alternative text must contain no null character."
@@ -128,7 +121,7 @@ declare (subject: Subject, alternative: Text, width: Number, height: Number, exp
     refuse INVALID_FORMAT "Image format must be one of the canonical supported formats."
   where attributes is not an approved attribute record
   then
-    refuse INVALID_ATTRIBUTES "Image attributes must be a plain record of approved text attributes."
+    refuse INVALID_ATTRIBUTES "Image attributes must be a plain record of text attributes."
   where the same declaration already exists
   then
     retain its offers and return embedding, changed false, and completed false
@@ -138,7 +131,7 @@ declare (subject: Subject, alternative: Text, width: Number, height: Number, exp
     add the supplied declaration
     return embedding, changed true, and completed true exactly when expects is zero
 
-offer (embedding: Embedding, address: Address, format: Format, width: Number, order: Number) : return (offer: Offer, embedding: Embedding, arrived: Number, changed: Flag, completed: Flag)
+offer (embedding: Embedding, address: Address, format: Format, width: PositiveInteger, order: NonnegativeInteger) : return (offer: Offer, embedding: Embedding, arrived: Number, changed: Flag, completed: Flag)
   where embedding is not Text
   then
     refuse INVALID_TEXT "Subjects, identities, and alternative text must be well-formed text; alternative text must contain no null character."
@@ -190,12 +183,38 @@ withdraw (subject: Subject) : return (embedding: Embedding, count: Number)
 ## Queries
 
 ```queries
-_embedding (embedding: Embedding) : optional (subject: Subject, original: Address, originalFormat: Format, expects: Number, arrived: Number, complete: Flag)
-_for (subject: Subject) : optional (embedding: Embedding, original: Address, originalFormat: Format, expects: Number, arrived: Number, complete: Flag)
-_offers (embedding: Embedding) : many (offer: Offer, address: Address, format: Format, width: Number, order: Number)
+_embedding (embedding: Embedding) : optional (subject: Subject, original: Address, originalFormat: Format, expects: NonnegativeInteger, arrived: NonnegativeInteger, complete: Flag)
+  Returns no row for an unknown or non-Text Embedding. `complete` is the
+  current completion level.
+
+_for (subject: Subject) : optional (embedding: Embedding, original: Address, originalFormat: Format, expects: NonnegativeInteger, arrived: NonnegativeInteger, complete: Flag)
+  Returns no row for an unknown or non-Text Subject. `complete` is the current
+  completion level.
+
+_offers (embedding: Embedding) : many (offer: Offer, address: Address, format: Format, width: PositiveInteger, order: NonnegativeInteger)
+  Returns no rows for an unknown or non-Text Embedding. Lists derived offers by
+  `order`, then `format`, `width`, and `address`.
+
 _markup (embedding: Embedding) : optional (markup: Text)
+  Returns no row for an unknown, non-Text, or incomplete Embedding. For a
+  complete Embedding, returns one `picture` element. The declared original is
+  the `img` `src` and reserves a candidate at its intrinsic width in its
+  declared format. Derived candidates in that format at other widths join the
+  original in `srcset`; other format groups become `source` elements. Groups
+  use their least offered order, then format, while the original-format
+  fallback is always last. Widths ascend within each group, followed by order
+  and address as deterministic tie-breakers.
 ```
 
-Lookup queries answer no row for an unknown identity or a non-Text lookup input.
-Embedding creates no image bytes and chooses no publication address. Its one
-specialized responsibility is safe, deterministic responsive HTML image markup.
+## Contracts
+
+```contracts
+contract embedding-keys
+  At most one Embedding exists per Subject, one Offer per Embedding and Address,
+  and one candidate per Embedding, Format, and width.
+
+contract stable-identities on declare, offer, withdraw
+  An Embedding identity is determined by its Subject, and an Offer identity by
+  its Embedding and Address. Replacing or later recreating either key preserves
+  its opaque identity.
+```

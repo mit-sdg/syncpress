@@ -3,21 +3,10 @@ import { parseFragment, type DefaultTreeAdapterTypes } from "parse5";
 const INVALID_TEXT_MESSAGE = "Subjects, parts, identities, HTML, and answers must be well-formed text.";
 const INVALID_FORM_MESSAGE = "Answer form must be address or markup.";
 const REFERENCE_NOT_FOUND_MESSAGE = "There is no such reference.";
+const SOURCE_FINISHED_MESSAGE = "A finished source cannot accept a changed answer.";
 const UNREPRESENTABLE_ADDRESS_MESSAGE = "This address cannot be represented as one HTML reference.";
 const OVERLAPPING_MARKUP_MESSAGE = "A markup answer overlaps another markup answer.";
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
-const IMAGE_ATTRIBUTES = new Set(["class", "crossorigin", "dir", "fetchpriority", "id", "lang", "referrerpolicy", "role", "sizes", "title"]);
-const REFERRER_POLICIES = new Set([
-  "",
-  "no-referrer",
-  "no-referrer-when-downgrade",
-  "origin",
-  "origin-when-cross-origin",
-  "same-origin",
-  "strict-origin",
-  "strict-origin-when-cross-origin",
-  "unsafe-url",
-]);
 
 export class InvalidText extends Error {
   constructor() {
@@ -37,6 +26,13 @@ export class ReferenceNotFound extends Error {
   constructor() {
     super(REFERENCE_NOT_FOUND_MESSAGE);
     this.name = "ReferenceNotFound";
+  }
+}
+
+export class SourceFinished extends Error {
+  constructor() {
+    super(SOURCE_FINISHED_MESSAGE);
+    this.name = "SourceFinished";
   }
 }
 
@@ -188,15 +184,6 @@ function attributeLocation(element: Element, name: string) {
   return locations[name] ?? Object.entries(locations).find(([candidate]) => candidate.toLowerCase() === name)?.[1];
 }
 
-function approvedImageAttribute(name: string, value: string): boolean {
-  if (!IMAGE_ATTRIBUTES.has(name) && !/^(?:aria|data)-[a-z][a-z0-9_.:-]*$/u.test(name)) return false;
-  if (name === "crossorigin") return value === "" || value === "anonymous" || value === "use-credentials";
-  if (name === "dir") return value === "auto" || value === "ltr" || value === "rtl";
-  if (name === "fetchpriority") return value === "auto" || value === "high" || value === "low";
-  if (name === "referrerpolicy") return REFERRER_POLICIES.has(value);
-  return true;
-}
-
 function compareAttributeNames(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -207,8 +194,7 @@ function authoredImageAttributes(element: Element): ImageAttributes {
     const name = item.name.toLowerCase();
     if (
       attributeLocation(element, name) === undefined ||
-      !isSerializableText(item.value) ||
-      !approvedImageAttribute(name, item.value)
+      !isSerializableText(item.value)
     ) {
       continue;
     }
@@ -568,8 +554,11 @@ export class ReferencingConcept {
 
     const record = this.#referencesByID.get(reference);
     if (record === undefined) throw new ReferenceNotFound();
-    if (form === "address" && !addressIsRepresentable(record, value)) throw new UnrepresentableAddress();
     const source = this.#sourcesByID.get(record.source)!;
+    const wasFinished = source.references.every((candidate) => candidate.answer !== undefined);
+    const changed = record.form !== form || record.answer !== value;
+    if (wasFinished && changed) throw new SourceFinished();
+    if (form === "address" && !addressIsRepresentable(record, value)) throw new UnrepresentableAddress();
     if (
       form === "markup" &&
       source.references.some(
@@ -579,8 +568,6 @@ export class ReferencingConcept {
       throw new OverlappingMarkup();
     }
 
-    const wasFinished = source.references.every((candidate) => candidate.answer !== undefined);
-    const changed = record.form !== form || record.answer !== value;
     if (changed) {
       record.form = form;
       record.answer = value;

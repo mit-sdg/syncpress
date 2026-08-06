@@ -15,7 +15,15 @@ the old values but keeps the document identity. A malformed or unclosed revision
 is refused and leaves the previous valid document unchanged. Forgetting removes
 the document.
 
-## YAML Front Matter
+## Types
+
+```types
+Subject = JavaScriptString
+
+AttributeValue = null | Flag | Number | JavaScriptString | List<AttributeValue> | Values
+Values = Map<JavaScriptString, AttributeValue>
+  A normalized YAML mapping with unique literal string keys. No key order is implied.
+```
 
 A text has front matter only when its first physical line is exactly the three
 ASCII characters `---`. The opening fence has no leading or trailing whitespace,
@@ -34,8 +42,6 @@ lines after the closing fence are part of the body.
 `bodyLine` is one-based. With front matter it is the line immediately after the
 closing fence, even when the body is empty and that line lies just past the end
 of the text. Without front matter it is 1.
-
-## Attribute Values
 
 Front matter is one YAML 1.2 document using the YAML 1.2 Core schema. Parser
 warnings are malformed. Empty or comment-only front matter is the empty mapping;
@@ -62,25 +68,6 @@ Anchors and aliases are accepted. Each alias is expanded into an independent
 normalized value. Cyclic, unresolved, or excessive expansion is malformed; at
 most 100 alias expansions may be materialized by one parse.
 
-## Identity And Replacement
-
-At most one document exists per subject. Its identity is exactly `document:`
-followed by the JSON string encoding of the complete subject. This encoding is
-stable across replacement, forgetting and reparsing, and separate concept
-instances; distinct subjects have distinct document identities.
-
-Parsing valid text atomically replaces the attributes, body, and body line for
-its subject while retaining that identity. Every refusal is atomic: it records
-no new document and leaves any previous valid document unchanged. Forgetting an
-existing subject removes its document; forgetting an absent subject is refused.
-
-Attributes returned by actions and queries are deep copies. Mutating one
-observation cannot change stored state or a later observation. `_all` returns one
-row per subject in ascending JavaScript string order, which compares UTF-16 code
-units.
-
-Documenting gives attributes no application-specific meaning.
-
 ## State
 
 ```state
@@ -101,6 +88,7 @@ parse (subject: Subject, text: Text) : return (document: Document, attributes: V
   where text has no front-matter header or has a well-formed one
   then
     atomically replace the document values for subject while keeping its stable identity
+    return the document, a copy of its attributes, and its body
 
 forget (subject: Subject) : return (document: Document)
   where subject has no document
@@ -115,5 +103,18 @@ forget (subject: Subject) : return (document: Document)
 
 ```queries
 _document (subject: Subject) : optional (document: Document, attributes: Values, body: Text, bodyLine: Number)
+  Returns no row when subject has no document. Attributes returned here and by
+  `parse` are deep copies; mutating an observation cannot change stored state or
+  a later observation.
+
 _all () : many (document: Document, subject: Subject)
+  Returns one row per subject in ascending JavaScript string order, which
+  compares UTF-16 code units.
+```
+
+## Contracts
+
+```contracts
+contract stable-document-identity on parse, forget
+  Document identity is `document:` followed by the JSON string encoding of the complete Subject; it is stable across replacement, forgetting, reparsing, and separate concept instances, and distinct Subjects have distinct identities.
 ```

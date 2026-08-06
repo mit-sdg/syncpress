@@ -1,160 +1,206 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSyncpressRuntime } from "../../src/edge/application.ts";
+import { createSyncpressRuntime } from "../../src/compositions/api.ts";
 
-const bytes = (text: string) => new TextEncoder().encode(text);
+const BATCH_TIMEOUT_MS = 60_000;
 
-test("internal endpoints answer every admitted precondition state", async () => {
+type Summary = {
+  pages: number;
+  files: number;
+  policy: unknown;
+  destination: string | null;
+  diagnostics: { code: string; message: string; source: string | null }[];
+};
+
+async function project(configuration = "{}\n"): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "syncpress-endpoints-"));
+  await Promise.all([
+    mkdir(join(directory, "content")),
+    mkdir(join(directory, "templates")),
+    mkdir(join(directory, "public")),
+  ]);
+  await writeFile(join(directory, "site.yaml"), configuration);
+  await writeFile(join(directory, "templates", "page.html"), "<!doctype html><title>x</title>{{ page.content }}\n");
+  return directory;
+}
+
+function runtime() {
   const { application, gateway } = createSyncpressRuntime();
-
-  expect(await gateway.invoke("/site/assess", {}, { timeoutMs: 100 })).toMatchObject({
-    ok: false,
-    error: { kind: "domain", value: "PROJECT_NOT_STAGED" },
-  });
-  const project = await application.concepts.Filing.open({ name: "project" });
-  if ("error" in project) throw new Error(project.error);
-  expect(await gateway.invoke("/site/assess", {}, { timeoutMs: 100 })).toMatchObject({
-    ok: false,
-    error: { kind: "domain", value: "CONFIGURATION_NOT_STAGED" },
-  });
-  expect(await gateway.invoke("/site/configure", { destination: "/tmp/output" }, { timeoutMs: 100 })).toMatchObject({
-    ok: false,
-    error: { kind: "domain", value: "CONFIGURATION_NOT_ASSESSED" },
-  });
-  expect(await gateway.invoke("/site/prepare", {}, { timeoutMs: 100 })).toMatchObject({
-    ok: false,
-    error: { kind: "domain", value: "CONFIGURATION_NOT_ASSESSED" },
-  });
-});
-
-test("staging crosses the gateway with exact binary content", async () => {
-  const { application, gateway } = createSyncpressRuntime();
-  const content = Uint8Array.from([0, 1, 127, 128, 255]);
-  expect(await gateway.invoke("/site/stage", {
-    name: "content",
-    filePath: "binary.bin",
-    encoded: Buffer.from(content).toString("base64"),
-  })).toEqual({ ok: true, value: {} });
-
-  const root = (await application.concepts.Filing._named({ name: "content" }))[0]!.root;
-  const file = (await application.concepts.Filing._at({ root, path: "binary.bin" }))[0]!.file;
-  expect((await application.concepts.Filing._file({ file }))[0]?.content).toEqual(content);
-  expect(await gateway.invoke("/site/stage", { name: "content", filePath: "bad.bin", encoded: "not base64" })).toMatchObject({
-    ok: false,
-    error: { kind: "domain", value: "INVALID_ENCODING" },
-  });
-});
-
-test("assessment atomically replaces policy and its diagnostics", async () => {
-  const { application, gateway } = createSyncpressRuntime();
-  const project = await application.concepts.Filing.open({ name: "project" });
-  if ("error" in project) throw new Error(project.error);
-
-  await application.concepts.Filing.place({ root: project.root, path: "site.yaml", content: bytes("paths:\n  output: dist\n") });
-  const assessed = await gateway.invoke("/site/assess", {}, { timeoutMs: 100 });
-  expect(assessed).toMatchObject({
-    ok: true,
-    value: {
-      sources: [
-        { name: "content", path: "content" },
-        { name: "templates", path: "templates" },
-        { name: "public", path: "public" },
-      ],
+  return {
+    application,
+    build: (input: { directory: string; destination?: string }) =>
+      gateway.invoke("/site/build", input, { timeoutMs: BATCH_TIMEOUT_MS }),
+    inspect: (input: { directory: string; target: string }) =>
+      gateway.invoke("/site/inspect", input, { timeoutMs: BATCH_TIMEOUT_MS }),
+    async summary(): Promise<Summary> {
+      const answer = await gateway.invoke("/site/summary", {});
+      if (!answer.ok) throw new Error(JSON.stringify(answer.error));
+      return answer.value.summary as unknown as Summary;
     },
-  });
-  expect((await gateway.invoke("/site/prepare", {}, { timeoutMs: 100 })).ok).toBe(true);
+  };
+}
 
-  await application.concepts.Filing.place({ root: project.root, path: "site.yaml", content: bytes("paths:\n  output: ../outside\n") });
-  expect(await gateway.invoke("/site/assess", {}, { timeoutMs: 100 })).toMatchObject({
-    ok: false,
-    error: { kind: "domain", value: "INVALID_CONFIGURATION" },
-  });
-  await application.whenIdle();
-  expect(await application.concepts.Governing._policy()).toEqual([]);
-  expect(await application.concepts.Diagnosing._errors()).toHaveLength(1);
-  expect(await gateway.invoke("/site/configure", { destination: "/tmp/output" }, { timeoutMs: 100 })).toMatchObject({
-    ok: false,
-    error: { kind: "domain", value: "CONFIGURATION_NOT_ASSESSED" },
-  });
-
-  await application.concepts.Filing.place({ root: project.root, path: "site.yaml", content: bytes("paths:\n  output: public\n") });
-  expect((await gateway.invoke("/site/assess", {}, { timeoutMs: 100 })).ok).toBe(true);
-  await application.whenIdle();
-  expect(await application.concepts.Diagnosing._all()).toEqual([]);
-  expect((await application.concepts.Governing._paths())[0]?.output).toBe("public");
-});
-
-test("reassessment retracts only assessment-owned configuration diagnostics", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "syncpress-diagnostic-scope-"));
+test("an empty project builds into its configured output and reports what it staged", async () => {
+  const directory = await project();
   try {
-    const { application, gateway } = createSyncpressRuntime();
-    const project = await application.concepts.Filing.open({ name: "project" });
-    if ("error" in project) throw new Error(project.error);
-    await application.concepts.Filing.place({
-      root: project.root,
-      path: "site.yaml",
-      content: bytes("collections:\n  posts:\n    match: 'posts/**{'\n"),
+    const { build, summary } = runtime();
+    expect(await build({ directory })).toMatchObject({
+      ok: true,
+      value: { written: 0, replaced: 0, kept: 0, removed: 0 },
     });
-    const assessed = await gateway.invoke("/site/assess", {});
-    expect(assessed.ok).toBe(true);
-    const configured = await gateway.invoke("/site/configure", { destination: join(temporary, "output") });
-    if (!configured.ok) throw new Error(JSON.stringify(configured.error));
-    const started = await application.concepts.Phasing.start({ sequence: configured.value.sequence });
-    if ("error" in started) throw new Error(started.error);
-    expect(await application.concepts.Diagnosing._all()).toContainEqual(expect.objectContaining({
-      code: "INVALID_SELECTOR",
-      scope: "configuration-settings",
-    }));
 
-    await application.concepts.Filing.place({ root: project.root, path: "site.yaml", content: bytes("{}\n") });
-    expect((await gateway.invoke("/site/assess", {})).ok).toBe(true);
-    await application.whenIdle();
-    expect(await application.concepts.Diagnosing._all()).toContainEqual(expect.objectContaining({
-      code: "INVALID_SELECTOR",
-      scope: "configuration-settings",
-    }));
-
-    const restarted = await application.concepts.Phasing.start({ sequence: configured.value.sequence });
-    if ("error" in restarted) throw new Error(restarted.error);
-    expect(await application.concepts.Diagnosing._all()).not.toContainEqual(expect.objectContaining({
-      code: "INVALID_SELECTOR",
-      scope: "configuration-settings",
-    }));
+    const staged = await summary();
+    expect(staged).toMatchObject({ pages: 0, files: 2, diagnostics: [] });
+    expect(staged.destination).toBe(join(directory, "dist"));
   } finally {
-    await rm(temporary, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
-test("the native build flow settles every phase and rejects superseded reconciliation", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "syncpress-endpoints-"));
+test("an explicit destination replaces the configured output without requiring containment", async () => {
+  const directory = await project();
+  const destination = await mkdtemp(join(tmpdir(), "syncpress-endpoints-output-"));
   try {
-    const { application, gateway, startBuild } = createSyncpressRuntime();
-    const project = await application.concepts.Filing.open({ name: "project" });
-    if ("error" in project) throw new Error(project.error);
-    await application.concepts.Filing.place({ root: project.root, path: "site.yaml", content: bytes("{}\n") });
-    expect((await gateway.invoke("/site/assess", {})).ok).toBe(true);
-    const configured = await gateway.invoke("/site/configure", { destination: join(temporary, "output") });
-    if (!configured.ok) throw new Error(JSON.stringify(configured.error));
-    const job = await startBuild(configured.value.sequence);
-    expect(await application.concepts.Phasing._outcome({ job })).toEqual([{ state: "finished" }]);
-    const unrelatedSequence = await application.concepts.Phasing.declare({ name: "unrelated", phases: ["other"] });
-    if ("error" in unrelatedSequence) throw new Error(unrelatedSequence.error);
-    const unrelated = await application.concepts.Phasing.start({ sequence: unrelatedSequence.sequence });
-    if ("error" in unrelated) throw new Error(unrelated.error);
-    await application.concepts.Phasing.advance({ job: unrelated.job, attempt: unrelated.attempt });
-    expect(await gateway.invoke("/site/reconcile", { job: unrelated.job })).toMatchObject({
-      ok: false,
-      error: { kind: "domain", value: "BUILD_NOT_COMPLETE" },
-    });
-    const replacement = await application.concepts.Phasing.start({ sequence: configured.value.sequence });
-    if ("error" in replacement) throw new Error(replacement.error);
-    expect(await gateway.invoke("/site/reconcile", { job })).toMatchObject({
-      ok: false,
-      error: { kind: "domain", value: "BUILD_SUPERSEDED" },
-    });
+    const { build, summary } = runtime();
+    expect((await build({ directory, destination })).ok).toBe(true);
+    expect((await summary()).destination).toBe(destination);
+    await expect(readdir(join(directory, "dist"))).rejects.toMatchObject({ code: "ENOENT" });
   } finally {
-    await rm(temporary, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
+    await rm(destination, { recursive: true, force: true });
   }
+});
+
+test("a missing site directory is diagnosed rather than left to time out", async () => {
+  const { build, summary } = runtime();
+  const directory = join(tmpdir(), "syncpress-endpoints-absent", "nowhere");
+
+  expect(await build({ directory })).toMatchObject({
+    ok: false,
+    error: { kind: "domain", value: "BUILD_HAS_ERRORS" },
+  });
+  expect((await summary()).diagnostics).toContainEqual(
+    expect.objectContaining({ code: "LOCATION_MISSING", source: "site.yaml" }),
+  );
+});
+
+test("invalid untyped build inputs are rejected before a build flow starts", async () => {
+  const { gateway } = createSyncpressRuntime();
+  expect(await gateway.invoke("/site/build", { directory: "./example", destination: 123 } as never)).toEqual({
+    ok: false,
+    error: { kind: "framework", code: "INVALID_INPUT", detail: "A site build destination must be non-empty text when supplied." },
+  });
+  expect(await gateway.invoke("/site/build", { directory: "" } as never)).toEqual({
+    ok: false,
+    error: { kind: "framework", code: "INVALID_INPUT", detail: "A site build needs a non-empty text directory." },
+  });
+});
+
+test("invalid untyped watch inputs are rejected before a watch flow starts", async () => {
+  const { gateway } = createSyncpressRuntime();
+  expect(await gateway.invoke("/watch/open", { directory: "./example", settling: 75, output: 123 } as never)).toEqual({
+    ok: false,
+    error: { kind: "framework", code: "INVALID_INPUT", detail: "A site watch needs an output path with a safe transaction prefix." },
+  });
+});
+
+test("a missing configuration file is diagnosed against the project", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "syncpress-endpoints-bare-"));
+  try {
+    const { build, summary } = runtime();
+    expect(await build({ directory })).toMatchObject({
+      ok: false,
+      error: { kind: "domain", value: "BUILD_HAS_ERRORS" },
+    });
+    expect((await summary()).diagnostics).toContainEqual(
+      expect.objectContaining({ code: "FILE_MISSING", source: "site.yaml" }),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a configuration that is not UTF-8 text is diagnosed without an assessment", async () => {
+  const directory = await project();
+  try {
+    await writeFile(join(directory, "site.yaml"), new Uint8Array([0xff]));
+    const { application, build, summary } = runtime();
+    expect(await build({ directory })).toMatchObject({
+      ok: false,
+      error: { kind: "domain", value: "BUILD_HAS_ERRORS" },
+    });
+    expect((await summary()).diagnostics).toContainEqual(expect.objectContaining({ code: "INVALID_TEXT" }));
+    expect(await application.concepts.Governing._policy()).toEqual([]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a source root that escapes the site through a symbolic link is diagnosed", async () => {
+  const directory = await project("paths:\n  content: linked/content\n");
+  const outside = await mkdtemp(join(tmpdir(), "syncpress-endpoints-outside-"));
+  try {
+    await mkdir(join(outside, "content"));
+    await symlink(outside, join(directory, "linked"));
+    const { build, summary } = runtime();
+    expect((await build({ directory })).ok).toBe(false);
+    expect((await summary()).diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "SOURCE_OUTSIDE_SITE",
+        message: "Configured paths.content must stay inside the site directory after resolving symbolic links.",
+      }),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("an output directory that overlaps a source directory is diagnosed", async () => {
+  const directory = await project("paths:\n  output: content\n");
+  try {
+    const { build, summary } = runtime();
+    expect((await build({ directory })).ok).toBe(false);
+    expect((await summary()).diagnostics).toContainEqual(
+      expect.objectContaining({ code: "OUTPUT_OVERLAPS_SOURCE", source: "content" }),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("inspection answers a missing target without publishing anything", async () => {
+  const directory = await project();
+  try {
+    const { inspect } = runtime();
+    expect(await inspect({ directory, target: "/nowhere/" })).toMatchObject({
+      ok: false,
+      error: { kind: "domain", value: "INSPECTION_TARGET_NOT_FOUND" },
+    });
+    await expect(readdir(join(directory, "dist"))).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("the summary of an application that has built nothing is empty", async () => {
+  expect(await runtime().summary()).toMatchObject({ pages: 0, files: 0, diagnostics: [] });
+});
+
+test("command composition admits only captured words recognized by the Syncpress grammar", async () => {
+  const interpret = (arguments_: string[]) => createSyncpressRuntime().gateway.invoke("/cli/interpret", { arguments: arguments_ });
+  expect(await interpret(["build", "./site", "out"])).toEqual({
+    ok: true,
+    value: { words: ["build", "./site", "out"] },
+  });
+  expect(await interpret(["dev", "--port", "8080"])).toEqual({
+    ok: true,
+    value: { words: ["dev", "--port", "8080"] },
+  });
+  expect(await interpret(["unknown"])).toEqual({
+    ok: false,
+    error: { kind: "domain", value: "INVALID_USAGE" },
+  });
 });

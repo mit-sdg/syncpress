@@ -2,79 +2,72 @@
 
 ## Purpose
 
-Track each page rendering attempt from source selection through body and layout
-settlement, so later behavior observes one completion event for each stage.
+Track each page rendering attempt through body and layout settlement, so later
+behavior observes one terminal event for the active owner attempt.
 
 ## Principle
 
-Ada begins a Markdown page without rendering controls, so its attempt uses the
-markdown profile and default page template. She begins an HTML page and it uses
-verbatim. Explicitly selected profile and template names are preserved instead.
-Settling the body, then the layout, then the attempt advances it in order.
+Ada begins a page with its selected profile and template and exact dependency
+and output attempts. Settling the body and then the layout advances it to completion in order.
 Repeating a settled transition reports no change. Retrying the same exact owner
 attempts returns the same rendering. Beginning the page with two newer attempts
 supersedes unfinished work, while an older or inconsistent pair is refused and
-late completion of superseded work reports no change.
+late completion of superseded work reports no change. Failing active work makes
+the attempt terminal and reports no second transition when repeated.
 
-## Values
+## Types
 
-Text is a well-formed Unicode string. Subjects identify pages. Paths are
-portable source paths. Data is an ordinary record containing resolved page
-values. Rendering reads optional `build.markup` and `build.template` Text from
-that record. Without them, it selects `markdown` for a `.md` path or `verbatim`
-for an `.html` path and selects the `page.html` template. Explicit names are
-retained for their owning concepts to resolve.
+```types
+Subject = Text
+  A page identity.
 
-A Stage is `started`, `body-settled`, `layout-settled`, `completed`, or
-`superseded`.
+Path = Text
+  A portable source path.
+
+Profile = Text
+  An application-selected profile name, not a profile identity.
+
+TemplateName = Text
+  An application-selected template name, not a template identity.
+
+Stage = "started" | "body-settled" | "completed" | "failed" | "superseded"
+
+AttemptRow = record
+  subject: Subject
+  path: Path
+  profile: Profile
+  template: TemplateName
+  stage: Stage
+  failure: Text | undefined
+  dependencyAttempt: PositiveInteger
+  emissionAttempt: PositiveInteger
+```
 
 ## State
 
 ```state
 a set of Renderings with
   a subject Subject
-  a source path Path
-  a selected profile Profile
-  a selected template TemplateName
-  a dependency attempt Number
-  an emission attempt Number
+  a path Path
+  a profile Profile
+  a template TemplateName
+  a dependencyAttempt PositiveInteger
+  an emissionAttempt PositiveInteger
   a stage Stage
-  a start order Number
-
-at most one latest Rendering for each Subject
-at most one active Rendering for each Subject
+  an optional failure Text
+  a startOrder Number
 ```
-
-The first valid owner-attempt pair creates a rendering identity. Retrying that
-same pair with the same selected source policy returns its identity without
-changing state. A pair whose dependency and emission attempts are both newer
-creates another rendering; if the latest attempt is unfinished, it is marked
-superseded. A pair with either identity not newer is stale.
-Completed and superseded attempts remain queryable as historical evidence.
-The latest attempt is active while started, body-settled, or layout-settled.
 
 ## Actions
 
 ```actions
-begin (subject: Subject, path: Path, data: Values, dependencyAttempt: Number, emissionAttempt: Number) : return (rendering: Rendering, subject: Subject, profile: Profile, template: TemplateName, dependencyAttempt: Number, emissionAttempt: Number)
-  where subject or path is not Text
+begin (subject: Subject, path: Path, profile: Profile, template: TemplateName, dependencyAttempt: PositiveInteger, emissionAttempt: PositiveInteger) : return (rendering: Rendering, subject: Subject, profile: Profile, template: TemplateName, dependencyAttempt: PositiveInteger, emissionAttempt: PositiveInteger)
+  where subject, path, profile, or template is not Text
   then
-    refuse INVALID_TEXT "Rendering subjects and paths must be well-formed text."
-  where data is not an ordinary record
-  then
-    refuse INVALID_DATA "Resolved rendering data must be an ordinary record."
+    refuse INVALID_TEXT "Rendering subjects, paths, profile names, template names, and failure reasons must be well-formed text."
   where either attempt is not a positive safe integer
   then
     refuse INVALID_ATTEMPT "Rendering attempts require valid dependency and emission attempt identities."
-  where build.markup is present and is not Text
-  then
-    refuse INVALID_PROFILE "A selected rendering profile must be well-formed text."
-  where build.template is present and is not Text
-  then
-    refuse INVALID_TEMPLATE "A selected rendering template must be well-formed text."
-  where build.markup is absent and path ends in neither .md nor .html
-  then
-    refuse UNKNOWN_SOURCE "A page source must select a profile or use a supported extension."
   where the pair equals the latest pair and selects the same source policy
   then
     return the latest rendering without changing state
@@ -106,22 +99,22 @@ settleLayout (rendering: Rendering) : return (rendering: Rendering, subject: Sub
     refuse STAGE_NOT_READY "The rendering attempt has not reached the required stage."
   where rendering is body-settled
   then
-    make it layout-settled and return transitioned true
-  where rendering is already layout-settled, completed, or superseded
+    make it completed and return transitioned true
+  where rendering is already completed, failed, or superseded
   then
     return transitioned false
 
-finish (rendering: Rendering) : return (rendering: Rendering, subject: Subject, transitioned: Flag)
+fail (rendering: Rendering, reason: Text) : return (rendering: Rendering, subject: Subject, transitioned: Flag)
   where rendering is unknown
   then
     refuse RENDERING_NOT_FOUND "There is no such rendering attempt."
+  where reason is not Text
+  then
+    refuse INVALID_TEXT "Rendering subjects, paths, profile names, template names, and failure reasons must be well-formed text."
   where rendering is started or body-settled
   then
-    refuse STAGE_NOT_READY "The rendering attempt has not reached the required stage."
-  where rendering is layout-settled
-  then
-    make it completed and return transitioned true
-  where rendering is already completed or superseded
+    make it failed with reason and return transitioned true
+  where rendering is already completed, failed, or superseded
   then
     return transitioned false
 ```
@@ -129,18 +122,28 @@ finish (rendering: Rendering) : return (rendering: Rendering, subject: Subject, 
 ## Queries
 
 ```queries
-_attempt (rendering: Rendering) : optional (subject: Subject, path: Path, profile: Profile, template: TemplateName, stage: Stage, dependencyAttempt: Number, emissionAttempt: Number)
-_active (rendering: Rendering) : optional (subject: Subject, path: Path, profile: Profile, template: TemplateName, stage: Stage, dependencyAttempt: Number, emissionAttempt: Number)
-_latest (subject: Subject) : optional (rendering: Rendering, path: Path, profile: Profile, template: TemplateName, stage: Stage, dependencyAttempt: Number, emissionAttempt: Number)
-_all () : many (rendering: Rendering, subject: Subject, path: Path, profile: Profile, template: TemplateName, stage: Stage, dependencyAttempt: Number, emissionAttempt: Number)
+_attempt (rendering: Rendering) : optional AttemptRow
+  Includes historical superseded and completed attempts and returns no row for
+  an unknown Rendering. In this and the other optional queries, failure is
+  present and undefined unless the attempt failed. No query returns a mutable
+  value.
+
+_active (rendering: Rendering) : optional AttemptRow
+  Returns the attempt only while it is its subject's latest unfinished attempt.
+  An unknown or inactive Rendering returns no row.
+
+_latest (subject: Subject) : optional (rendering: Rendering, path: Path, profile: Profile, template: TemplateName, stage: Stage, failure: Text | undefined, dependencyAttempt: PositiveInteger, emissionAttempt: PositiveInteger)
+  Returns the most recently begun attempt for the subject, or no row for an
+  unknown Subject.
+
+_all () : many (rendering: Rendering, subject: Subject, path: Path, profile: Profile, template: TemplateName, stage: Stage, failure?: Text, dependencyAttempt: PositiveInteger, emissionAttempt: PositiveInteger)
+  Returns all attempts in start order. Failure is omitted from a row unless the
+  attempt failed.
 ```
 
-`_attempt` includes historical superseded and completed attempts. `_active`
-returns an attempt only while it is the subject's latest unfinished attempt.
-`_latest` returns the most recently begun attempt for a subject. `_all` lists
-attempts in start order.
+## Contracts
 
-Rendering records lifecycle and source-profile selection. It does not fill
-templates, convert source, resolve references, emit output, or decide that
-outside work has settled. Reactions report those milestones through its
-actions.
+```contracts
+contract one-current-attempt-per-subject
+  For each Subject, at most one Rendering is latest and at most one is active.
+```

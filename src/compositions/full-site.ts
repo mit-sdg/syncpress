@@ -3,15 +3,20 @@
  * these declarations connect their actions and queries. Assembly discovers the
  * exports below, while PHASES in shared.ts determines execution order.
  */
-export * from "./endpoints.ts";
-export * from "./calculations.ts";
-export * from "./settings.ts";
-export * from "./sources.ts";
-export * from "./routes.ts";
-export * from "./excerpts.ts";
-export * from "./collections.ts";
-export * from "./render.ts";
-export * from "./references.ts";
-export * from "./images.ts";
-export * from "./deployment.ts";
-export * from "./views.ts";
+export * as calculations from "./calculations.ts";
+export * as collections from "./collections.ts";
+export * as commanding from "./commanding.ts";
+export * as deployment from "./deployment.ts";
+export * as endpoints from "./endpoints.ts";
+export * as excerpts from "./excerpts.ts";
+export * as images from "./images.ts";
+export * as inspection from "./inspection.ts";
+export * as references from "./references.ts";
+export * as render from "./render.ts";
+export * as routes from "./routes.ts";
+export * as serving from "./serving.ts";
+export * as settings from "./settings.ts";
+export * as sources from "./sources.ts";
+export * as staging from "./staging.ts";
+export * as views from "./views.ts";
+export * as watching from "./watching.ts";

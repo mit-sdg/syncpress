@@ -1,5 +1,7 @@
 import { compute, view, where } from "@mit-sdg/sync-engine/language";
-import { computations } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+
+const { Governing } = conceptRefs;
 
 /** Optional relational facades over nullable pure calculations. */
 export const DerivedAddress = view(
@@ -34,6 +36,25 @@ export const RetargetedReference = view(
   ),
 ).optional();
 
+export const SiteUrl = view(
+  "site URL of target (target)",
+  ({ target }, { url }, { base }) => where(
+    Governing._site({}).is({ base }),
+    compute(computations.projectSiteUrl, { base, target }, url),
+    computations.isTextValue({ value: url }),
+  ),
+).optional();
+
+export const AbsoluteSiteUrl = view(
+  "absolute site URL of address (address)",
+  ({ address }, { url }, { base, origin }) => where(
+    Governing._site({}).is({ base }),
+    Governing._origin({}).is({ origin }),
+    compute(computations.projectAbsoluteSiteUrl, { base, origin, address }, url),
+    computations.isTextValue({ value: url }),
+  ),
+).optional();
+
 export const RelativePath = view(
   "path (path) relative to prefix (prefix)",
   ({ path, prefix }, { relative }) => where(
@@ -54,6 +75,14 @@ export const DirectoryPath = view(
   "directory prefix of path (path)",
   ({ path }, { prefix }) => where(
     compute(computations.directoryPath, { path }, prefix),
+    computations.isTextValue({ value: prefix }),
+  ),
+).optional();
+
+export const PublicationTransactionPrefix = view(
+  "the publication transaction prefix of destination (destination)",
+  ({ destination }, { prefix }) => where(
+    compute(computations.publicationTransactionPrefix, { destination }, prefix),
     computations.isTextValue({ value: prefix }),
   ),
 ).optional();

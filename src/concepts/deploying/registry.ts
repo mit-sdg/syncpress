@@ -5,11 +5,11 @@ import {
   InvalidContext,
   InvalidEntries,
   InvalidPolicy,
+  InvalidPreparation,
   InvalidRedirect,
   InvalidUrls,
   WorkNotActive,
   WorkNotCurrent,
-  WorkNotPending,
   WorkNotPrepared,
 } from "./deploying.ts";
 import spec from "./spec.md" with { type: "text" };
@@ -22,11 +22,11 @@ export const deploying = registerConcept({
     INVALID_CONTEXT: InvalidContext,
     INVALID_ENTRIES: InvalidEntries,
     INVALID_POLICY: InvalidPolicy,
+    INVALID_PREPARATION: InvalidPreparation,
     INVALID_REDIRECT: InvalidRedirect,
     INVALID_URLS: InvalidUrls,
     WORK_NOT_ACTIVE: WorkNotActive,
     WORK_NOT_CURRENT: WorkNotCurrent,
-    WORK_NOT_PENDING: WorkNotPending,
     WORK_NOT_PREPARED: WorkNotPrepared,
   },
 });

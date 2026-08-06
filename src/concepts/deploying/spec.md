@@ -2,50 +2,100 @@
 
 ## Purpose
 
-Own the ordered lifecycle of one static deployment,
-so later work cannot begin before every earlier item reaches a terminal outcome.
+Own the ordered queue, historical snapshots, and preparation state of one
+static deployment, so every returned current item is already active and later
+work cannot begin before earlier work reaches a terminal outcome.
 
 ## Principle
 
-Ada starts one policy containing a marker, a redirect, pagination, a sitemap,
-and a feed. Only the marker is pending. She activates and completes it, then
-activates and prepares the redirect. Activating that redirect twice is refused.
-The pagination plan expands atomically into numbered pending pages, including a
-first page for an empty collection. Each page becomes current in number order.
-After every page completes, the sitemap and feed are prepared from the facts Ada
-supplies and the deployment finishes. Starting another deployment in the same
-concept instance, completing pending work, and completing stale work are refused. The final
-outcome distinguishes a wholly completed queue from one containing failed work.
+Ada starts one policy containing a marker, redirects, pagination, a sitemap,
+and a feed. Starting atomically activates and returns the marker. Completing,
+rejecting, rejecting by owner or producer, and failing each current item
+atomically activate the next item they return. Dividing an active pagination
+plan atomically replaces it with numbered pages and activates the first page,
+including one page for an empty collection. Preparation records independently
+computed redirect documents, pagination contexts, sitemap documents, and feed
+results without generating them. An invalid or originless feed result remains
+active, cannot complete, and can be diagnosed and rejected so the queue
+continues. The final outcome distinguishes a wholly completed queue from one
+containing failed work.
+
+## Types
+
+```types
+Policy = external
+  A publishing policy record in the supported deployment shape.
+
+Owner = Text
+Producer = Text
+Template = Text
+Name = Text
+Collection = Text
+Path = Text
+Address = Text
+Url = Text
+Code = Text
+
+Value = external
+  A value accepted by the host structured-clone operation.
+
+Values = List<Value>
+
+Entries = external
+  A dense list of structured-cloneable identified-card records.
+
+Urls = external
+  A dense list of records containing absolute HTTP URLs.
+
+Kind = "nojekyll" | "redirect" | "pagination-plan" | "pagination-page" | "sitemap" | "feed"
+Status = "pending" | "active" | "prepared" | "failed" | "completed"
+State = "absent" | "active" | "failed" | "completed"
+
+WorkRow = record
+  work: Work
+  deployment: Deployment
+  kind: Kind
+  status: Status
+  owner?: Owner
+  producer?: Producer
+  path?: Path
+  from?: Address
+  to?: Url
+  name?: Name
+  collection?: Collection
+  perPage?: Number
+  route?: Address
+  templateName?: Name
+  title?: Value
+  template?: Template
+  number?: Number
+  pages?: Number
+  address?: Address
+  previous?: Value
+  next?: Value
+  cards?: Values
+  sourcePath?: Path
+  description?: Value
+```
 
 ## State
 
 ```state
-an optional sole Deployment with
-  an ordered sequence of Work
-  one current position
+a set of Deployments with
+  a works seq of Work
+  a position NonnegativeInteger
 
-each Work has
-  a kind
-  a status of pending, active, prepared, failed, or completed
-  the configuration snapshot that gives the work its historical meaning
+a set of Work with
+  a Deployment
+  a kind Kind
+  a status Status
+  a snapshot Value
 ```
-
-The deployment policy and cards supplied to this concept are snapshots. Their
-copies are authoritative for that deployment attempt and are never refreshed
-from another concept. One concept instance owns exactly one deployment attempt;
-a complete site-build retry uses a fresh application so routes, dependencies,
-and output producers cannot leak from prior work.
-Preparation actions return independent values without retaining duplicate
-rendering contexts or complete generated artifacts in queue state.
-Rejection and failure are terminal for one work item and do not retry it; the
-queue continues so callers can discover later failures. A failed deployment is
-never a completed outcome. Retrying requires a fresh concept application after
-the queue is exhausted.
 
 ## Actions
 
 ```actions
-start (policy: Policy) : return (deployment: Deployment, work: OptionalWork, completed: Flag)
+start (policy: Policy) : return (deployment: Deployment, work?: Work, completed: Flag)
   where policy does not have the supported deployment shape, contains an invalid or cyclic redirect, pagination route, or feed path, or repeats a redirect source or pagination name
   then
     refuse INVALID_POLICY "A deployment policy must have the supported publishing shape."
@@ -55,20 +105,9 @@ start (policy: Policy) : return (deployment: Deployment, work: OptionalWork, com
   where no deployment was started
   then
     add work in declared precedence
-    return the first pending work, or completed true when policy produces none
+    activate and return the first work, or completed true when policy produces none
 
-dispatch (deployment: Deployment, work: Work) : return (deployment: Deployment, work: Work)
-  where work is not the deployment's current item
-  then
-    refuse WORK_NOT_CURRENT "Deployment work must be the current item."
-  where current work is not pending
-  then
-    refuse WORK_NOT_PENDING "Current deployment work has already been activated."
-  where current work is pending
-  then
-    make it active and return it
-
-complete (work: Work) : return (deployment: Deployment, work: OptionalWork, completed: Flag)
+complete (work: Work) : return (deployment: Deployment, work?: Work, completed: Flag)
   where work is not current
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -80,9 +119,9 @@ complete (work: Work) : return (deployment: Deployment, work: OptionalWork, comp
     refuse WORK_NOT_PREPARED "Deployment work must be prepared before completion."
   where work is an active marker or is prepared
   then
-    make it completed, advance, and return the next pending work or completed true
+    make it completed, advance, and atomically activate and return the next work or completed true
 
-reject (work: Work) : return (deployment: Deployment, work: OptionalWork, completed: Flag)
+reject (work: Work) : return (deployment: Deployment, work?: Work, completed: Flag)
   where work is not current
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -91,9 +130,9 @@ reject (work: Work) : return (deployment: Deployment, work: OptionalWork, comple
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where work is active or prepared
   then
-    make it failed, advance, and return the next result
+    make it failed, advance, and atomically activate and return the next work or completed true
 
-rejectOwner (owner: Owner) : return (deployment: Deployment, work: OptionalWork, completed: Flag)
+rejectOwner (owner: Owner) : return (deployment: Deployment, work?: Work, completed: Flag)
   where the latest deployment has no current work for owner
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -102,9 +141,9 @@ rejectOwner (owner: Owner) : return (deployment: Deployment, work: OptionalWork,
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where the owner's work is active or prepared
   then
-    reject it and return the next result
+    reject it and atomically activate and return the next work or completed true
 
-rejectProducer (producer: Producer) : return (deployment: Deployment, work: OptionalWork, completed: Flag)
+rejectProducer (producer: Producer) : return (deployment: Deployment, work?: Work, completed: Flag)
   where the latest deployment has no current work for producer
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -113,10 +152,10 @@ rejectProducer (producer: Producer) : return (deployment: Deployment, work: Opti
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where the producer's work is active or prepared
   then
-    reject it and return the next result
+    reject it and atomically activate and return the next work or completed true
 
 divide (deployment: Deployment, work: Work, template: Template, entries: Entries) : return (deployment: Deployment, work: Work, pages: Number)
-  where entries are not a dense list of structured-cloneable identified cards
+  where entries are not a dense list of structured-cloneable identified cards with routed URLs
   then
     refuse INVALID_ENTRIES "Deployment entries must be a dense list of structured-cloneable identified cards."
   where work is not current
@@ -127,9 +166,9 @@ divide (deployment: Deployment, work: Work, template: Template, entries: Entries
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where work is the active pagination plan
   then
-    replace it atomically with at least one ordered pending page and return the first
+    replace it atomically with at least one ordered pending page, activate the first page, and return it
 
-redirect (work: Work, target: Url, canonical: Url) : return (content: Text)
+redirect (work: Work, target: Url, canonical: Url, content: Text) : return (content: Text)
   where work is not current
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -139,39 +178,61 @@ redirect (work: Work, target: Url, canonical: Url) : return (content: Text)
   where target and canonical are not a valid local or external projection of the configured target
   then
     refuse INVALID_REDIRECT "Redirect preparation requires a valid projection of its configured target."
-  where work is the active redirect
+  where content is not well-formed text
   then
-    make it prepared and return its escaped redirect document
+    refuse INVALID_PREPARATION "Deployment preparation must match the current work snapshot."
+  where work and preparation are valid
+  then
+    make it prepared and return the independently computed content
 
-context (work: Work, site: Value, collections: Value, canonicalUrl: OptionalUrl) : return (owner: Owner, template: Template, context: Value)
+context (work: Work, context: Value) : return (owner: Owner, template: Template, context: Value)
   where work is not current
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
   where work is not the current active pagination page
   then
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
-  where the supplied context values cannot be copied
+  where context cannot be copied
   then
     refuse INVALID_CONTEXT "Deployment context values must be structured-cloneable."
-  where work is the active pagination page
+  where work and context are valid
   then
-    make it prepared and return its complete rendering context
+    make it prepared and return an independent context with the work's owner and template
 
-feed (work: Work, site: Value, entries: Entries) : return (path: Path, content: Text, invalid: Number, valid: Flag, origin: Flag)
-  where entries are not a dense list of structured-cloneable identified cards
-  then
-    refuse INVALID_ENTRIES "Deployment entries must be a dense list of structured-cloneable identified cards."
+snapshotFeed (work: Work, site: Value, entries: Entries) : return (work: Work, path: Path, title: Text | null, description: Text | null, site: Value, entries: Entries)
   where work is not current
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
   where work is not the current active feed
   then
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
-  where work is the active feed
+  where entries are not a dense list of structured-cloneable identified cards
   then
-    make it prepared and return its deterministic Atom document
+    refuse INVALID_ENTRIES "Deployment entries must be a dense list of structured-cloneable identified cards."
+  where the snapshot cannot be copied
+  then
+    refuse INVALID_PREPARATION "Deployment preparation must match the current work snapshot."
+  then
+    return independent copies of the feed policy, site, and entries without changing work state
 
-sitemap (work: Work, urls: Urls) : return (path: Path, content: Text)
+prepareFeed (work: Work, preparation: Value) : return (path: Path, content: Text, invalid: Number, valid: Flag, origin: Flag)
+  where work is not current
+  then
+    refuse WORK_NOT_CURRENT "Deployment work must be the current item."
+  where work is not the current active feed
+  then
+    refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
+  where preparation does not contain the configured path, well-formed content, a nonnegative invalid count, and consistent validity and origin flags
+  then
+    refuse INVALID_PREPARATION "Deployment preparation must match the current work snapshot."
+  where preparation has an origin and no invalid entries
+  then
+    make work prepared and return the independent preparation
+  where preparation is originless or has invalid entries
+  then
+    leave work active and return the independent preparation for diagnosis
+
+snapshotSitemap (work: Work, urls: Urls) : return (work: Work, path: Path, urls: Urls)
   where urls are not a dense list of absolute HTTP URL records
   then
     refuse INVALID_URLS "Sitemap URLs must be a dense list of absolute HTTP URL records."
@@ -181,11 +242,24 @@ sitemap (work: Work, urls: Urls) : return (path: Path, content: Text)
   where work is not the current active sitemap
   then
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
-  where work is the active sitemap
   then
-    make it prepared and return its deterministic XML document
+    return an independent URL snapshot without changing work state
 
-fail (producer: Producer, path: Path, code: Code, detail: Text) : return (deployment: Deployment, work: OptionalWork, completed: Flag, path: Path, code: Code, message: Text)
+prepareSitemap (work: Work, content: Text) : return (path: Path, content: Text)
+  where work is not current
+  then
+    refuse WORK_NOT_CURRENT "Deployment work must be the current item."
+  where work is not the current active sitemap
+  then
+    refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
+  where content is not well-formed text
+  then
+    refuse INVALID_PREPARATION "Deployment preparation must match the current work snapshot."
+  where work and preparation are valid
+  then
+    make it prepared and return its path and independently computed content
+
+fail (producer: Producer, path: Path, code: Code, detail: Text) : return (deployment: Deployment, work?: Work, completed: Flag, path: Path, code: Code, message: Text)
   where the latest deployment has no current work for producer
   then
     refuse WORK_NOT_CURRENT "Deployment work must be the current item."
@@ -194,22 +268,43 @@ fail (producer: Producer, path: Path, code: Code, detail: Text) : return (deploy
     refuse WORK_NOT_ACTIVE "Deployment work must be active before this transition."
   where the producer's work is active or prepared
   then
-    mark it failed, advance, and return the next result and path-prefixed message
+    mark it failed, advance, atomically activate and return the next work or completed true, and return a path-prefixed message
 ```
 
 ## Queries
 
 ```queries
-_work (work: Work) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
-_forOwner (owner: Owner) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
-_forProducer (producer: Producer) : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
-_current () : optional (work: Work, deployment: Deployment, kind: Kind, status: Status, owner?: Owner, producer?: Producer, path?: Path, from?: Address, to?: Url, name?: Name, collection?: Collection, perPage?: Number, route?: Address, templateName?: Name, title?: Text, template?: Template, number?: Number, pages?: Number, address?: Address, previous?: Address, next?: Address, cards?: Values, content?: Text, sourcePath?: Path, description?: Text)
+_work (work: Work) : optional WorkRow
+  Returns no row for unknown work. Every work query includes only the fields
+  defined for the work's kind; all other fields are absent. All query results
+  are copies.
+
+_forOwner (owner: Owner) : optional WorkRow
+  Looks only in the sole deployment and uses `_work`'s kind-specific projection.
+  Returns no row when that deployment has no work for the owner.
+
+_forProducer (producer: Producer) : optional WorkRow
+  Looks only in the sole deployment and uses `_work`'s kind-specific projection.
+  Returns no row when that deployment has no work for the producer.
+
+_current () : optional WorkRow
+  Uses `_work`'s kind-specific projection and returns no row before a deployment
+  starts or after its queue is exhausted. Queue order is marker, redirects by
+  validated policy order, pagination by validated policy order and page number,
+  sitemap, then feed.
+
 _outcome () : one (state: State)
+  Reports `absent` before a deployment starts, `active` while current work
+  remains, `failed` when an exhausted queue contains failed work, and `completed`
+  otherwise. A true `completed` flag returned by an action means only that the
+  queue is exhausted; it does not imply a `completed` outcome.
 ```
 
-Work order is marker, redirects by validated policy order, pagination by
-validated policy order and page number, sitemap, then feed. Owner and producer
-lookup concerns the sole deployment. `_outcome` is `absent` before a
-deployment starts, `active` while current work remains, `failed` when an
-exhausted queue contains failed work, and `completed` otherwise. The `completed`
-action-result flag means only that the queue is exhausted. Queries return copies.
+## Contracts
+
+```contracts
+contract deployment-snapshots on start, divide, context, snapshotFeed, snapshotSitemap
+  A Deployment retains independent Policy and pagination-card snapshots.
+  Context and snapshot actions return independent copies. Preparation results
+  are returned rather than retained; only their declared Work transitions remain.
+```
