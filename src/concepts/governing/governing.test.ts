@@ -149,6 +149,96 @@ test("unsupported nested site values cannot silently erase author data", () => {
   }));
 });
 
+test("normalizes a trailing origin slash in the authoritative policy and queries", () => {
+  const governing = new GoverningConcept();
+  const assessed = governing.assess({ source: "site:\n  origin: https://example.test/\n" });
+
+  expect(assessed.policy.site.origin).toBe("https://example.test");
+  expect(governing._policy()[0]?.policy.site.origin).toBe("https://example.test");
+  expect(governing._site()[0]?.site.origin).toBe("https://example.test");
+  expect(governing._origin()).toEqual([{ origin: "https://example.test" }]);
+});
+
+test("reports configured portable glob failures at their YAML values", () => {
+  const governing = new GoverningConcept();
+  expect(() => governing.assess({
+    source: [
+      "defaults:",
+      "  - match: posts/**{",
+      "    values: {}",
+      "collections:",
+      "  posts:",
+      '    match: "[z-a]"',
+      "",
+    ].join("\n"),
+  })).toThrow(InvalidConfiguration);
+
+  expect(governing._problems()).toEqual([
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "defaults[0].match must be a valid portable glob.",
+      line: 2,
+      column: 12,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.match must be a valid portable glob.",
+      line: 6,
+      column: 12,
+    },
+  ]);
+});
+
+test("reports catalog field and condition contract failures at their YAML values", () => {
+  const governing = new GoverningConcept();
+  expect(() => governing.assess({
+    source: [
+      "collections:",
+      "  posts:",
+      "    match: posts/**",
+      "    sort:",
+      "      by: data..date",
+      "    where:",
+      "      field: data metadata",
+      "      exists: true",
+      "      unexpected: true",
+      "  malformed:",
+      "    match: posts/**",
+      "    where:",
+      "      field: data.title",
+      '      equals: "\\uD800"',
+      "",
+    ].join("\n"),
+  })).toThrow(InvalidConfiguration);
+
+  expect(governing._problems()).toEqual([
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.sort.by must use dotted ASCII segments.",
+      line: 5,
+      column: 11,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.where.unexpected is not a supported setting.",
+      line: 9,
+      column: 19,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.posts.where.field must use dotted ASCII segments.",
+      line: 7,
+      column: 14,
+    },
+    {
+      code: "INVALID_CONFIGURATION",
+      message: "collections.malformed.where.equals must be a supported configuration value.",
+      line: 14,
+      column: 15,
+    },
+  ]);
+});
+
 test("publishing strings satisfy the deployment owner's nonempty contract", () => {
   const governing = new GoverningConcept();
   expect(() => governing.assess({

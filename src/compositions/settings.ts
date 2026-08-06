@@ -1,14 +1,13 @@
-import { earlier, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
+import { earlier, reaction, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts as conceptRefs } from "@syncpress/concept-set";
 import {
   CONFIGURATION_PATH,
   DIAGNOSTIC_SCOPES,
-  PAGE_PATTERNS,
   PHASE_SEQUENCE,
   PROFILES,
 } from "./shared.ts";
 
-const { Cataloging, Converting, Diagnosing, Governing, Matching, Phasing, Routing } = conceptRefs;
+const { Cataloging, Converting, Diagnosing, Governing, Phasing } = conceptRefs;
 
 /** Each assessment replaces only diagnostics owned by configuration policy. */
 export const ConfigurationAssessmentRetractsDiagnostics = reaction(() =>
@@ -30,85 +29,11 @@ export const AssessedConfigurationProblemsDiagnose = reaction(({ code, message, 
     })),
 );
 
-/** Make the built-in source selectors available even when configuration has no rules. */
-export const SettingsPhasesRetractDiagnostics = reaction(() =>
+/** Begin settings work after replacing diagnostics from the preceding assessment. */
+export const SettingsPhaseRetractsDiagnostics = reaction(() =>
   when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "settings", transitioned: true })).then(
     Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }),
   ),
-);
-
-export const FixedPatternsCompile = reaction(() =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }))
-    .then(
-      Matching.compile({ text: PAGE_PATTERNS.markdown }).named("markdown"),
-      Matching.compile({ text: PAGE_PATTERNS.html }).named("html"),
-      Matching.compile({ text: PAGE_PATTERNS.raster }).named("raster"),
-    ),
-);
-
-export const SettingsRebaseRouting = reaction(({ base }) =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._site({}).is({ base }),
-    )
-    .then(Routing.rebase({ base })),
-);
-
-export const SettingsRebaseFailuresDiagnose = reaction(({ base, detail }) =>
-  when(Routing.rebase({ base }).refuses({ error: "INVALID_BASE", detail }))
-    .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._site({}).is({ base }),
-    )
-    .then(
-      Diagnosing.report({
-        scope: DIAGNOSTIC_SCOPES.settings,
-        severity: "error",
-        code: "INVALID_BASE",
-        message: detail,
-        source: CONFIGURATION_PATH,
-      }),
-    ),
-);
-
-/** Configure canonical URL projection only when the site declares an origin. */
-export const SettingsReoriginRouting = reaction(({ origin }) =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._origin({}).is({ origin }),
-    )
-    .then(Routing.reorigin({ origin })),
-);
-
-/** An omitted origin deliberately clears any origin retained by a long-lived application. */
-export const SettingsClearRoutingOrigin = reaction(() =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._policy({}),
-      no(Governing._origin({})),
-    )
-    .then(Routing.reorigin({})),
-);
-
-export const SettingsReoriginFailuresDiagnose = reaction(({ origin, detail }) =>
-  when(Routing.reorigin({ origin }).refuses({ error: "INVALID_ORIGIN", detail }))
-    .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._origin({}).is({ origin }),
-    )
-    .then(
-      Diagnosing.report({
-        scope: DIAGNOSTIC_SCOPES.settings,
-        severity: "error",
-        code: "INVALID_ORIGIN",
-        message: detail,
-        source: CONFIGURATION_PATH,
-      }),
-    ),
 );
 
 export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, separator }) =>
@@ -175,24 +100,6 @@ export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ separator, er
     .where(
       earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
       Governing._markdown({}).is({ separator }),
-    )
-    .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
-);
-
-export const SettingsCompileDefaultPatterns = reaction(({ text }) =>
-  when(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
-    .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._defaults({}).is({ text }),
-    )
-    .then(Matching.compile({ text })),
-);
-
-export const SettingsDefaultPatternFailuresDiagnose = reaction(({ text, error, detail }) =>
-  when(Matching.compile({ text }).refuses({ error, detail }))
-    .where(
-      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._defaults({}).is({ text }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );

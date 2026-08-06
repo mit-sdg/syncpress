@@ -73,6 +73,9 @@ a set of Entries with
 At most one catalog has a name, and at most one entry has a catalog and item.
 Catalog and entry identities are deterministic encodings of their name and
 `(catalog, item)` respectively and survive redeclaration and remove-then-add.
+An indexed card is a catalog-owned snapshot supplied by the caller. `index`
+replaces that snapshot; it is never refreshed from another owner implicitly.
+Removing a catalog removes all of its snapshots atomically.
 
 ## Actions
 
@@ -109,7 +112,7 @@ index (catalog: Catalog, item: Item, path: Path, tiebreak: Text, card: Values) :
     refuse INVALID_TEXT "Names, selectors, identities, paths, and tiebreaks must be text."
   where catalog is absent
   then
-    refuse COLLECTION_NOT_FOUND "There is no such catalog."
+    refuse CATALOG_NOT_FOUND "There is no such catalog."
   where card is not a record of Values
   then
     refuse INVALID_CARD "A card must be a record of supported values."
@@ -133,6 +136,17 @@ unindex (catalog: Catalog, item: Item) : return (entry: Entry)
   where item is present
   then
     remove and return its entry
+
+remove (name: Name) : return (catalog: Catalog, count: Number)
+  where name is not Text
+  then
+    refuse INVALID_TEXT "Names, selectors, identities, paths, and tiebreaks must be text."
+  where no catalog has name
+  then
+    refuse CATALOG_NOT_FOUND "There is no such catalog."
+  where a catalog has name
+  then
+    remove it and all of its entries and return how many entries were removed
 
 withdraw (item: Item) : return (item: Item, count: Number)
   where item is not Text

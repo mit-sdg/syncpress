@@ -11,10 +11,11 @@ Ada scans generated HTML containing links, images, and embedded resources. Each
 found address says which element and attribute owns it, where it appears in the
 HTML, and which other addresses share that element or attribute. Ada can replace
 an address safely or trust supplied markup to replace one whole element. The HTML
-is finished only after every found address has an answer. Scanning again forgets
-the old answers, and removing the scan makes its old reference identities invalid.
-Primary image sources also carry a vetted record of authored attributes that an
-image embedding policy may preserve.
+is finished only after every found address has an answer. Once finished, its
+answers are fixed: an identical repeated answer is idempotent, while a changed
+answer is refused. Scanning again forgets the old answers, and removing the scan
+makes its old reference identities invalid. Primary image sources also carry
+their source-backed authored attributes for application policy to interpret.
 
 ## Text And HTML
 
@@ -55,17 +56,9 @@ Form actions, citation attributes, ping lists, `srcdoc`, CSS URLs, SVG reference
 and other element/attribute pairs are outside this concept's contract.
 
 Only a primary `img[src]` reference exposes `attributes`. It is a fresh
-null-prototype record of decoded, parser-retained, source-backed attribute values
-that Embedding can accept: `class`, `crossorigin`, `dir`, `fetchpriority`, `id`,
-`lang`, `referrerpolicy`, `role`, `sizes`, `title`, `aria-*`, and `data-*`.
-Dynamic names match `^(?:aria|data)-[a-z][a-z0-9_.:-]*$`. `crossorigin` is empty,
-`anonymous`, or `use-credentials`; `dir` is `auto`, `ltr`, or `rtl`;
-`fetchpriority` is `auto`, `high`, or `low`; and `referrerpolicy` is empty,
-`no-referrer`, `no-referrer-when-downgrade`, `origin`,
-`origin-when-cross-origin`, `same-origin`, `strict-origin`,
-`strict-origin-when-cross-origin`, or `unsafe-url`. Everything else is omitted,
-including Syncpress-owned `src`, `srcset`, `width`, `height`, `alt`, `loading`,
-and `decoding` attributes, event handlers, and `style`.
+null-prototype record of every decoded, parser-retained, source-backed attribute
+value on that element. Referencing records HTML evidence without deciding which
+attributes another mechanism may preserve.
 
 Attribute names are canonical lowercase and records use ascending UTF-8 name
 order. Each query returns a new record, so changing a returned record cannot
@@ -135,9 +128,10 @@ new scan itself completes immediately because it found no references.
 
 An answer has `changed: true` only when its form or value differs from the stored
 answer. Its `completed` response is a transition flag: it is true exactly when
-this changed answer takes a previously unfinished source to finished. Repeating an
-answer, or correcting an answer after the source is already finished, returns
-`completed: false`. `_finished` nevertheless always reflects the current answers.
+this changed answer takes a previously unfinished source to finished. After a
+source is finished, repeating the same form and value is idempotent and returns
+`changed: false` and `completed: false`; a different form or value is refused.
+Scanning again is required before any answers can change.
 
 `drop` removes a present source and all its references. It is an idempotent no-op
 for an absent source; `dropped`, `count`, and the stable source identity report
@@ -211,6 +205,9 @@ answer (reference: Reference, form: Form, value: Text) : return (reference: Refe
   where reference is not in references
   then
     refuse REFERENCE_NOT_FOUND "There is no such reference."
+  where the source is finished and form or value differs from the stored answer
+  then
+    refuse SOURCE_FINISHED "A finished source cannot accept a changed answer."
   where form is address and value cannot be represented as one reference in its HTML attribute
   then
     refuse UNREPRESENTABLE_ADDRESS "This address cannot be represented as one HTML reference."

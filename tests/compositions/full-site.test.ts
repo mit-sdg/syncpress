@@ -475,6 +475,42 @@ test("watch ignores its own reconciliation transactions", async () => {
   }
 }, BUILD_TEST_TIMEOUT_MS);
 
+test("watch replaces its exclusions when configured output changes", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-watch-output-"));
+  let builds = 0;
+  let resolveRebuilt: (() => void) | undefined;
+  const rebuilt = new Promise<void>((resolve) => {
+    resolveRebuilt = resolve;
+  });
+  const outputs: string[] = [];
+
+  try {
+    await copyExample(project);
+    const watcher = await watchSite(project, undefined, {
+      onBuild(_result, outputDirectory) {
+        outputs.push(outputDirectory);
+        builds += 1;
+        if (builds === 2) resolveRebuilt?.();
+      },
+    });
+    try {
+      const configuration = join(project, "site.yaml");
+      await writeFile(configuration, (await readFile(configuration, "utf8")).replace("output: dist", "output: public-dist"));
+      await Promise.race([
+        rebuilt,
+        Bun.sleep(5_000).then(() => Promise.reject(new Error("Watch rebuild did not complete."))),
+      ]);
+      await Bun.sleep(250);
+      expect(builds).toBe(2);
+      expect(outputs).toEqual([join(project, "dist"), join(project, "public-dist")]);
+    } finally {
+      await watcher.close();
+    }
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+}, BUILD_TEST_TIMEOUT_MS);
+
 test("a missing local reference reports a diagnostic and preserves the prior destination", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-site-"));
   const destination = join(project, "dist");

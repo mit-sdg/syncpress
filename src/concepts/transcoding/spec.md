@@ -95,6 +95,9 @@ a set of Originals with
   a width Number
   a height Number
   an animated Flag
+  a frame count Number
+  frame delays Values
+  a loop count Number
 
 a set of Renditions with
   an original Original

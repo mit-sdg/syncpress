@@ -38,11 +38,14 @@ request with a service-unavailable status, because it has nothing published to
 show. Pointing a server at another directory replaces the first.
 
 A reader is one open reload listener. Readers arrive and leave on their own;
-`publish` tells all of them at once and reports how many were told.
+every successful `publish`, including publication of the same directory again,
+tells all of them at once and reports how many were told.
 
 ## Serving Rules
 
-A raw origin-form request path is separated from its query without WHATWG dot
+A server without a published directory answers every request, including the
+reload path, with service unavailable before applying the remaining rules. A
+raw origin-form request path is separated from its query without WHATWG dot
 segment normalization, then decoded once; a malformed encoding is a bad
 request. A decoded path containing a backslash or a `..`
 segment is forbidden without touching the host. What remains is resolved inside
@@ -75,7 +78,7 @@ publish (server: Server, directory: Path) : return (server: Server, directory: P
     refuse SERVER_NOT_OPEN "There is no such open server."
   where directory is not well-formed, non-empty text
   then
-    refuse INVALID_SERVER "A server needs a host and a port between 0 and 65535."
+    refuse INVALID_PUBLICATION "A publication needs a well-formed, non-empty directory path."
   where directory is missing, symbolic, not a directory, or cannot be resolved
   then
     refuse PUBLICATION_UNAVAILABLE "This published directory could not be served."

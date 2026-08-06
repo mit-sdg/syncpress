@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
+import { inspectAssembly } from "@mit-sdg/sync-engine/tooling";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { assembleSyncpress } from "../src/assembly.ts";
 import type { BuildResult as DeclaredBuildResult, InspectionResult as DeclaredInspectionResult } from "../types/index.d.ts";
 import type { BuildResult, inspectSite } from "../src/compositions/api.ts";
 
@@ -68,11 +70,26 @@ test("composition asks concepts for host work instead of doing it", async () => 
   }
 });
 
+test("reaction names retain their composition module", () => {
+  const names = inspectAssembly(assembleSyncpress()).app.reactions.map(({ name }) => name);
+  expect(names).toContain("fullSite.endpoints.AdvanceSiteBuild");
+  expect(names).toContain("fullSite.render.SettledLayoutsStagePageOutput");
+  expect(names).toContain("fullSite.deployment.ActivatedSitemapWorkSnapshotsUrls");
+  expect(names.some((name) => /^fullSite\.[A-Z]/u.test(name))).toBe(false);
+});
+
 /** Computations may use pure host path projection, but never perform host effects. */
 test("computations perform no host effects", async () => {
-  const source = await readFile(join(root, "src", "compositions", "computations.ts"), "utf8");
-  expect(source).not.toMatch(/from\s+["']node:(?:fs|http|https|net|process|timers)/);
-  expect(source).not.toMatch(/\bprocess\.|\bconsole\.|\bsetTimeout\b|\bsetInterval\b/);
+  for (const name of ["computations.ts", "deployment-computations.ts"]) {
+    const source = await readFile(join(root, "src", "compositions", name), "utf8");
+    expect(source).not.toMatch(/from\s+["']node:(?:fs|http|https|net|process|timers)/);
+    expect(source).not.toMatch(/\bprocess\.|\bconsole\.|\bsetTimeout\b|\bsetInterval\b/);
+  }
+});
+
+test("Deploying owns preparation state but no generated document formats", async () => {
+  const source = await readFile(join(root, "src", "concepts", "deploying", "deploying.ts"), "utf8");
+  expect(source).not.toMatch(/<!doctype|<feed\b|<urlset\b|syncpress-pagination-items|atomTimestamp|xmlEscape|htmlEscape/);
 });
 
 /**

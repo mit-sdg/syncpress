@@ -1,5 +1,5 @@
 import { isProxy } from "node:util/types";
-import picomatch from "picomatch";
+import { compilePortableGlob } from "../../compositions/computations.ts";
 
 export class InvalidText extends Error {}
 export class InvalidDirection extends Error {}
@@ -44,31 +44,6 @@ class UnsupportedValue extends Error {}
 
 const encoder = new TextEncoder();
 const fieldPattern = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
-const globOptions = {
-  basename: false,
-  contains: false,
-  debug: true,
-  dot: true,
-  fastpaths: false,
-  keepQuotes: false,
-  nobrace: false,
-  nobracket: false,
-  nocase: false,
-  noextglob: false,
-  noglobstar: false,
-  nonegate: true,
-  posix: true,
-  strictBrackets: true,
-  strictSlashes: true,
-  windows: false,
-} as const;
-
-function compileGlob(pattern: string): (path: string) => boolean {
-  const matcher = picomatch(pattern, globOptions, true);
-  if (matcher.state.quotes !== 0) throw new SyntaxError("Unterminated quoted run");
-  return matcher;
-}
-
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();
 }
@@ -324,7 +299,7 @@ export class CatalogingConcept {
     requireText(selector);
     let matches: (path: string) => boolean;
     try {
-      matches = compileGlob(selector);
+      matches = compilePortableGlob(selector);
     } catch {
       throw new InvalidSelector();
     }
@@ -399,6 +374,21 @@ export class CatalogingConcept {
     const entry = entryIdentity(catalog, item);
     if (!this.#entries.delete(entry)) throw new NotIncluded();
     return { entry };
+  }
+
+  remove({ name }: { name: unknown }) {
+    requireText(name);
+    const catalog = this.#catalogsByName.get(name);
+    if (catalog === undefined) throw new CatalogNotFound();
+    let count = 0;
+    for (const [entry, record] of this.#entries) {
+      if (record.catalog !== catalog.catalog) continue;
+      this.#entries.delete(entry);
+      count += 1;
+    }
+    this.#catalogsByName.delete(name);
+    this.#catalogsByID.delete(catalog.catalog);
+    return { catalog: catalog.catalog, count };
   }
 
   withdraw({ item }: { item: unknown }) {

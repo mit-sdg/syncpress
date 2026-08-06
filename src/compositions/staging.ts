@@ -11,7 +11,7 @@ import { CONFIGURATION_PATH, DIAGNOSTIC_SCOPES, PHASE_SEQUENCE, PLACES, ROOTS } 
 import { PublicationTransactionPrefix } from "./calculations.ts";
 import { PublicationPlace } from "./views.ts";
 
-const { Diagnosing, Emitting, Filing, Governing, Locating, Phasing } = conceptRefs;
+const { Delivering, Diagnosing, Emitting, Filing, Governing, Locating, Phasing } = conceptRefs;
 
 const staged = {
   scope: DIAGNOSTIC_SCOPES.staging,
@@ -21,14 +21,14 @@ const staged = {
 
 /* Locate: ground the recorded site directory and read its configuration. */
 
-export const LocateResumesDiagnosticDelivery = reaction(() =>
-  when(Phasing.start({}).responds({ name: PHASE_SEQUENCE, phase: "locate" }))
-    .then(Diagnosing.resume({})),
+export const StartedSiteBuildsBeginAggregateDelivery = reaction(({ job }) =>
+  when(Phasing.start({}).responds({ job, name: PHASE_SEQUENCE, phase: "locate" }))
+    .then(Delivering.begin({ task: job })),
 );
 
-export const LocateRetractsStagingDiagnostics = reaction(() =>
-  when(Diagnosing.resume({}).responds({}))
-    .where(earlier(Phasing.start, {}, { name: PHASE_SEQUENCE, phase: "locate" }))
+export const BegunSiteBuildDeliveriesRetractStagingDiagnostics = reaction(({ job }) =>
+  when(Delivering.begin({ task: job }).responds({}))
+    .where(earlier(Phasing.start, {}, { job, name: PHASE_SEQUENCE, phase: "locate" }))
     .then(Diagnosing.retract({ scope: DIAGNOSTIC_SCOPES.staging, source: CONFIGURATION_PATH })),
 );
 

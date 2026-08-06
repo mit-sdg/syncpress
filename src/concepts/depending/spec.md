@@ -118,6 +118,21 @@ settle (subject: Subject, attempt: Number) : return (result: Result)
     replace its retained uses atomically with its active attempt's inputs, set it to current,
     retain its reason, and return it
 
+abandon (subject: Subject, attempt: Number) : return (result: Result)
+  where subject is not Text
+  then
+    refuse INVALID_TEXT "Subjects and inputs must be well-formed text."
+  where no result for subject is building
+  then
+    refuse NOT_BUILDING "This result is not being computed."
+  where attempt is not the result's current attempt
+  then
+    refuse STALE_ATTEMPT "This computation attempt is no longer active."
+  where a result for subject is building
+  then
+    discard its provisional inputs, retain its last successful graph, and make it stale
+    return it
+
 touch (input: Input) : return (input: Input, count: Number)
   where input is not Text
   then

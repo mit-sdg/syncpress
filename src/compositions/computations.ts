@@ -1,10 +1,14 @@
-import picomatch from "picomatch";
 import { basename, dirname, join, resolve as resolveNative } from "node:path";
+import picomatch from "picomatch";
 import { syncpressCommandComputations } from "./command-line.ts";
+import { deploymentComputations } from "./deployment-computations.ts";
 
 type AddressKind = "relative" | "absolute" | "external" | "fragment";
 type ParsedAddress = { address: string; segments: string[]; directory: boolean };
 type PathStatus = "canonical" | "outside" | "invalid";
+type PageRenderingSelection =
+  | { profile: string; template: string }
+  | { error: "INVALID_PROFILE" | "INVALID_TEMPLATE" | "UNKNOWN_SOURCE"; detail: string };
 
 const encoder = new TextEncoder();
 const forbiddenSegmentCharacter = /[\\/\u0000-\u001f\u007f]/u;
@@ -13,7 +17,7 @@ const scheme = /^[a-z][a-z\d+.-]*:/i;
 const literalReferenceCharacter = /^[A-Za-z0-9._~!$&'()*+,;=:@/?#-]$/;
 const hexadecimalDigit = /^[A-Fa-f0-9]$/;
 const unsafeUnicodeReferenceCharacter = /[\p{Cc}\p{Cf}\p{Zs}\p{Zl}\p{Zp}]/u;
-const globOptions = {
+const portableGlobOptions = {
   basename: false,
   contains: false,
   debug: true,
@@ -32,8 +36,57 @@ const globOptions = {
   windows: false,
 } as const;
 
+/** Compile one selector under Syncpress's shared portable glob value contract. */
+export function compilePortableGlob(pattern: string): (path: string) => boolean {
+  const matcher = picomatch(pattern, portableGlobOptions, true);
+  if (matcher.state.quotes !== 0) throw new SyntaxError("Unterminated quoted run");
+  return matcher;
+}
+
+export function isPortableGlob(value: unknown): value is string {
+  if (typeof value !== "string" || !value.isWellFormed()) return false;
+  try {
+    compilePortableGlob(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function portableGlobMatches(pattern: unknown, path: unknown): boolean | undefined {
+  if (typeof pattern !== "string" || typeof path !== "string") return undefined;
+  try {
+    return compilePortableGlob(pattern)(path);
+  } catch {
+    return undefined;
+  }
+}
+
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+export function selectPageRendering(path: unknown, data: unknown): PageRenderingSelection {
+  const build = isRecord(data) && isRecord(data.build) ? data.build : undefined;
+  let profile: string;
+  if (build !== undefined && Object.hasOwn(build, "markup")) {
+    if (!isText(build.markup)) {
+      return { error: "INVALID_PROFILE", detail: "A selected rendering profile must be well-formed text." };
+    }
+    profile = build.markup;
+  } else if (typeof path === "string" && path.endsWith(".md")) profile = "markdown";
+  else if (typeof path === "string" && path.endsWith(".html")) profile = "verbatim";
+  else return { error: "UNKNOWN_SOURCE", detail: "A page source must select a profile or use a supported extension." };
+
+  if (build !== undefined && Object.hasOwn(build, "template") && !isText(build.template)) {
+    return { error: "INVALID_TEMPLATE", detail: "A selected rendering template must be well-formed text." };
+  }
+  return { profile, template: build !== undefined && Object.hasOwn(build, "template") ? build.template as string : "page.html" };
 }
 
 function isPathSegment(value: unknown): value is string {
@@ -201,10 +254,23 @@ function retargetReference(replacement: unknown, original: unknown): string | un
   return start === -1 ? parsed.address : `${parsed.address}${original.slice(start)}`;
 }
 
-function compileGlob(pattern: string): (path: string) => boolean {
-  const matcher = picomatch(pattern, globOptions, true);
-  if (matcher.state.quotes !== 0) throw new SyntaxError("Unterminated quoted run");
-  return matcher;
+export function projectSiteUrl(base: unknown, target: unknown): string | undefined {
+  const parsedBase = parseAddress(base);
+  if (parsedBase?.directory !== true || !isText(target) || !target.startsWith("/") || target.startsWith("//")) return undefined;
+  return parsedBase.address === "/" ? target : `${parsedBase.address.slice(0, -1)}${target}`;
+}
+
+export function projectAbsoluteSiteUrl(base: unknown, origin: unknown, address: unknown): string | undefined {
+  const parsed = parseAddress(address);
+  if (!isText(origin) || parsed === undefined) return undefined;
+  const projected = projectSiteUrl(base, parsed.address);
+  if (projected === undefined) return undefined;
+  try {
+    const url = new URL(projected, origin);
+    return url.origin === origin && (url.protocol === "http:" || url.protocol === "https:") ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const optional = (value: string | undefined): string | null => value ?? null;
@@ -226,17 +292,35 @@ export const syncpressComputations = {
   outputPathAddress: ({ path }: { path: unknown }) => optional(outputPathAddress(path)),
   retargetReference: ({ replacement, original }: { replacement: unknown; original: unknown }) =>
     optional(retargetReference(replacement, original)),
+  projectSiteUrl: ({ base, target }: { base: unknown; target: unknown }) => optional(projectSiteUrl(base, target)),
+  projectAbsoluteSiteUrl: ({ base, origin, address }: { base: unknown; origin: unknown; address: unknown }) =>
+    optional(projectAbsoluteSiteUrl(base, origin, address)),
   targetHasKind: ({ target, kind }: { target: unknown; kind: AddressKind }) => targetKind(target) === kind,
   relativePath: ({ path, prefix }: { path: unknown; prefix: unknown }) => optional(relativePath(path, prefix)),
   joinPath: ({ prefix, name }: { prefix: unknown; name: unknown }) => optional(joinPath(prefix, name)),
   directoryPath: ({ path }: { path: unknown }) => optional(directoryPath(path)),
   patternHasResult: ({ pattern, path, matched }: { pattern: unknown; path: unknown; matched: unknown }) => {
-    if (typeof pattern !== "string" || typeof path !== "string" || typeof matched !== "boolean") return false;
-    try {
-      return compileGlob(pattern)(path) === matched;
-    } catch {
-      return false;
-    }
+    if (typeof matched !== "boolean") return false;
+    return portableGlobMatches(pattern, path) === matched;
   },
+  pageRenderingSelectionHasValidity: ({ path, data, valid }: { path: unknown; data: unknown; valid: unknown }) =>
+    typeof valid === "boolean" && ("profile" in selectPageRendering(path, data)) === valid,
+  pageRenderingProfile: ({ path, data }: { path: unknown; data: unknown }) => {
+    const selection = selectPageRendering(path, data);
+    return "profile" in selection ? selection.profile : null;
+  },
+  pageRenderingTemplate: ({ path, data }: { path: unknown; data: unknown }) => {
+    const selection = selectPageRendering(path, data);
+    return "profile" in selection ? selection.template : null;
+  },
+  pageRenderingError: ({ path, data }: { path: unknown; data: unknown }) => {
+    const selection = selectPageRendering(path, data);
+    return "error" in selection ? selection.error : null;
+  },
+  pageRenderingErrorDetail: ({ path, data }: { path: unknown; data: unknown }) => {
+    const selection = selectPageRendering(path, data);
+    return "error" in selection ? selection.detail : null;
+  },
+  ...deploymentComputations,
   ...syncpressCommandComputations,
 };

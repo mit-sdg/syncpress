@@ -19,6 +19,11 @@ class DependingConcept extends StrictDependingConcept {
     const attempt = input.attempt ?? this._attempt({ subject: input.subject })[0]?.attempt;
     return super.settle({ ...input, attempt });
   }
+
+  abandon(input: { subject: unknown; attempt?: unknown }) {
+    const attempt = input.attempt ?? this._attempt({ subject: input.subject })[0]?.attempt;
+    return super.abandon({ ...input, attempt });
+  }
 }
 
 function finish(depending: DependingConcept, subject: string, inputs: readonly string[]) {
@@ -75,6 +80,30 @@ test("an incomplete replacement retains its last settled dependency graph", () =
   expect(depending._uses({ subject: "page" })).toEqual([{ input: "replacement-template" }]);
   expect(depending._dependents({ input: "source" })).toEqual([]);
   expect(depending._dependents({ input: "replacement-template" })).toEqual([{ subject: "page" }]);
+});
+
+test("abandoning an attempt discards provisional inputs and retains the last settled graph", () => {
+  const depending = new DependingConcept();
+  const first = finish(depending, "page", ["old"]);
+  depending.begin({ subject: "page" });
+  depending.use({ subject: "page", input: "new" });
+
+  expect(depending.abandon({ subject: "page" })).toEqual({ result: first.result });
+  expect(depending._state({ subject: "page" })).toEqual({ state: "stale" });
+  expect(depending._uses({ subject: "page" })).toEqual([{ input: "old" }]);
+  expect(depending._dependents({ input: "new" })).toEqual([]);
+  expect(() => depending.abandon({ subject: "page" })).toThrow(NotBuilding);
+});
+
+test("abandoning a first attempt removes its provisional dependency edges", () => {
+  const depending = new DependingConcept();
+  depending.begin({ subject: "page" });
+  depending.use({ subject: "page", input: "draft" });
+  depending.abandon({ subject: "page" });
+
+  expect(depending._state({ subject: "page" })).toEqual({ state: "stale" });
+  expect(depending._uses({ subject: "page" })).toEqual([]);
+  expect(depending._dependents({ input: "draft" })).toEqual([]);
 });
 
 test("late uses complete settled first-time and replacement attempts", () => {
@@ -251,6 +280,7 @@ test("actions reject malformed runtime text atomically and lookup queries stay t
     expect(() => depending.use({ subject: value, input: "input" })).toThrow(InvalidText);
     expect(() => depending.use({ subject: "kept", input: value })).toThrow(InvalidText);
     expect(() => depending.settle({ subject: value })).toThrow(InvalidText);
+    expect(() => depending.abandon({ subject: value })).toThrow(InvalidText);
     expect(() => depending.touch({ input: value })).toThrow(InvalidText);
     expect(() => depending.drop({ subject: value })).toThrow(InvalidText);
     expect(depending._state({ subject: value })).toEqual({ state: "stale" });
@@ -279,6 +309,9 @@ test("the registry exposes every refusal with its normative message", async () =
   ).toEqual([
     ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
     ["ATTEMPT_EXHAUSTED", "No further computation attempt can be represented."],
+    ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
+    ["NOT_BUILDING", "This result is not being computed."],
+    ["STALE_ATTEMPT", "This computation attempt is no longer active."],
     ["INVALID_TEXT", "Subjects and inputs must be well-formed text."],
     ["NOT_BUILDING", "This result is not being computed."],
     ["STALE_ATTEMPT", "This computation attempt is no longer active."],

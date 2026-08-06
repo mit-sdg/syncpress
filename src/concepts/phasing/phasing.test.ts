@@ -235,7 +235,7 @@ test("registry refusals, query promises, and assembled outcomes match the specif
   });
   expect(registration.specification.queries).toEqual([
     { name: "_job", inputs: ["job"], promise: "optional" },
-    { name: "_running", inputs: ["sequence"], promise: "many" },
+    { name: "_running", inputs: ["sequence"], promise: "optional" },
     { name: "_latest", inputs: ["sequence"], promise: "optional" },
     { name: "_outcome", inputs: ["job"], promise: "optional" },
   ]);

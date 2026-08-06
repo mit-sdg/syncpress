@@ -32,6 +32,11 @@ policy is authoritative for publication. No peer reparses or interprets the
 configuration. Each `assess` atomically replaces the interpretation and all
 problems, including when the action then refuses invalid policy.
 
+Configured default and collection matches must be portable globs. Collection
+sort fields and conditions must satisfy the catalog field and condition
+contracts. These failures are policy problems at their YAML locations. An
+accepted `site.origin` with a trailing slash is stored without that slash.
+
 ## Actions
 
 ```actions

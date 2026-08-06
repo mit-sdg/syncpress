@@ -24,6 +24,8 @@ boundaries, invalid configuration, build failures, filesystem failures, or
 invalid CLI arguments as applicable. The package does not define public error
 subclasses or stable machine-readable error codes for these rejections.
 
+`buildSite` and `inspectSite` each create and discard a fresh strict batch application. `watchSite` and `serveSite` retain controller applications until `close()`, but the initial build and every rebuild still use fresh batch applications. Applications and gateway handles are internal and are not part of the public API.
+
 ## `buildSite`
 
 ```ts
@@ -43,6 +45,7 @@ route-claim and input counts; written, replaced, retained, and removed file
 counts; the assessed site policy; the output directory it published into, with
 symbolic links resolved; and diagnostics. The `pages` field counts all route
 claims: authored pages, redirects, and generated pagination routes.
+The fresh batch application is not reused for a later build.
 
 ## `inspectSite`
 
@@ -59,6 +62,7 @@ route, template, data provenance, collection membership, dependency, output,
 claim, and diagnostic data for the selected page. The configured destination
 remains unchanged. The promise rejects when no routed page or content source
 matches `target`.
+Its isolated batch application is discarded after the inspection result or failure summary is formed.
 
 ## `watchSite`
 
@@ -75,9 +79,11 @@ function watchSite(
 
 `watchSite` performs the initial strict build before resolving. It then watches
 the project recursively and invokes `onBuild` after each successful build with
-the result and canonical output directory.
+the result and canonical output directory. The watcher controller is retained,
+but every rebuild creates a fresh strict batch application.
 Later build and watcher failures are passed to `onError` when that callback is
-provided. A failed rebuild leaves the last reconciled output in place.
+provided. A failed rebuild leaves the last reconciled output in place and ends
+the attendance loop; call `close()` to release the watcher resource.
 
 Call `await watcher.close()` to stop watching and release the watcher. Repeated
 `close()` calls have no further effect.
@@ -98,7 +104,8 @@ function serveSite(
 
 `serveSite` starts watch mode and an HTTP development server for the reconciled
 output. The default host is `127.0.0.1` and the default port is `3000`. The
-resolved object reports the actual `host` and `port` and provides `close()`.
+resolved object reports the actual `host` and `port` and provides `close()`. The
+server and watcher are retained controllers; their builds remain fresh batches.
 Call `await server.close()` to stop the watcher, close live-reload clients, and
 close the HTTP server.
 

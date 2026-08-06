@@ -86,6 +86,26 @@ test("a missing site directory is diagnosed rather than left to time out", async
   );
 });
 
+test("invalid untyped build inputs are rejected before a build flow starts", async () => {
+  const { gateway } = createSyncpressRuntime();
+  expect(await gateway.invoke("/site/build", { directory: "./example", destination: 123 } as never)).toEqual({
+    ok: false,
+    error: { kind: "framework", code: "INVALID_INPUT", detail: "A site build destination must be non-empty text when supplied." },
+  });
+  expect(await gateway.invoke("/site/build", { directory: "" } as never)).toEqual({
+    ok: false,
+    error: { kind: "framework", code: "INVALID_INPUT", detail: "A site build needs a non-empty text directory." },
+  });
+});
+
+test("invalid untyped watch inputs are rejected before a watch flow starts", async () => {
+  const { gateway } = createSyncpressRuntime();
+  expect(await gateway.invoke("/watch/open", { directory: "./example", settling: 75, output: 123 } as never)).toEqual({
+    ok: false,
+    error: { kind: "framework", code: "INVALID_INPUT", detail: "A site watch needs an output path with a safe transaction prefix." },
+  });
+});
+
 test("a missing configuration file is diagnosed against the project", async () => {
   const directory = await mkdtemp(join(tmpdir(), "syncpress-endpoints-bare-"));
   try {
@@ -169,17 +189,17 @@ test("the summary of an application that has built nothing is empty", async () =
   expect(await runtime().summary()).toMatchObject({ pages: 0, files: 0, diagnostics: [] });
 });
 
-test("command composition maps Syncpress grammar onto generic command selections", async () => {
-  const { gateway } = createSyncpressRuntime();
-  expect(await gateway.invoke("/cli/interpret", { arguments: ["build", "./site", "out"] })).toEqual({
+test("command composition admits only captured words recognized by the Syncpress grammar", async () => {
+  const interpret = (arguments_: string[]) => createSyncpressRuntime().gateway.invoke("/cli/interpret", { arguments: arguments_ });
+  expect(await interpret(["build", "./site", "out"])).toEqual({
     ok: true,
-    value: { name: "build", operands: ["./site", "out"] },
+    value: { words: ["build", "./site", "out"] },
   });
-  expect(await gateway.invoke("/cli/interpret", { arguments: ["dev", "--port", "8080"] })).toEqual({
+  expect(await interpret(["dev", "--port", "8080"])).toEqual({
     ok: true,
-    value: { name: "develop", operands: [".", "8080"] },
+    value: { words: ["dev", "--port", "8080"] },
   });
-  expect(await gateway.invoke("/cli/interpret", { arguments: ["unknown"] })).toEqual({
+  expect(await interpret(["unknown"])).toEqual({
     ok: false,
     error: { kind: "domain", value: "INVALID_USAGE" },
   });

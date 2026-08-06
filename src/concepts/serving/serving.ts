@@ -3,6 +3,7 @@ import { createServer, type Server, type ServerResponse } from "node:http";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const INVALID_SERVER = "A server needs a host and a port between 0 and 65535.";
+const INVALID_PUBLICATION = "A publication needs a well-formed, non-empty directory path.";
 const ADDRESS_UNAVAILABLE = "This address could not be listened on.";
 const PUBLICATION_UNAVAILABLE = "This published directory could not be served.";
 const SERVER_CLOSE_FAILED = "This server could not be closed.";
@@ -39,6 +40,13 @@ export class AddressUnavailable extends Error {
   constructor(options?: ErrorOptions) {
     super(ADDRESS_UNAVAILABLE, options);
     this.name = "AddressUnavailable";
+  }
+}
+
+export class InvalidPublication extends Error {
+  constructor() {
+    super(INVALID_PUBLICATION);
+    this.name = "InvalidPublication";
   }
 }
 
@@ -182,6 +190,10 @@ export class ServingConcept {
         response.writeHead(503).end("Site unavailable");
         return;
       }
+      if (record.directory === undefined) {
+        response.writeHead(503).end("Site unavailable");
+        return;
+      }
 
       const target = request.url ?? "/";
       const suffix = target.search(/[?#]/);
@@ -203,10 +215,6 @@ export class ServingConcept {
         return;
       }
 
-      if (record.directory === undefined) {
-        response.writeHead(503).end("Site unavailable");
-        return;
-      }
       void answerFile(response, record.directory, pathname).catch(() => {
         if (!response.headersSent) response.writeHead(500);
         response.end("Internal server error");
@@ -248,7 +256,7 @@ export class ServingConcept {
 
   async publish({ server, directory }: { server: string; directory: string }) {
     const record = this.#open(server);
-    if (!isServerText(directory)) throw new InvalidServer();
+    if (!isServerText(directory)) throw new InvalidPublication();
     const requested = resolve(directory);
     let published: string;
     try {

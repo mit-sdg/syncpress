@@ -5,7 +5,7 @@ const INVALID_DIMENSION_MESSAGE = "Intrinsic width and height must be positive s
 const INVALID_COUNT_MESSAGE = "Expected offer count must be a nonnegative safe integer.";
 const INVALID_ADDRESS_MESSAGE = "Image addresses must be safe site-absolute srcset addresses.";
 const INVALID_FORMAT_MESSAGE = "Image format must be one of the canonical supported formats.";
-const INVALID_ATTRIBUTES_MESSAGE = "Image attributes must be a plain record of approved text attributes.";
+const INVALID_ATTRIBUTES_MESSAGE = "Image attributes must be a plain record of text attributes.";
 const EMBEDDING_NOT_FOUND_MESSAGE = "There is no such embedding.";
 const INVALID_WIDTH_MESSAGE = "Offer width must be a positive safe integer no greater than the intrinsic width.";
 const INVALID_ORDER_MESSAGE = "Offer order must be a nonnegative safe integer.";
@@ -188,9 +188,8 @@ function normalizeAttributes(value: unknown): readonly Attribute[] {
     for (const name of keys as string[]) {
       const descriptor = Object.getOwnPropertyDescriptor(value, name);
       if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) throw new InvalidAttributes();
-      if (!isSerializableText(name) || !isSerializableText(descriptor.value) || !approvedAttribute(name, descriptor.value)) {
-        throw new InvalidAttributes();
-      }
+      if (!isSerializableText(name) || !isSerializableText(descriptor.value)) throw new InvalidAttributes();
+      if (!approvedAttribute(name, descriptor.value)) continue;
       attributes.push({ name, value: descriptor.value });
     }
     attributes.sort((left, right) => compareText(left.name, right.name));

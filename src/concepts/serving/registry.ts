@@ -1,6 +1,7 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 import {
   AddressUnavailable,
+  InvalidPublication,
   InvalidServer,
   PublicationUnavailable,
   ServerCloseFailed,
@@ -15,6 +16,7 @@ export const serving = registerConcept({
   spec,
   refusals: {
     ADDRESS_UNAVAILABLE: AddressUnavailable,
+    INVALID_PUBLICATION: InvalidPublication,
     INVALID_SERVER: InvalidServer,
     PUBLICATION_UNAVAILABLE: PublicationUnavailable,
     SERVER_CLOSE_FAILED: ServerCloseFailed,

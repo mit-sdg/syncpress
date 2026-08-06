@@ -5,6 +5,7 @@ import { cataloging } from "./concepts/cataloging/registry.ts";
 import { commanding } from "./concepts/commanding/registry.ts";
 import { converting } from "./concepts/converting/registry.ts";
 import { depending } from "./concepts/depending/registry.ts";
+import { delivering } from "./concepts/delivering/registry.ts";
 import { diagnosing } from "./concepts/diagnosing/registry.ts";
 import { documenting } from "./concepts/documenting/registry.ts";
 import { deploying } from "./concepts/deploying/registry.ts";
@@ -14,7 +15,6 @@ import { filing } from "./concepts/filing/registry.ts";
 import { governing } from "./concepts/governing/registry.ts";
 import { layering } from "./concepts/layering/registry.ts";
 import { locating } from "./concepts/locating/registry.ts";
-import { matching } from "./concepts/matching/registry.ts";
 import { phasing } from "./concepts/phasing/registry.ts";
 import { referencing } from "./concepts/referencing/registry.ts";
 import { rendering } from "./concepts/rendering/registry.ts";
@@ -32,6 +32,7 @@ export const syncpressConcepts = conceptSet(
     Commanding: commanding,
     Converting: converting,
     Depending: depending,
+    Delivering: delivering,
     Diagnosing: diagnosing,
     Documenting: documenting,
     Deploying: deploying,
@@ -41,7 +42,6 @@ export const syncpressConcepts = conceptSet(
     Governing: governing,
     Layering: layering,
     Locating: locating,
-    Matching: matching,
     Phasing: phasing,
     Referencing: referencing,
     Rendering: rendering,

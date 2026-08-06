@@ -27,13 +27,12 @@ const SyncpressMisuse = view(
 
 export const InterpretCommandLine = endpoint(
   "/cli/interpret",
-  ({ supplied, words, name, operands }) =>
+  ({ supplied, words }) =>
     receive({ arguments: supplied })
       .then(Commanding.capture({ arguments: supplied }).responds({ words }))
       .then(
-        where(SyncpressCommand({ words }).is({ name, operands }))
-          .then(Commanding.recognize({ name, operands }).responds({ name, operands }))
-          .then(respond({ name, operands }))
+        where(SyncpressCommand({ words }))
+          .then(respond({ words }))
           .named("recognized"),
         where(no(SyncpressCommand({ words })))
           .then(respond({ error: "INVALID_USAGE" }))

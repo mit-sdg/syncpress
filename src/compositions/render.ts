@@ -1,11 +1,11 @@
-import { earlier, no, reaction, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
-import { AddressOutputPath } from "./calculations.ts";
+import { compute, earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { AbsoluteSiteUrl, AddressOutputPath } from "./calculations.ts";
 import { DIAGNOSTIC_SCOPES, PAGE_CONTENT_PATH, PARTS, PHASE_SEQUENCE, ROOTS, TRUSTED_COLLECTION_EXCERPTS } from "./shared.ts";
 import {
-  CompletedPageRenderContext,
+  CompletedOriginatedPageRenderContext,
   CompletedUnoriginatedPageRenderContext,
-  PageRenderContext,
+  OriginatedPageRenderContext,
   UnoriginatedPageRenderContext,
 } from "./views.ts";
 
@@ -24,6 +24,34 @@ const {
   Templating,
 } = conceptRefs;
 
+const InvalidPageRenderingSelection = view(
+  "the invalid rendering selection for path (path) and data (data)",
+  ({ path, data }, { error, detail }) =>
+    where(
+      computations.pageRenderingSelectionHasValidity({ path, data, valid: false }),
+      compute(computations.pageRenderingError, { path, data }, error),
+      compute(computations.pageRenderingErrorDetail, { path, data }, detail),
+    ),
+).optional();
+
+/** Failed latest renderings whose owner-local attempts still need cleanup. */
+export const PendingFailedRenderingCleanup = view(
+  "pending failed rendering cleanup",
+  (_inputs, { page, rendering }, { dependencyAttempt, emissionAttempt }) => [
+    where(
+      Rendering._all({}).is({ rendering, subject: page, stage: "failed", emissionAttempt }),
+      Rendering._latest({ subject: page }).is({ rendering }),
+      Emitting._open({ producer: page }).is({ attempt: emissionAttempt }),
+    ),
+    where(
+      Rendering._all({}).is({ rendering, subject: page, stage: "failed", dependencyAttempt }),
+      Rendering._latest({ subject: page }).is({ rendering }),
+      Depending._attempt({ subject: page }).is({ attempt: dependencyAttempt }),
+      Depending._state({ subject: page }).is({ state: "building" }),
+    ),
+  ],
+).many();
+
 /** A newly routed page receives exact owner attempts before later phases inspect it. */
 export const ClaimedRoutesBeginPageDependencies = reaction(({ page }) =>
   when(Routing.claim({ owner: page }).responds({}))
@@ -41,7 +69,7 @@ export const PageDependenciesOpenEmission = reaction(({ page }) =>
 );
 
 export const PageEmissionsBeginRendering = reaction(
-  ({ page, emissionAttempt, dependencyAttempt, path, data }) =>
+  ({ page, emissionAttempt, dependencyAttempt, path, data, profile, template }) =>
     when(Emitting.begin({ producer: page }).responds({ attempt: emissionAttempt }))
       .where(
         earlier(Depending.begin, { subject: page }, { attempt: dependencyAttempt }),
@@ -49,8 +77,50 @@ export const PageEmissionsBeginRendering = reaction(
         Depending._attempt({ subject: page }).is({ attempt: dependencyAttempt }),
         Filing._file({ file: page }).is({ path }),
         Layering._resolved({ subject: page }).is({ values: data }),
+        computations.pageRenderingSelectionHasValidity({ path, data, valid: true }),
+        compute(computations.pageRenderingProfile, { path, data }, profile),
+        compute(computations.pageRenderingTemplate, { path, data }, template),
       )
-      .then(Rendering.begin({ subject: page, path, data, dependencyAttempt, emissionAttempt })),
+      .then(Rendering.begin({ subject: page, path, profile, template, dependencyAttempt, emissionAttempt })),
+);
+
+export const InvalidPageRenderingSelectionsDiagnose = reaction(
+  ({ page, emissionAttempt, path, data, error, detail }) =>
+    when(Emitting.begin({ producer: page }).responds({ attempt: emissionAttempt }))
+      .where(
+        earlier(Depending.begin, { subject: page }, {}),
+        earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "route", transitioned: true }),
+        Filing._file({ file: page }).is({ path }),
+        Layering._resolved({ subject: page }).is({ values: data }),
+        InvalidPageRenderingSelection({ path, data }).is({ error, detail }),
+      )
+      .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source: path })),
+);
+
+export const InvalidPageRenderingSelectionsAbortOutput = reaction(
+  ({ page, emissionAttempt, path, data }) =>
+    when(Emitting.begin({ producer: page }).responds({ attempt: emissionAttempt }))
+      .where(
+        earlier(Depending.begin, { subject: page }, {}),
+        earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "route", transitioned: true }),
+        Filing._file({ file: page }).is({ path }),
+        Layering._resolved({ subject: page }).is({ values: data }),
+        InvalidPageRenderingSelection({ path, data }),
+      )
+      .then(Emitting.abort({ producer: page, attempt: emissionAttempt })),
+);
+
+export const InvalidPageRenderingSelectionsAbandonDependencies = reaction(
+  ({ page, emissionAttempt, dependencyAttempt, path, data }) =>
+    when(Emitting.begin({ producer: page }).responds({ attempt: emissionAttempt }))
+      .where(
+        earlier(Depending.begin, { subject: page }, { attempt: dependencyAttempt }),
+        earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "route", transitioned: true }),
+        Filing._file({ file: page }).is({ path }),
+        Layering._resolved({ subject: page }).is({ values: data }),
+        InvalidPageRenderingSelection({ path, data }),
+      )
+      .then(Depending.abandon({ subject: page, attempt: dependencyAttempt })),
 );
 
 /** Clear diagnostics for this source before its replacement render proceeds. */
@@ -89,17 +159,17 @@ export const TrackedRenderingSourcesFillBodies = reaction(
       Routing._address({ owner: page }).is({ address }),
     )
     .then(
-      where(Routing._absolute({ address }))
+      where(AbsoluteSiteUrl({ address }))
         .then(Templating.fill({
           subject: rendering,
           source: body,
-          context: PageRenderContext({ rendering }) as unknown as Record<string, unknown>,
+          context: OriginatedPageRenderContext({ rendering }) as unknown as Record<string, unknown>,
           trusted: [TRUSTED_COLLECTION_EXCERPTS],
           sourceName: path,
           sourceLine: bodyLine,
         }))
         .named("originated"),
-      where(no(Routing._absolute({ address })))
+      where(no(AbsoluteSiteUrl({ address })))
         .then(Templating.fill({
           subject: rendering,
           source: body,
@@ -175,14 +245,14 @@ export const SettledBodiesRenderOriginatedPages = reaction(({ rendering, page, a
   when(Rendering.settleBody({ rendering }).responds({ subject: page, transitioned: true }))
     .where(
       Routing._address({ owner: page }).is({ address }),
-      Routing._absolute({ address }),
+      AbsoluteSiteUrl({ address }),
       Rendering._active({ rendering }).is({ template: name }),
       Templating._template({ name }).is({ template }),
     )
     .then(Templating.render({
       template,
       subject: rendering,
-      context: CompletedPageRenderContext({ rendering }) as unknown as Record<string, unknown>,
+      context: CompletedOriginatedPageRenderContext({ rendering }) as unknown as Record<string, unknown>,
       trusted: [PAGE_CONTENT_PATH, TRUSTED_COLLECTION_EXCERPTS],
     })),
 );
@@ -192,7 +262,7 @@ export const SettledBodiesRenderUnoriginatedPages = reaction(({ rendering, page,
   when(Rendering.settleBody({ rendering }).responds({ subject: page, transitioned: true }))
     .where(
       Routing._address({ owner: page }).is({ address }),
-      no(Routing._absolute({ address })),
+      no(AbsoluteSiteUrl({ address })),
       Rendering._active({ rendering }).is({ template: name }),
       Templating._template({ name }).is({ template }),
     )
@@ -259,17 +329,10 @@ export const FinishedLayoutAnswersSettleRendering = reaction(({ rendering }) =>
     .then(Rendering.settleLayout({ rendering })),
 );
 
-/** A newly settled layout completes only while it remains the active attempt. */
-export const SettledLayoutsFinish = reaction(({ rendering }) =>
-  when(Rendering.settleLayout({ rendering }).responds({ transitioned: true })).then(
-    Rendering.finish({ rendering }),
-  ),
-);
-
 /** Commit a completed page attempt only while it remains the latest rendering. */
-export const FinishedRenderingsCommitOutput = reaction(
+export const SettledLayoutsStagePageOutput = reaction(
   ({ rendering, page, text, address, path, emissionAttempt }) =>
-  when(Rendering.finish({ rendering }).responds({ subject: page, transitioned: true }))
+  when(Rendering.settleLayout({ rendering }).responds({ subject: page, transitioned: true }))
     .where(
       Rendering._latest({ subject: page }).is({ rendering, stage: "completed", emissionAttempt }),
       Referencing._finished({ subject: rendering, part: PARTS.layout }).is({ text }),
@@ -282,7 +345,7 @@ export const FinishedRenderingsCommitOutput = reaction(
 export const IntendedPageOutputsCommit = reaction(({ page, rendering, emissionAttempt }) =>
   when(Emitting.intend({ producer: page, attempt: emissionAttempt }).responds({}))
     .where(
-      earlier(Rendering.finish, { rendering }, { subject: page, transitioned: true }),
+      earlier(Rendering.settleLayout, { rendering }, { subject: page, transitioned: true }),
       Rendering._latest({ subject: page }).is({ rendering, stage: "completed", emissionAttempt }),
     )
     .then(Emitting.commit({ producer: page, attempt: emissionAttempt })),
@@ -292,7 +355,7 @@ export const CommittedPageOutputsSettleDependencies = reaction(
   ({ page, rendering, emissionAttempt, dependencyAttempt }) =>
   when(Emitting.commit({ producer: page, attempt: emissionAttempt }).responds({}))
     .where(
-      earlier(Rendering.finish, { rendering }, { subject: page, transitioned: true }),
+      earlier(Rendering.settleLayout, { rendering }, { subject: page, transitioned: true }),
       Rendering._latest({ subject: page }).is({ rendering, stage: "completed", emissionAttempt, dependencyAttempt }),
     )
     .then(Depending.settle({ subject: page, attempt: dependencyAttempt })),
@@ -317,6 +380,50 @@ export const RenderingBeginningsAbortEmission = reaction(({ page, emissionAttemp
     .then(Emitting.abort({ producer: page, attempt: emissionAttempt })),
 );
 
+export const RenderingBeginningsAbandonDependencies = reaction(({ page, dependencyAttempt, error }) =>
+  when(Rendering.begin({ subject: page, dependencyAttempt }).refuses({ error }))
+    .where(
+      earlier(Depending.begin, { subject: page }, { attempt: dependencyAttempt }),
+      Depending._attempt({ subject: page }).is({ attempt: dependencyAttempt }),
+    )
+    .then(Depending.abandon({ subject: page, attempt: dependencyAttempt })),
+);
+
+/** A reported page error terminates every owner-local attempt for that page. */
+export const RenderingDiagnosticsFailActiveAttempts = reaction(
+  ({ path, code, root, page, rendering }) =>
+    when(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code, source: path }).responds({}))
+      .where(
+        Filing._named({ name: ROOTS.content }).is({ root }),
+        Filing._under({ root, prefix: "" }).is({ file: page, path }),
+        Rendering._latest({ subject: page }).is({ rendering }),
+        Rendering._active({ rendering }),
+      )
+      .then(Rendering.fail({ rendering, reason: code })),
+);
+
+/** Failure closes staged output without changing current output. */
+export const FailedRenderingsAbortOutput = reaction(
+  ({ rendering, page, emissionAttempt }) =>
+    when(Rendering.fail({ rendering }).responds({ subject: page, transitioned: true }))
+      .afterFlowSettles()
+      .where(
+        Rendering._latest({ subject: page }).is({ rendering, stage: "failed", emissionAttempt }),
+      )
+      .then(Emitting.abort({ producer: page, attempt: emissionAttempt })),
+);
+
+/** Failure also discards provisional dependency inputs while retaining the last settled graph. */
+export const FailedRenderingsAbandonDependencies = reaction(
+  ({ rendering, page, dependencyAttempt }) =>
+    when(Rendering.fail({ rendering }).responds({ subject: page, transitioned: true }))
+      .afterFlowSettles()
+      .where(
+        Rendering._latest({ subject: page }).is({ rendering, stage: "failed", dependencyAttempt }),
+      )
+      .then(Depending.abandon({ subject: page, attempt: dependencyAttempt })),
+);
+
 /** Convert expected template and conversion failures into page diagnostics. */
 export const BodyTemplateFailuresDiagnose = reaction(({ page, rendering, error, detail, path, source, line, column }) =>
   when(Templating.fill({ subject: rendering }).refuses({ error, detail }))
@@ -327,6 +434,15 @@ export const BodyTemplateFailuresDiagnose = reaction(({ page, rendering, error, 
       Templating._failureLocation({ subject: rendering, fallbackSource: path }).is({ source, line, column }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source, line, column })),
+);
+
+export const BodyTemplateFailuresFailRendering = reaction(({ rendering, error }) =>
+  when(Templating.fill({ subject: rendering }).refuses({ error }))
+    .where(
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "render", transitioned: true }),
+      Rendering._active({ rendering }),
+    )
+    .then(Rendering.fail({ rendering, reason: error })),
 );
 
 export const BodyConversionFailuresDiagnose = reaction(({ page, rendering, error, detail, path }) =>
@@ -348,6 +464,15 @@ export const LayoutTemplateFailuresDiagnose = reaction(({ page, rendering, error
       Templating._failureLocation({ subject: rendering, fallbackSource: path }).is({ source, line, column }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.rendering, severity: "error", code: error, message: detail, source, line, column })),
+);
+
+export const LayoutTemplateFailuresFailRendering = reaction(({ rendering, error }) =>
+  when(Templating.render({ subject: rendering }).refuses({ error }))
+    .where(
+      earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "render", transitioned: true }),
+      Rendering._active({ rendering }),
+    )
+    .then(Rendering.fail({ rendering, reason: error })),
 );
 
 /** Output collisions and other staging failures must block reconciliation. */

@@ -11,7 +11,7 @@ told to disregard.
 Ada observes `/srv/site`, letting a burst settle after 75 milliseconds, with
 `/srv/site/dist` excluded before observation starts. She attends the watch and waits.
 Saving three files in quick succession reports one settled change, not three.
-Attending again waits, because that burst was already reported. Files written
+When she attends again she waits, because that burst was already reported. Files written
 under `/srv/site/dist` report nothing at all. A burst that settles while nobody
 is attending is still reported by the next attend. Closing the watch releases
 whoever is attending and stops the observation for good.

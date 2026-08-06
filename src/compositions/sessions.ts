@@ -3,6 +3,7 @@ import {
   formatSyncpressBuildReport,
   formatSyncpressInspectionReport,
   formatSyncpressServerReport,
+  recognizeSyncpressCommand,
   SYNCPRESS_MISUSE,
 } from "./command-line.ts";
 import {
@@ -34,13 +35,15 @@ export async function watchSite(
   options.onBuild?.(initial, initial.outputDirectory);
 
   const { gateway } = createSyncpressRuntime();
-  const { watch } = answer(
-    await gateway.invoke("/watch/open", { directory: projectDirectory, settling: SETTLING_MS, output: initial.outputDirectory }),
+  const open = async (output: string): Promise<string> => answer(
+    await gateway.invoke("/watch/open", { directory: projectDirectory, settling: SETTLING_MS, output }),
     "Could not watch the site directory",
-  );
+  ).watch;
+  let output = initial.outputDirectory;
+  let watch = await open(output);
 
   let closing = false;
-  const attending = (async (): Promise<void> => {
+  const watchLoop = (async (): Promise<void> => {
     try {
       while (!closing) {
         const { changed, watching } = answer(
@@ -50,6 +53,11 @@ export async function watchSite(
         if (!watching) return;
         if (!changed) continue;
         const built = await buildSite(projectDirectory, destination);
+        if (built.outputDirectory !== output) {
+          answer(await gateway.invoke("/watch/close", { watch }), "Could not replace the site watch");
+          watch = await open(built.outputDirectory);
+          output = built.outputDirectory;
+        }
         options.onBuild?.(built, built.outputDirectory);
       }
     } catch (error) {
@@ -64,7 +72,7 @@ export async function watchSite(
       try {
         answer(await gateway.invoke("/watch/close", { watch }), "Could not close the site watch");
       } finally {
-        await attending;
+        await watchLoop;
       }
     },
   };
@@ -112,9 +120,9 @@ export async function serveSite(
         gateway.invoke("/serve/close", { server: opened.server }),
       ]);
       const failures = closed.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
-      const serving = closed[1];
-      if (serving?.status === "fulfilled" && !serving.value.ok) {
-        failures.push(new Error(`Could not close the site server: ${reason(serving.value.error)}`));
+      const serverClose = closed[1];
+      if (serverClose?.status === "fulfilled" && !serverClose.value.ok) {
+        failures.push(new Error(`Could not close the site server: ${reason(serverClose.value.error)}`));
       }
       if (failures.length === 1) throw failures[0];
       if (failures.length > 1) throw new AggregateError(failures, "Could not close the development server.");
@@ -123,14 +131,19 @@ export async function serveSite(
 }
 
 class ReportedError extends Error {}
+type InterpretedCommand = NonNullable<ReturnType<typeof recognizeSyncpressCommand>>;
 
 function operatorSession(gateway: Gateway) {
   const write = async (stream: "output" | "error", text: string) =>
     answer(await gateway.invoke("/cli/write", { stream, text }), CLI_CONTEXT);
   return {
-    async interpret(args: string[] | null): Promise<SyncpressWire["/cli/interpret"]["output"]> {
+    async interpret(args: string[] | null): Promise<InterpretedCommand> {
       const interpreted = await gateway.invoke("/cli/interpret", { arguments: args });
-      if (interpreted.ok) return interpreted.value;
+      if (interpreted.ok) {
+        const command = recognizeSyncpressCommand(interpreted.value.words);
+        if (command === undefined) throw new Error("The accepted command line could not be interpreted.");
+        return command;
+      }
       if (interpreted.error.kind === "domain" && interpreted.error.value === "INVALID_USAGE") {
         answer(await gateway.invoke("/cli/misuse", {}), CLI_CONTEXT);
         throw new ReportedError(SYNCPRESS_MISUSE);
@@ -179,7 +192,7 @@ export async function runExecutable(): Promise<void> {
 
 async function carryOut(
   operator: ReturnType<typeof operatorSession>,
-  request: SyncpressWire["/cli/interpret"]["output"],
+  request: InterpretedCommand,
 ): Promise<void> {
   const { name, operands } = request;
   if (name === "help" && operands.length === 0) return void await operator.usage();

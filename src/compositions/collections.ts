@@ -6,7 +6,7 @@ import { PublicationCard } from "./views.ts";
 const { Cataloging, Diagnosing, Filing, Phasing, Routing } = conceptRefs;
 
 /** Every path-matching page enters each catalog under that catalog's own policy. */
-export const MatchingPagesEnterCatalogs = reaction(({ page, catalog, path, content }) =>
+export const CollectPhaseIndexesPages = reaction(({ page, catalog, path, content }) =>
   when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "collect", transitioned: true }))
     .where(
       Routing._claims({}).is({ owner: page }),

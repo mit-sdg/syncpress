@@ -14,7 +14,6 @@ const {
   Emitting,
   Filing,
   Governing,
-  Matching,
   Referencing,
   Rendering,
   Routing,
@@ -23,7 +22,7 @@ const {
 
 export const RasterBodyAssetReference = view(
   "primary raster body asset reference of source (source)",
-  ({ source }, { rendering, page, reference, raw, image, name, content }, { pattern, imagePath }) =>
+  ({ source }, { rendering, page, reference, raw, image, name, content }, { imagePath }) =>
     where(
       UnroutedContentBodyAsset({ source }).is({
         rendering,
@@ -36,8 +35,7 @@ export const RasterBodyAssetReference = view(
         name,
         content,
       }),
-      Matching._compiled({ text: PAGE_PATTERNS.raster }).is({ pattern }),
-      computations.patternHasResult({ pattern, path: imagePath, matched: true }),
+      computations.patternHasResult({ pattern: PAGE_PATTERNS.raster, path: imagePath, matched: true }),
     ),
 ).many();
 

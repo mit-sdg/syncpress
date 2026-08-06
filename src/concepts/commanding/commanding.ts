@@ -1,8 +1,9 @@
 const INVALID_ARGUMENTS = "Arguments must be an ordinary dense list of text values.";
-const INVALID_COMMAND = "A recognized command needs a non-empty text name and ordinary dense text operands.";
+const INVOCATION_CAPTURED = "This command invocation already has different words.";
 const INVALID_STREAM = "A command stream must be output or error.";
 const INVALID_TEXT = "A command line must be well-formed text.";
 const INVALID_EXIT_CODE = "A command exit code must be a safe integer from 0 through 255.";
+const EXIT_SELECTED = "This command invocation already has another exit status.";
 
 type Stream = "output" | "error";
 type Environment = {
@@ -29,10 +30,10 @@ export class InvalidArguments extends Error {
   }
 }
 
-export class InvalidCommand extends Error {
+export class InvocationCaptured extends Error {
   constructor() {
-    super(INVALID_COMMAND);
-    this.name = "InvalidCommand";
+    super(INVOCATION_CAPTURED);
+    this.name = "InvocationCaptured";
   }
 }
 
@@ -57,6 +58,13 @@ export class InvalidExitCode extends Error {
   }
 }
 
+export class ExitSelected extends Error {
+  constructor() {
+    super(EXIT_SELECTED);
+    this.name = "ExitSelected";
+  }
+}
+
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.isWellFormed();
 }
@@ -69,17 +77,24 @@ function isArguments(value: unknown): value is readonly string[] {
 
 /** Expose one command-line invocation without leaking ambient process access. */
 export class CommandingConcept {
+  #words: string[] | undefined;
+  #exitCode: number | undefined;
+
   constructor(private readonly environment: Environment = host) {}
 
   capture({ arguments: supplied }: { arguments: readonly string[] | null }) {
+    if (supplied !== null && !isArguments(supplied)) throw new InvalidArguments();
+    if (this.#words !== undefined) {
+      if (supplied !== null && (supplied.length !== this.#words.length || supplied.some((word, index) => word !== this.#words![index]))) {
+        throw new InvocationCaptured();
+      }
+      return { words: [...this.#words] };
+    }
+
     const words = supplied ?? this.environment.arguments();
     if (!isArguments(words)) throw new InvalidArguments();
-    return { words: [...words] };
-  }
-
-  recognize({ name, operands }: { name: string; operands: readonly string[] }) {
-    if (!isText(name) || name === "" || !isArguments(operands)) throw new InvalidCommand();
-    return { name, operands: [...operands] };
+    this.#words = [...words];
+    return { words: [...this.#words] };
   }
 
   write({ stream, text }: { stream: string; text: string }) {
@@ -91,7 +106,20 @@ export class CommandingConcept {
 
   exit({ code }: { code: number }) {
     if (!Number.isSafeInteger(code) || code < 0 || code > 255) throw new InvalidExitCode();
+    if (this.#exitCode !== undefined) {
+      if (this.#exitCode !== code) throw new ExitSelected();
+      return { code, changed: false };
+    }
     this.environment.exit(code);
-    return { code };
+    this.#exitCode = code;
+    return { code, changed: true };
+  }
+
+  _invocation(): { words: string[] }[] {
+    return this.#words === undefined ? [] : [{ words: [...this.#words] }];
+  }
+
+  _outcome(): { code: number }[] {
+    return this.#exitCode === undefined ? [] : [{ code: this.#exitCode }];
   }
 }

@@ -42,7 +42,8 @@ item from every catalog, or reset all catalog state.
 Actions:
 
 - `declare (condition, direction, name, selector, sort)` — may refuse `INVALID_CONDITION`, `INVALID_DIRECTION`, `INVALID_FIELD`, `INVALID_SELECTOR`, `INVALID_TEXT`
-- `index (card, catalog, item, path, tiebreak)` — may refuse `COLLECTION_NOT_FOUND`, `INVALID_CARD`, `INVALID_TEXT`
+- `index (card, catalog, item, path, tiebreak)` — may refuse `CATALOG_NOT_FOUND`, `INVALID_CARD`, `INVALID_TEXT`
+- `remove (name)` — may refuse `CATALOG_NOT_FOUND`, `INVALID_TEXT`
 - `reset (…)`
 - `unindex (catalog, item)` — may refuse `INVALID_TEXT`, `NOT_INCLUDED`
 - `withdraw (item)` — may refuse `INVALID_TEXT`
@@ -58,24 +59,28 @@ Queries (standing questions the state answers):
 
 ### Commanding
 
-**Purpose.** Expose one command-line invocation's words, application-selected command,
-operator streams, and eventual exit status so an application can interact with
-it without consulting ambient process state or hiding grammar in the host
-boundary.
+**Purpose.** Own one command-line invocation's captured words, operator streams, and terminal
+exit status so an application can interact with it without consulting ambient
+process state or hiding grammar in the host boundary.
 
 **Principle.** Ada invokes a tool with the words `publish notes`. Capturing the invocation
 returns those exact words. Her application recognizes them as command `publish`
-with operand `notes`; Commanding returns that selection without choosing it. The
-tool writes a completion line to her ordinary output and a warning to her error
-output, then selects exit status 2. Supplying an explicit word list instead makes
-the same interaction available to an embedding host.
+with operand `notes` outside Commanding. The tool writes a completion message to
+her ordinary output and a warning to her error output, then selects exit status
+2. Repeating that capture or status is idempotent; different words or a different
+status are refused. Supplying an explicit word list instead makes the same
+interaction available to an embedding host.
 
 Actions:
 
-- `capture (arguments)` — may refuse `INVALID_ARGUMENTS`
-- `exit (code)` — may refuse `INVALID_EXIT_CODE`
-- `recognize (name, operands)` — may refuse `INVALID_COMMAND`
+- `capture (arguments)` — may refuse `INVALID_ARGUMENTS`, `INVOCATION_CAPTURED`
+- `exit (code)` — may refuse `EXIT_SELECTED`, `INVALID_EXIT_CODE`
 - `write (stream, text)` — may refuse `INVALID_STREAM`, `INVALID_TEXT`
+
+Queries (standing questions the state answers):
+
+- `_invocation (…)` — promises at most one row
+- `_outcome (…)` — promises at most one row
 
 ### Converting
 
@@ -103,6 +108,27 @@ Queries (standing questions the state answers):
 - `_for (part, subject)` — promises at most one row
 - `_profile (name)` — promises at most one row
 
+### Delivering
+
+**Purpose.** Coordinate one aggregate task answer with failures already delivered at its boundary,
+so settlement cannot race a second terminal answer.
+
+**Principle.** Ada begins delivery for one task. An interruption records that another failure path
+already answered it; repeating the interruption changes nothing. Settling returns
+that interrupted result and closes the delivery. Another task remains independent.
+An interruption that arrives just before its begin is retained, so consequence
+ordering cannot erase an already delivered failure.
+
+Actions:
+
+- `begin (task)` — may refuse `INVALID_TASK`
+- `interrupt (task)` — may refuse `INVALID_TASK`
+- `settle (task)` — may refuse `DELIVERY_NOT_ACTIVE`
+
+Queries (standing questions the state answers):
+
+- `_delivery (task)` — promises at most one row
+
 ### Depending
 
 **Purpose.** Remember what each piece of work used, so a change marks only the work that must
@@ -127,6 +153,7 @@ that settles the result.
 
 Actions:
 
+- `abandon (attempt, subject)` — may refuse `INVALID_TEXT`, `NOT_BUILDING`, `STALE_ATTEMPT`
 - `begin (subject)` — may refuse `ATTEMPT_EXHAUSTED`, `INVALID_TEXT`
 - `drop (subject)` — may refuse `INVALID_TEXT`
 - `settle (attempt, subject)` — may refuse `INVALID_TEXT`, `NOT_BUILDING`, `STALE_ATTEMPT`
@@ -145,32 +172,36 @@ Queries (standing questions the state answers):
 
 ### Deploying
 
-**Purpose.** Own the ordered lifecycle of one static deployment,
-so later work cannot begin before every earlier item reaches a terminal outcome.
+**Purpose.** Own the ordered queue, historical snapshots, and preparation state of one
+static deployment, so every returned current item is already active and later
+work cannot begin before earlier work reaches a terminal outcome.
 
-**Principle.** Ada starts one policy containing a marker, a redirect, pagination, a sitemap,
-and a feed. Only the marker is pending. She activates and completes it, then
-activates and prepares the redirect. Activating that redirect twice is refused.
-The pagination plan expands atomically into numbered pending pages, including a
-first page for an empty collection. Each page becomes current in number order.
-After every page completes, the sitemap and feed are prepared from the facts Ada
-supplies and the deployment finishes. Starting another deployment in the same
-concept instance, completing pending work, and completing stale work are refused. The final
-outcome distinguishes a wholly completed queue from one containing failed work.
+**Principle.** Ada starts one policy containing a marker, redirects, pagination, a sitemap,
+and a feed. Starting atomically activates and returns the marker. Completing,
+rejecting, rejecting by owner or producer, and failing each current item
+atomically activate the next item they return. Dividing an active pagination
+plan atomically replaces it with numbered pages and activates the first page,
+including one page for an empty collection. Preparation records independently
+computed redirect documents, pagination contexts, sitemap documents, and feed
+results without generating them. An invalid or originless feed result remains
+active, cannot complete, and can be diagnosed and rejected so the queue
+continues. The final outcome distinguishes a wholly completed queue from one
+containing failed work.
 
 Actions:
 
 - `complete (work)` — may refuse `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`, `WORK_NOT_PREPARED`
-- `context (canonicalUrl, collections, site, work)` — may refuse `INVALID_CONTEXT`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
-- `dispatch (deployment, work)` — may refuse `WORK_NOT_CURRENT`, `WORK_NOT_PENDING`
+- `context (context, work)` — may refuse `INVALID_CONTEXT`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
 - `divide (deployment, entries, template, work)` — may refuse `INVALID_ENTRIES`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
 - `fail (code, detail, path, producer)` — may refuse `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
-- `feed (entries, site, work)` — may refuse `INVALID_ENTRIES`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
-- `redirect (canonical, target, work)` — may refuse `INVALID_REDIRECT`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
+- `prepareFeed (preparation, work)` — may refuse `INVALID_PREPARATION`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
+- `prepareSitemap (content, work)` — may refuse `INVALID_PREPARATION`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
+- `redirect (canonical, content, target, work)` — may refuse `INVALID_PREPARATION`, `INVALID_REDIRECT`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
 - `reject (work)` — may refuse `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
 - `rejectOwner (owner)` — may refuse `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
 - `rejectProducer (producer)` — may refuse `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
-- `sitemap (urls, work)` — may refuse `INVALID_URLS`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
+- `snapshotFeed (entries, site, work)` — may refuse `INVALID_PREPARATION`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
+- `snapshotSitemap (urls, work)` — may refuse `INVALID_URLS`, `WORK_NOT_ACTIVE`, `WORK_NOT_CURRENT`
 - `start (policy)` — may refuse `DEPLOYMENT_ACTIVE`, `INVALID_POLICY`
 
 Queries (standing questions the state answers):
@@ -183,9 +214,8 @@ Queries (standing questions the state answers):
 
 ### Diagnosing
 
-**Purpose.** Keep the problems found during a task together and record whether aggregate
-delivery was interrupted, so people can see everything available without a
-second terminal report racing an earlier failure.
+**Purpose.** Keep the problems found during a task together, so people can see everything
+available in one stable, ordered report.
 
 **Principle.** Ada checks two records. She reports an error in one, a warning in the other, and
 another error later in the first. Reading the list gives both errors before the
@@ -198,17 +228,14 @@ check clean; clearing leaves no problems at all.
 Actions:
 
 - `clear (…)`
-- `interrupt (…)`
 - `relate (column, diagnostic, line, note, source)` — may refuse `DIAGNOSTIC_NOT_FOUND`, `INVALID_LOCATION`, `INVALID_TEXT`
 - `report (code, column, line, message, scope, severity, source)` — may refuse `INVALID_LOCATION`, `INVALID_TEXT`, `UNKNOWN_SEVERITY`
-- `resume (…)`
 - `retract (scope, source)` — may refuse `INVALID_TEXT`
 
 Queries (standing questions the state answers):
 
 - `_all (…)` — promises any number of rows
 - `_clean (…)` — promises exactly one row
-- `_delivery (…)` — promises exactly one row
 - `_errors (…)` — promises any number of rows
 - `_for (source)` — promises any number of rows
 - `_related (diagnostic)` — promises any number of rows
@@ -434,23 +461,6 @@ Queries (standing questions the state answers):
 - `_place (place)` — promises at most one row
 - `_requested (name)` — promises at most one row
 
-### Matching
-
-**Purpose.** Admit reusable standalone path selectors under the shared portable glob value
-contract, so malformed syntax is refused before a computation uses a selector.
-
-**Principle.** Ada admits `posts/**/*.md`, where `**` means any folders. Admitting the exact
-text again returns the same pattern without adding another one. Admitting the
-broken pattern `posts/**{` is refused and adds nothing.
-
-Actions:
-
-- `compile (text)` — may refuse `MALFORMED_PATTERN`
-
-Queries (standing questions the state answers):
-
-- `_compiled (text)` — promises at most one row
-
 ### Phasing
 
 **Purpose.** Move a job through a named list of barriers in order, advancing only from the
@@ -477,7 +487,7 @@ Queries (standing questions the state answers):
 - `_job (job)` — promises at most one row
 - `_latest (sequence)` — promises at most one row
 - `_outcome (job)` — promises at most one row
-- `_running (sequence)` — promises any number of rows
+- `_running (sequence)` — promises at most one row
 
 ### Referencing
 
@@ -488,14 +498,15 @@ replacements are known.
 found address says which element and attribute owns it, where it appears in the
 HTML, and which other addresses share that element or attribute. Ada can replace
 an address safely or trust supplied markup to replace one whole element. The HTML
-is finished only after every found address has an answer. Scanning again forgets
-the old answers, and removing the scan makes its old reference identities invalid.
-Primary image sources also carry a vetted record of authored attributes that an
-image embedding policy may preserve.
+is finished only after every found address has an answer. Once finished, its
+answers are fixed: an identical repeated answer is idempotent, while a changed
+answer is refused. Scanning again forgets the old answers, and removing the scan
+makes its old reference identities invalid. Primary image sources also carry
+their source-backed authored attributes for application policy to interpret.
 
 Actions:
 
-- `answer (form, reference, value)` — may refuse `INVALID_FORM`, `INVALID_TEXT`, `OVERLAPPING_MARKUP`, `REFERENCE_NOT_FOUND`, `UNREPRESENTABLE_ADDRESS`
+- `answer (form, reference, value)` — may refuse `INVALID_FORM`, `INVALID_TEXT`, `OVERLAPPING_MARKUP`, `REFERENCE_NOT_FOUND`, `SOURCE_FINISHED`, `UNREPRESENTABLE_ADDRESS`
 - `drop (part, subject)` — may refuse `INVALID_TEXT`
 - `scan (part, subject, text)` — may refuse `INVALID_TEXT`
 
@@ -509,22 +520,21 @@ Queries (standing questions the state answers):
 
 ### Rendering
 
-**Purpose.** Track each page rendering attempt from source selection through body and layout
-settlement, so later behavior observes one completion event for each stage.
+**Purpose.** Track each page rendering attempt through body and layout settlement, so later
+behavior observes one terminal event for the active owner attempt.
 
-**Principle.** Ada begins a Markdown page without rendering controls, so its attempt uses the
-markdown profile and default page template. She begins an HTML page and it uses
-verbatim. Explicitly selected profile and template names are preserved instead.
-Settling the body, then the layout, then the attempt advances it in order.
+**Principle.** Ada begins a page with its selected profile and template and exact dependency
+and output attempts. Settling the body and then the layout advances it to completion in order.
 Repeating a settled transition reports no change. Retrying the same exact owner
 attempts returns the same rendering. Beginning the page with two newer attempts
 supersedes unfinished work, while an older or inconsistent pair is refused and
-late completion of superseded work reports no change.
+late completion of superseded work reports no change. Failing active work makes
+the attempt terminal and reports no second transition when repeated.
 
 Actions:
 
-- `begin (data, dependencyAttempt, emissionAttempt, path, subject)` — may refuse `INVALID_ATTEMPT`, `INVALID_DATA`, `INVALID_PROFILE`, `INVALID_TEMPLATE`, `INVALID_TEXT`, `STALE_ATTEMPT`, `UNKNOWN_SOURCE`
-- `finish (rendering)` — may refuse `RENDERING_NOT_FOUND`, `STAGE_NOT_READY`
+- `begin (dependencyAttempt, emissionAttempt, path, profile, subject, template)` — may refuse `INVALID_ATTEMPT`, `INVALID_TEXT`, `STALE_ATTEMPT`
+- `fail (reason, rendering)` — may refuse `INVALID_TEXT`, `RENDERING_NOT_FOUND`
 - `settleBody (rendering)` — may refuse `RENDERING_NOT_FOUND`
 - `settleLayout (rendering)` — may refuse `RENDERING_NOT_FOUND`, `STAGE_NOT_READY`
 
@@ -548,34 +558,25 @@ Actions:
 
 ### Routing
 
-**Purpose.** Give each thing one dependable address in a shared space, prevent two things
-from using the same address, and project canonical addresses into site URLs.
+**Purpose.** Give each thing one dependable canonical address in a shared space, so two
+things cannot silently use the same address.
 
 **Principle.** Ada gives one note the address `/notes/design/`. Giving another note that address
 is refused, so the first note keeps it. Giving the first note the same address
 again changes nothing, while moving it to a free address keeps the note's claim
-identity. Changing the public base from `/` to `/library/` changes the URLs
-people use but not who owns either address. Releasing an address makes it free
-for someone else. Malformed requests leave every existing claim untouched.
-Configuring the origin `https://notes.example/` then makes the rebased
-`/notes/design/` address available as
-`https://notes.example/library/notes/design/`; clearing the origin leaves the
-relative URL unchanged.
+identity. Releasing an address makes it free for someone else. Malformed
+requests leave every existing claim untouched.
 
 Actions:
 
 - `claim (address, owner)` — may refuse `ADDRESS_TAKEN`, `INVALID_ADDRESS`, `INVALID_OWNER`
-- `rebase (base)` — may refuse `INVALID_BASE`
 - `release (owner)` — may refuse `INVALID_OWNER`, `NOT_CLAIMED`
-- `reorigin (origin)` — may refuse `INVALID_ORIGIN`
 
 Queries (standing questions the state answers):
 
-- `_absolute (address)` — promises at most one row
 - `_address (owner)` — promises at most one row
 - `_claims (…)` — promises any number of rows
 - `_owner (address)` — promises at most one row
-- `_url (target)` — promises at most one row
 
 ### Serving
 
@@ -596,7 +597,7 @@ Actions:
 
 - `close (server)` — may refuse `SERVER_CLOSE_FAILED`, `SERVER_NOT_FOUND`
 - `open (host, port)` — may refuse `ADDRESS_UNAVAILABLE`, `INVALID_SERVER`
-- `publish (directory, server)` — may refuse `INVALID_SERVER`, `PUBLICATION_UNAVAILABLE`, `SERVER_NOT_OPEN`
+- `publish (directory, server)` — may refuse `INVALID_PUBLICATION`, `PUBLICATION_UNAVAILABLE`, `SERVER_NOT_OPEN`
 
 Queries (standing questions the state answers):
 
@@ -679,7 +680,7 @@ told to disregard.
 **Principle.** Ada observes `/srv/site`, letting a burst settle after 75 milliseconds, with
 `/srv/site/dist` excluded before observation starts. She attends the watch and waits.
 Saving three files in quick succession reports one settled change, not three.
-Attending again waits, because that burst was already reported. Files written
+When she attends again she waits, because that burst was already reported. Files written
 under `/srv/site/dist` report nothing at all. A burst that settles while nobody
 is attending is still reported by the next attend. Closing the watch releases
 whoever is attending and stops the observation for good.
@@ -699,6 +700,23 @@ Queries (standing questions the state answers):
 ## Views
 
 _Views name reusable conditions. Multiple `where` blocks are alternatives._
+
+```view
+absolute site URL of address (address) — inputs (address); outputs (url); bindings (base, origin) — answers at most one (url)
+  where
+    Governing._site () has (base)
+    Governing._origin () has (origin)
+    url is projectAbsoluteSiteUrl (address, base, origin)
+    isTextValue (value: url)
+```
+
+```view
+active deployment work returned by queue transition (action, result) — inputs (action, result); outputs (work); bindings () — answers at most one (work)
+  where
+    work is deploymentTransitionWork (action, result)
+    isTextValue (value: work)
+    Deploying._work (work) has (status: "active")
+```
 
 ```view
 address of output path (path) — inputs (path); outputs (address); bindings () — answers at most one (address)
@@ -744,18 +762,16 @@ committable deployment work of producer (producer) — inputs (producer); output
 ```
 
 ```view
-content document file — inputs (); outputs (file, text); bindings (root, path, pattern) — answers any number of (file, text)
+content document file — inputs (); outputs (file, text); bindings (root, path) — answers any number of (file, text)
   where
     Filing._named (name: "content") has (root)
     Filing._under (prefix: "", root) has (file, path)
-    Matching._compiled (text: "**/*.md") has (pattern)
-    patternHasResult (matched: true, path, pattern)
+    patternHasResult (matched: true, path, pattern: "**/*.md")
     Filing._text (file) has (text)
   where
     Filing._named (name: "content") has (root)
     Filing._under (prefix: "", root) has (file, path)
-    Matching._compiled (text: "**/*.html") has (pattern)
-    patternHasResult (matched: true, path, pattern)
+    patternHasResult (matched: true, path, pattern: "**/*.html")
     Filing._text (file) has (text)
 ```
 
@@ -786,12 +802,11 @@ unrouted content body asset of source (source) — inputs (source); outputs (ren
 ```
 
 ```view
-copyable body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, asset, name, content); bindings (pattern, sourcePath) — answers any number of (rendering, page, reference, raw, asset, name, content)
+copyable body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, asset, name, content); bindings (sourcePath) — answers any number of (rendering, page, reference, raw, asset, name, content)
   where view "unrouted content body asset of source (source)" with (source) has (asset, content, name, page, raw, reference, rendering) and not (role: "image")
   where
     view "unrouted content body asset of source (source)" with (source) has (asset, content, name, page, raw, reference, rendering, role: "image", sourcePath)
-    Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
-    patternHasResult (matched: false, path: sourcePath, pattern)
+    patternHasResult (matched: false, path: sourcePath, pattern: "**/*.{avif,gif,jpeg,jpg,png,webp}")
 ```
 
 ```view
@@ -835,6 +850,29 @@ held layout reference of source (source) — inputs (source); outputs (reference
 ```
 
 ```view
+the settled site build of job (job) — inputs (job); outputs (state); bindings () — answers at most one (state)
+  where
+    Phasing._job (job) has (name: "site-build")
+    Phasing._outcome (job) has (state)
+```
+
+```view
+unsettled route owner — inputs (); outputs (owner); bindings () — answers any number of (owner)
+  where
+    Routing._claims () has (owner)
+    no Depending._current (subject: owner)
+```
+
+```view
+job (job) is a publishable site build — inputs (job); outputs (); bindings ()
+  where
+    view "the settled site build of job (job)" with (job) has (state: "finished")
+    Diagnosing._clean () has (clean: true)
+    Deploying._outcome () has (state: "completed")
+    no view "unsettled route owner"
+```
+
+```view
 path (path) relative to prefix (prefix) — inputs (path, prefix); outputs (relative); bindings () — answers at most one (relative)
   where
     relative is relativePath (path, prefix)
@@ -842,11 +880,23 @@ path (path) relative to prefix (prefix) — inputs (path, prefix); outputs (rela
 ```
 
 ```view
-primary raster body asset reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, image, name, content); bindings (pattern, imagePath) — answers any number of (rendering, page, reference, raw, image, name, content)
+pending failed rendering cleanup — inputs (); outputs (page, rendering); bindings (dependencyAttempt, emissionAttempt) — answers any number of (page, rendering)
+  where
+    Rendering._all () has (emissionAttempt, rendering, stage: "failed", subject: page)
+    Rendering._latest (subject: page) has (rendering)
+    Emitting._open (producer: page) has (attempt: emissionAttempt)
+  where
+    Rendering._all () has (dependencyAttempt, rendering, stage: "failed", subject: page)
+    Rendering._latest (subject: page) has (rendering)
+    Depending._attempt (subject: page) has (attempt: dependencyAttempt)
+    Depending._state (subject: page) has (state: "building")
+```
+
+```view
+primary raster body asset reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, image, name, content); bindings (imagePath) — answers any number of (rendering, page, reference, raw, image, name, content)
   where
     view "unrouted content body asset of source (source)" with (source) has (asset: image, content, name, page, raw, reference, rendering, role: "image", sourcePath: imagePath)
-    Matching._compiled (text: "**/*.{avif,gif,jpeg,jpg,png,webp}") has (pattern)
-    patternHasResult (matched: true, path: imagePath, pattern)
+    patternHasResult (matched: true, path: imagePath, pattern: "**/*.{avif,gif,jpeg,jpg,png,webp}")
 ```
 
 ```view
@@ -875,11 +925,19 @@ routed deployment work (work) — inputs (work); outputs (owner, address); bindi
 ```
 
 ```view
+site URL of target (target) — inputs (target); outputs (url); bindings (base) — answers at most one (url)
+  where
+    Governing._site () has (base)
+    url is projectSiteUrl (base, target)
+    isTextValue (value: url)
+```
+
+```view
 sitemap page — inputs (); outputs (owner, address, url); bindings () — answers any number of (owner, address, url)
   where
     Routing._claims () has (address, owner) and not (address: "/404.html")
     no Deploying._forOwner (owner) has (kind: "redirect")
-    Routing._absolute (address) has (url)
+    view "absolute site URL of address (address)" with (address) has (url)
 ```
 
 ```view
@@ -909,6 +967,14 @@ the inspection owner of target (target) — inputs (target); outputs (owner); bi
 ```
 
 ```view
+the invalid rendering selection for path (path) and data (data) — inputs (path, data); outputs (error, detail); bindings () — answers at most one (error, detail)
+  where
+    pageRenderingSelectionHasValidity (data, path, valid: false)
+    error is pageRenderingError (data, path)
+    detail is pageRenderingErrorDetail (data, path)
+```
+
+```view
 the publication place — inputs (); outputs (place, destination); bindings () — answers at most one (place, destination)
   where
     Locating._named (name: "destination") has (place)
@@ -926,38 +992,69 @@ the publication transaction prefix of destination (destination) — inputs (dest
     isTextValue (value: prefix)
 ```
 
-```view
-unsettled route owner — inputs (); outputs (owner); bindings () — answers any number of (owner)
-  where
-    Routing._claims () has (owner)
-    no Depending._current (subject: owner)
-```
-
-```view
-the publishable site build of sequence (sequence) — inputs (sequence); outputs (job); bindings () — answers at most one (job)
-  where
-    Phasing._latest (sequence) has (job, name: "site-build", state: "finished")
-    Diagnosing._delivery () has (interrupted: false)
-    Diagnosing._clean () has (clean: true)
-    Deploying._outcome () has (state: "completed")
-    no view "unsettled route owner"
-```
-
-```view
-the settled site build of sequence (sequence) — inputs (sequence); outputs (job, state); bindings () — answers at most one (job, state)
-  where Phasing._latest (sequence) has (job, name: "site-build", state)
-```
-
 ## Formers
 
 _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
+Former "the build diagnostics inspection" — inputs (); bindings (diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
+  a record of
+    diagnostics: each Diagnosing._all () has (code, column, diagnostic, line, message, severity, source)
+      form a record of
+        code
+        column
+        diagnostic
+        line
+        message
+        related: each Diagnosing._related (diagnostic) has (column: relatedColumn, line: relatedLine, note, source: relatedSource)
+          form a record of
+            column: relatedColumn
+            line: relatedLine
+            note
+            source: relatedSource
+        severity
+        source
+```
+
+```former
+Former "the catalog inspection of owner (owner)" — inputs (owner); bindings (catalog, name, index); promises exactly one record — forms:
+  a record of
+    memberships: each Cataloging._membership (item: owner) has (catalog, name)
+      where Cataloging._position (catalog, item: owner) has (index)
+      form a record of
+        collection: catalog
+        index
+        name
+```
+
+```former
+Former "the claim inspection of owner (owner)" — inputs (owner); bindings (address); promises exactly one record — forms:
+  a record of
+    claims: each Routing._claims () has (address, owner)
+      form a record of
+        address
+        owner
+```
+
+```former
 Former "the completed body render facts of rendering (rendering)" — inputs (rendering); bindings (content); promises exactly one record — forms:
   a record of
     where Referencing._finished (part: "body", subject: rendering) has (text: content)
     content
+```
+
+```former
+Former "the dependency inspection of owner (owner)" — inputs (owner); bindings (state, reason, input); promises exactly one record — forms:
+  a record of
+    dependencies: a record of
+      where Depending._state (subject: owner) has (state)
+      where whether Depending._reason (subject: owner) has (reason)
+      inputs: each Depending._uses (subject: owner) has (input)
+        form a record of
+          input
+      reason
+      state
 ```
 
 ```former
@@ -976,66 +1073,18 @@ Former "the diagnosed text" — inputs (); bindings (text); promises exactly one
 ```
 
 ```former
-Former "the operational inspection of page (owner)" — inputs (owner); bindings (catalog, name, index, rendering, renderingPath, renderingProfile, renderingTemplate, renderingStage, bodySource, layoutSource, historicalRendering, historicalPath, historicalProfile, historicalTemplate, historicalStage, state, reason, input, outputPath, digest, medium, address, diagnostic, severity, code, message, source, line, column, relatedSource, relatedLine, relatedColumn, note); promises exactly one record — forms:
+Former "the layer inspection of owner (owner)" — inputs (owner); bindings (layer, rank, values, path, originRank, originLayer); promises exactly one record — forms:
   a record of
-    claims: each Routing._claims () has (address, owner)
+    layers: each Layering._layers (subject: owner) has (layer, rank, values)
       form a record of
-        address
-        owner
-    dependencies: a record of
-      where Depending._state (subject: owner) has (state)
-      where whether Depending._reason (subject: owner) has (reason)
-      inputs: each Depending._uses (subject: owner) has (input)
-        form a record of
-          input
-      reason
-      state
-    diagnostics: each Diagnosing._all () has (code, column, diagnostic, line, message, severity, source)
+        layer
+        rank
+        values
+    origins: each Layering._leafOrigins (subject: owner) has (layer: originLayer, path, rank: originRank)
       form a record of
-        code
-        column
-        diagnostic
-        line
-        message
-        related: each Diagnosing._related (diagnostic) has (column: relatedColumn, line: relatedLine, note, source: relatedSource)
-          form a record of
-            column: relatedColumn
-            line: relatedLine
-            note
-            source: relatedSource
-        severity
-        source
-    memberships: each Cataloging._membership (item: owner) has (catalog, name)
-      where Cataloging._position (catalog, item: owner) has (index)
-      form a record of
-        collection: catalog
-        index
-        name
-    outputs: each Emitting._byProducer (producer: owner) has (digest, medium, path: outputPath)
-      form a record of
-        digest
-        medium
-        path: outputPath
-    rendering: a record of
-      where whether Rendering._latest (subject: owner) has (path: renderingPath, profile: renderingProfile, rendering, stage: renderingStage, template: renderingTemplate)
-      attempt: rendering
-      body: a record of
-        where whether Referencing._finished (part: "body", subject: rendering) has (source: bodySource)
-        source: bodySource
-      layout: a record of
-        where whether Referencing._finished (part: "layout", subject: rendering) has (source: layoutSource)
-        source: layoutSource
-      path: renderingPath
-      profile: renderingProfile
-      stage: renderingStage
-      template: renderingTemplate
-    renderings: each Rendering._all () has (path: historicalPath, profile: historicalProfile, rendering: historicalRendering, stage: historicalStage, subject: owner, template: historicalTemplate)
-      form a record of
-        attempt: historicalRendering
-        path: historicalPath
-        profile: historicalProfile
-        stage: historicalStage
-        template: historicalTemplate
+        layer: originLayer
+        path
+        rank: originRank
 ```
 
 ```former
@@ -1043,7 +1092,7 @@ Former "the originated page render facts of rendering (rendering)" — inputs (r
   a record of
     where Rendering._active (rendering) has (subject: page)
     where Routing._address (owner: page) has (address)
-    where Routing._absolute (address) has (url: canonicalUrl)
+    where view "absolute site URL of address (address)" with (address) has (url: canonicalUrl)
     canonicalUrl
 ```
 
@@ -1070,7 +1119,7 @@ Former "the site render facts" — inputs (); bindings (site, collections); prom
 ```
 
 ```former
-Former "the originated completed render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
+Former "the originated completed render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
   a record of
     page: a record of
       … former "the page render facts of rendering (rendering)" with (rendering)
@@ -1080,12 +1129,22 @@ Former "the originated completed render context of page (page)" — inputs (rend
 ```
 
 ```former
-Former "the originated render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
+Former "the originated render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
   a record of
     page: a record of
       … former "the page render facts of rendering (rendering)" with (rendering)
       … former "the originated page render facts of rendering (rendering)" with (rendering)
     … former "the site render facts"
+```
+
+```former
+Former "the output inspection of owner (owner)" — inputs (owner); bindings (path, digest, medium); promises exactly one record — forms:
+  a record of
+    outputs: each Emitting._byProducer (producer: owner) has (digest, medium, path)
+      form a record of
+        digest
+        medium
+        path
 ```
 
 ```former
@@ -1101,6 +1160,39 @@ Former "the publication card of page (page)" — inputs (page); bindings (data, 
     source: a record of
       path
     url: address
+```
+
+```former
+Former "the rendering inspection of owner (owner)" — inputs (owner); bindings (rendering, path, profile, template, stage, bodySource, layoutSource, historicalRendering, historicalPath, historicalProfile, historicalTemplate, historicalStage); promises exactly one record — forms:
+  a record of
+    rendering: a record of
+      where whether Rendering._latest (subject: owner) has (path, profile, rendering, stage, template)
+      attempt: rendering
+      body: a record of
+        where whether Referencing._finished (part: "body", subject: rendering) has (source: bodySource)
+        source: bodySource
+      layout: a record of
+        where whether Referencing._finished (part: "layout", subject: rendering) has (source: layoutSource)
+        source: layoutSource
+      path
+      profile
+      stage
+      template
+    renderings: each Rendering._all () has (path: historicalPath, profile: historicalProfile, rendering: historicalRendering, stage: historicalStage, subject: owner, template: historicalTemplate)
+      form a record of
+        attempt: historicalRendering
+        path: historicalPath
+        profile: historicalProfile
+        stage: historicalStage
+        template: historicalTemplate
+```
+
+```former
+Former "the route inspection of owner (owner)" — inputs (owner); bindings (route); promises exactly one record — forms:
+  a record of
+    route: a record of
+      where whether Routing._address (owner) has (address: route)
+      address: route
 ```
 
 ```former
@@ -1124,34 +1216,40 @@ Former "the site build summary" — inputs (); bindings (owner, file, policy, de
 ```
 
 ```former
-Former "the site inspection of owner (owner)" — inputs (owner); bindings (route, sourcePath, sourceDigest, templateName, templateOwner, templateDigest, used, layer, rank, values, originPath, originRank, originLayer); promises exactly one record — forms:
+Former "the source inspection of owner (owner)" — inputs (owner); bindings (path, digest); promises exactly one record — forms:
   a record of
-    layers: each Layering._layers (subject: owner) has (layer, rank, values)
-      form a record of
-        layer
-        rank
-        values
-    origins: each Layering._leafOrigins (subject: owner) has (layer: originLayer, path: originPath, rank: originRank)
-      form a record of
-        layer: originLayer
-        path: originPath
-        rank: originRank
-    route: a record of
-      where whether Routing._address (owner) has (address: route)
-      address: route
     source: a record of
-      where whether Filing._file (file: owner) has (digest: sourceDigest, path: sourcePath)
-      digest: sourceDigest
-      path: sourcePath
+      where whether Filing._file (file: owner) has (digest, path)
+      digest
+      path
+```
+
+```former
+Former "the template inspection of owner (owner)" — inputs (owner); bindings (name, template, digest, used); promises exactly one record — forms:
+  a record of
     template: a record of
-      where whether Rendering._latest (subject: owner) has (template: templateName)
-      where whether Templating._template (name: templateName) has (digest: templateDigest, template: templateOwner)
-      digest: templateDigest
-      name: templateName
-      tree: each Templating._tree (owner: templateOwner) has (used)
+      where whether Rendering._latest (subject: owner) has (template: name)
+      where whether Templating._template (name) has (digest, template)
+      digest
+      name
+      tree: each Templating._tree (owner: template) has (used)
         form a record of
           used
-    … former "the operational inspection of page (owner)" with (owner)
+```
+
+```former
+Former "the site inspection of owner (owner)" — inputs (owner); bindings (); promises exactly one record — forms:
+  a record of
+    … former "the route inspection of owner (owner)" with (owner)
+    … former "the source inspection of owner (owner)" with (owner)
+    … former "the template inspection of owner (owner)" with (owner)
+    … former "the layer inspection of owner (owner)" with (owner)
+    … former "the rendering inspection of owner (owner)" with (owner)
+    … former "the catalog inspection of owner (owner)" with (owner)
+    … former "the dependency inspection of owner (owner)" with (owner)
+    … former "the output inspection of owner (owner)" with (owner)
+    … former "the claim inspection of owner (owner)" with (owner)
+    … former "the build diagnostics inspection"
 ```
 
 ```former
@@ -1166,11 +1264,11 @@ Former "the unoriginated page render facts of rendering (rendering)" — inputs 
   a record of
     where Rendering._active (rendering) has (subject: page)
     where Routing._address (owner: page) has (address)
-    where no Routing._absolute (address)
+    where no view "absolute site URL of address (address)" with (address)
 ```
 
 ```former
-Former "the unoriginated completed render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
+Former "the unoriginated completed render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
   a record of
     page: a record of
       … former "the page render facts of rendering (rendering)" with (rendering)
@@ -1180,7 +1278,7 @@ Former "the unoriginated completed render context of page (page)" — inputs (re
 ```
 
 ```former
-Former "the unoriginated render context of page (page)" — inputs (rendering); bindings (); promises exactly one record — forms:
+Former "the unoriginated render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
   a record of
     page: a record of
       … former "the page render facts of rendering (rendering)" with (rendering)
@@ -1210,418 +1308,7 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### fullSite.AbsoluteDeploymentLayoutReferencesRebase
-
-```reaction
-when Referencing.scan (part: "deployment-layout", source)
-where
-  Referencing._references (source) has (raw, reference)
-  targetHasKind (kind: "absolute", target: raw)
-  Routing._url (target: raw) has (url)
-then
-  Referencing.answer (form: "address", reference, value: url)
-```
-
-### fullSite.AbsoluteLayoutReferencesRebase
-
-```reaction
-when Referencing.scan (part: "layout", source)
-where
-  Referencing._references (source) has (raw, reference)
-  targetHasKind (kind: "absolute", target: raw)
-  Routing._url (target: raw) has (url)
-then
-  Referencing.answer (form: "address", reference, value: url)
-```
-
-### fullSite.AdmittedConfigurationIsLoaded
-
-```reaction
-when Locating.admit (name: "settings", path, status: "admitted")
-then
-  Filing.loadFile (name: "project", path: "site.yaml", source: path)
-```
-
-### fullSite.AdmittedRasterImagesRender
-
-```reaction
-when Transcoding.admit (original)
-where
-  Governing._images () has (formats, widths)
-then
-  Transcoding.render (formats, original, widths)
-```
-
-### fullSite.AdmittedSourceRootsAreLoaded
-
-```reaction
-when Locating.admit (name: root, path: directory, contained: true, real, resolved: true, status: "admitted")
-where
-  Governing._sources () has (name: root, path: directory)
-then
-  Filing.loadTree (directory: real, name: root)
-```
-
-### fullSite.AdvanceSiteBuild
-
-```reaction
-when Phasing.advance (attempt, job, name: "site-build", transitioned: true)
-at the flow's settlement frontier
-where
-  Phasing._job (job) has (attempt: nextAttempt, name: "site-build", state: "running")
-then
-  Phasing.advance (attempt: nextAttempt, job)
-```
-
-### fullSite.AdvanceStartedSiteBuild
-
-```reaction
-when Phasing.start (sequence, attempt, job, name: "site-build")
-at the flow's settlement frontier
-where
-  Phasing._running (sequence) has (attempt, job, name: "site-build")
-then
-  Phasing.advance (attempt, job)
-```
-
-### fullSite.AnnounceMisuse
-
-```reaction
-when RequestBoundary.request (path: "/cli/misuse", requestId)
-where
-  view "the Syncpress misuse report" has (text)
-then
-  Commanding.write (stream: "error", text)
-```
-
-### fullSite.AnnounceMisuse#2
-
-```reaction
-when Commanding.write (stream: "error", text), asked by fullSite.AnnounceMisuse
-where
-  earlier, RequestBoundary.request (path: "/cli/misuse", requestId)
-then
-  RequestBoundary.respond (requestId)
-```
-
-### fullSite.AnnounceUsage
-
-```reaction
-when RequestBoundary.request (path: "/cli/usage", requestId)
-where
-  view "the Syncpress usage report" has (text)
-then
-  Commanding.write (stream: "output", text)
-```
-
-### fullSite.AnnounceUsage#2
-
-```reaction
-when Commanding.write (stream: "output", text), asked by fullSite.AnnounceUsage
-where
-  earlier, RequestBoundary.request (path: "/cli/usage", requestId)
-then
-  RequestBoundary.respond (requestId)
-```
-
-### fullSite.AssessedConfigurationProblemsDiagnose
-
-```reaction
-when refused Governing.assess (error: "INVALID_CONFIGURATION")
-where
-  Governing._problems () has (code, column, line, message)
-then
-  Diagnosing.report (code, column, line, message, scope: "configuration-assessment", severity: "error", source: "site.yaml")
-```
-
-### fullSite.AttendSiteWatch
-
-```reaction
-when RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
-then
-  Watching.attend (watch, within)
-```
-
-### fullSite.AttendSiteWatch#2
-
-```reaction
-when Watching.attend (watch, within, changed, watching), asked by fullSite.AttendSiteWatch
-where
-  earlier, RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
-then
-  RequestBoundary.respond (changed, requestId, watching)
-```
-
-### fullSite.BegunFeedsIntend
-
-```reaction
-when Emitting.begin (producer, attempt)
-where
-  Deploying._forProducer (producer) has (kind: "feed", work)
-  earlier, Deploying.feed (work, content, origin: true, path)
-then
-  Emitting.intend (attempt, content, medium: "application/atom+xml", path, producer)
-```
-
-### fullSite.BegunNojekyllWorkIntends
-
-```reaction
-when Emitting.begin (producer, attempt)
-where
-  Deploying._forProducer (producer) has (kind: "nojekyll", path)
-then
-  Emitting.intend (attempt, content: "", medium: "text/plain", path, producer)
-```
-
-### fullSite.BegunPaginationPagesIntend
-
-```reaction
-when Emitting.begin (producer, attempt)
-where
-  Deploying._forProducer (producer) has (address, kind: "pagination-page")
-  view "output path of address (address)" with (address) has (path)
-  Referencing._finished (part: "deployment-layout", subject: producer) has (text)
-then
-  Emitting.intend (attempt, content: text, medium: "text/html", path, producer)
-```
-
-### fullSite.BegunRedirectsIntend
-
-```reaction
-when Emitting.begin (producer, attempt)
-where
-  Deploying._forProducer (producer) has (from: address, kind: "redirect", work)
-  view "output path of address (address)" with (address) has (path)
-  earlier, Deploying.redirect (work, content)
-then
-  Emitting.intend (attempt, content, medium: "text/html", path, producer)
-```
-
-### fullSite.BegunSitemapsIntend
-
-```reaction
-when Emitting.begin (producer, attempt)
-where
-  Deploying._forProducer (producer) has (kind: "sitemap", work)
-  earlier, Deploying.sitemap (work, content, path)
-then
-  Emitting.intend (attempt, content, medium: "application/xml", path, producer)
-```
-
-### fullSite.BodyConversionFailuresDiagnose
-
-```reaction
-when refused Converting.convert (part: "body", subject: rendering, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering) has (subject: page)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
-```
-
-### fullSite.BodyTemplateFailuresDiagnose
-
-```reaction
-when refused Templating.fill (subject: rendering, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering) has (subject: page)
-  Filing._file (file: page) has (path)
-  Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
-then
-  Diagnosing.report (code: error, column, line, message: detail, scope: "page-rendering", severity: "error", source)
-```
-
-### fullSite.BuildSiteAtConfiguredOutput
-
-```reaction
-when RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-where
-  isAbsentValue (value: destination)
-then
-  Locating.request (name: "site", path: directory)
-```
-
-### fullSite.BuildSiteAtConfiguredOutput#2
-
-```reaction
-when Locating.request (name: "site", path: directory), asked by fullSite.BuildSiteAtConfiguredOutput
-then
-  Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
-```
-
-### fullSite.BuildSiteAtConfiguredOutput#3
-
-```reaction
-when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.BuildSiteAtConfiguredOutput#2
-then
-  Phasing.start (sequence)
-```
-
-### fullSite.BuildSiteAtConfiguredOutput:errors#4
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtConfiguredOutput#3
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
-  Diagnosing._delivery () has (interrupted: false)
-  Diagnosing._clean () has (clean: false)
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (error: "BUILD_HAS_ERRORS", requestId)
-```
-
-### fullSite.BuildSiteAtConfiguredOutput:failed#4
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtConfiguredOutput#3
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "failed")
-  Diagnosing._delivery () has (interrupted: false)
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (error: "BUILD_FAILED", requestId)
-```
-
-### fullSite.BuildSiteAtConfiguredOutput:incomplete#4
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtConfiguredOutput#3
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
-  Diagnosing._delivery () has (interrupted: false)
-  Diagnosing._clean () has (clean: true)
-  no view "the publishable site build of sequence (sequence)" with (sequence)
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (error: "BUILD_INCOMPLETE", requestId)
-```
-
-### fullSite.BuildSiteAtConfiguredOutput:published#4
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtConfiguredOutput#3
-at the flow's settlement frontier
-where
-  view "the publishable site build of sequence (sequence)" with (sequence) has (job)
-then
-  Emitting.reconcile ()
-```
-
-### fullSite.BuildSiteAtConfiguredOutput:published#5
-
-```reaction
-when Emitting.reconcile (kept, removed, replaced, written), asked by fullSite.BuildSiteAtConfiguredOutput:published#4
-where
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (kept, removed, replaced, requestId, summary: former "the site build summary", written)
-```
-
-### fullSite.BuildSiteAtDestination
-
-```reaction
-when RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-where
-  isTextValue (value: destination)
-then
-  Locating.request (name: "site", path: directory)
-```
-
-### fullSite.BuildSiteAtDestination#2
-
-```reaction
-when Locating.request (name: "site", path: directory), asked by fullSite.BuildSiteAtDestination
-where
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  Locating.request (name: "destination", path: destination)
-```
-
-### fullSite.BuildSiteAtDestination#3
-
-```reaction
-when Locating.request (name: "destination", path: destination), asked by fullSite.BuildSiteAtDestination#2
-then
-  Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
-```
-
-### fullSite.BuildSiteAtDestination#4
-
-```reaction
-when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.BuildSiteAtDestination#3
-then
-  Phasing.start (sequence)
-```
-
-### fullSite.BuildSiteAtDestination:errors#5
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtDestination#4
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
-  Diagnosing._delivery () has (interrupted: false)
-  Diagnosing._clean () has (clean: false)
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (error: "BUILD_HAS_ERRORS", requestId)
-```
-
-### fullSite.BuildSiteAtDestination:failed#5
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtDestination#4
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "failed")
-  Diagnosing._delivery () has (interrupted: false)
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (error: "BUILD_FAILED", requestId)
-```
-
-### fullSite.BuildSiteAtDestination:incomplete#5
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtDestination#4
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
-  Diagnosing._delivery () has (interrupted: false)
-  Diagnosing._clean () has (clean: true)
-  no view "the publishable site build of sequence (sequence)" with (sequence)
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (error: "BUILD_INCOMPLETE", requestId)
-```
-
-### fullSite.BuildSiteAtDestination:published#5
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.BuildSiteAtDestination#4
-at the flow's settlement frontier
-where
-  view "the publishable site build of sequence (sequence)" with (sequence) has (job)
-then
-  Emitting.reconcile ()
-```
-
-### fullSite.BuildSiteAtDestination:published#6
-
-```reaction
-when Emitting.reconcile (kept, removed, replaced, written), asked by fullSite.BuildSiteAtDestination:published#5
-where
-  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
-then
-  RequestBoundary.respond (kept, removed, replaced, requestId, summary: former "the site build summary", written)
-```
-
-### fullSite.CatalogIndexFailuresDiagnose
+### fullSite.collections.CatalogIndexFailuresDiagnose
 
 ```reaction
 when refused Cataloging.index (item: page, path, detail, error)
@@ -1632,1025 +1319,7 @@ then
   Diagnosing.report (code: error, message: detail, scope: "collection-indexing", severity: "error", source: path)
 ```
 
-### fullSite.ClaimedBodyReferencesRetarget
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  view "resolved local body reference of source (source)" with (source) has (raw, reference, target)
-  Routing._address (owner: target) has (address)
-  view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address) has (target: value)
-then
-  Referencing.answer (form: "address", reference, value)
-```
-
-### fullSite.ClaimedExternalRedirectsRender
-
-```reaction
-when Routing.claim (owner)
-where
-  Deploying._forOwner (owner) has (kind: "redirect", to: target, work)
-  targetHasKind (kind: "external", target)
-then
-  Deploying.redirect (canonical: target, target, work)
-```
-
-### fullSite.ClaimedLocalRedirectsRender
-
-```reaction
-when Routing.claim (owner)
-where
-  Deploying._forOwner (owner) has (kind: "redirect", to: raw, work)
-  Routing._url (target: raw) has (url: target)
-  Routing._absolute (address: raw) has (url: canonical)
-then
-  Deploying.redirect (canonical, target, work)
-```
-
-### fullSite.ClaimedPaginationPagesFormContext
-
-```reaction
-when Routing.claim (owner)
-where
-  Deploying._forOwner (owner) has (address, kind: "pagination-page", work)
-  Governing._site () has (site)
-  Cataloging._record () has (catalogs: collections)
-  whether Routing._absolute (address) has (url: canonicalUrl)
-then
-  Deploying.context (canonicalUrl, collections, site, work)
-```
-
-### fullSite.ClaimedRoutesBeginPageDependencies
-
-```reaction
-when Routing.claim (owner: page)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-then
-  Depending.begin (subject: page)
-```
-
-### fullSite.ClaimedUnoriginatedRedirectsRender
-
-```reaction
-when Routing.claim (owner)
-where
-  Deploying._forOwner (owner) has (kind: "redirect", to: raw, work)
-  Routing._url (target: raw) has (url: target)
-  no Routing._absolute (address: raw)
-then
-  Deploying.redirect (canonical: target, target, work)
-```
-
-### fullSite.ClearedContentGetsAttributes
-
-```reaction
-when Layering.clear (subject)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: subject) has (root)
-  Documenting._document (subject) has (attributes)
-then
-  Layering.contribute (rank: 9007199254740991, subject, values: attributes)
-```
-
-### fullSite.ClearedContentGetsDefaults
-
-```reaction
-when Layering.clear (subject)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-  Filing._named (name: "content") has (root: content)
-  Filing._file (file: subject) has (path, root: content)
-  Governing._defaults () has (index, text, values)
-  Matching._compiled (text) has (pattern)
-  patternHasResult (matched: true, path, pattern)
-then
-  Layering.contribute (rank: index, subject, values)
-```
-
-### fullSite.CloseSiteServer
-
-```reaction
-when RequestBoundary.request (path: "/serve/close", requestId, server)
-then
-  Serving.close (server)
-```
-
-### fullSite.CloseSiteServer#2
-
-```reaction
-when Serving.close (server), asked by fullSite.CloseSiteServer
-where
-  earlier, RequestBoundary.request (path: "/serve/close", requestId, server)
-then
-  RequestBoundary.respond (requestId)
-```
-
-### fullSite.CloseSiteWatch
-
-```reaction
-when RequestBoundary.request (path: "/watch/close", requestId, watch)
-then
-  Watching.close (watch)
-```
-
-### fullSite.CloseSiteWatch#2
-
-```reaction
-when Watching.close (watch), asked by fullSite.CloseSiteWatch
-where
-  earlier, RequestBoundary.request (path: "/watch/close", requestId, watch)
-then
-  RequestBoundary.respond (requestId)
-```
-
-### fullSite.CommittedDeploymentArtifactsComplete
-
-```reaction
-when Emitting.commit (attempt, producer)
-where
-  view "committable deployment work of producer (producer)" with (producer) has (work)
-  Emitting._attempt (producer) has (attempt)
-then
-  Deploying.complete (work)
-```
-
-### fullSite.CommittedPageOutputsSettleDependencies
-
-```reaction
-when Emitting.commit (attempt: emissionAttempt, producer: page)
-where
-  earlier, Rendering.finish (rendering, subject: page, transitioned: true)
-  Rendering._latest (subject: page) has (dependencyAttempt, emissionAttempt, rendering, stage: "completed")
-then
-  Depending.settle (attempt: dependencyAttempt, subject: page)
-```
-
-### fullSite.CompletedDeploymentsDispatch
-
-```reaction
-when Deploying.complete (deployment, work)
-then
-  Deploying.dispatch (deployment, work)
-```
-
-### fullSite.CompletedEmbeddingsAnswer
-
-```reaction
-when Embedding.offer (embedding, completed: true)
-where
-  Embedding._embedding (embedding) has (subject: reference)
-  Embedding._markup (embedding) has (markup)
-then
-  Referencing.answer (form: "markup", reference, value: markup)
-```
-
-### fullSite.ConfigurationAssessmentRetractsDiagnostics
-
-```reaction
-when requested Governing.assess ()
-then
-  Diagnosing.retract (scope: "configuration-assessment", source: "site.yaml")
-```
-
-### fullSite.ConfiguredOutputDirectsPublication
-
-```reaction
-when Locating.admit (name: "output", path: directory, contained: true, real, resolved: true, status: "admitted")
-where
-  view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
-then
-  Emitting.direct (destination: real, prefix)
-```
-
-### fullSite.ContentDocumentsParse
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-where
-  view "content document file" has (file, text)
-then
-  Documenting.parse (subject: file, text)
-```
-
-### fullSite.ConvertedBodiesScan
-
-```reaction
-when Converting.convert (part: "body", subject: rendering, output)
-then
-  Referencing.scan (part: "body", subject: rendering, text: output)
-```
-
-### fullSite.CopiedBodyAssetsAnswer
-
-```reaction
-when Emitting.intend (path, producer: page)
-where
-  earlier, Referencing.scan (part: "body", subject: rendering, source)
-  view "copyable body asset of source (source)" with (source) has (name, page, raw, reference, rendering)
-  view "beside-page output for page (page) and name (name)" with (name, page) has (path)
-  view "address of output path (path)" with (path) has (address)
-  view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address) has (target: value)
-then
-  Referencing.answer (form: "address", reference, value)
-```
-
-### fullSite.CopyableBodyAssetsCopy
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  view "copyable body asset of source (source)" with (source) has (asset: target, content, name, page, rendering)
-  Rendering._active (rendering) has (emissionAttempt)
-  view "beside-page output for page (page) and name (name)" with (name, page) has (path)
-then
-  Emitting.intend (attempt: emissionAttempt, claim: target, content, medium: "application/octet-stream", path, producer: page)
-```
-
-### fullSite.DeclaredEmbeddingsAnswer
-
-```reaction
-when Embedding.declare (completed: true, embedding)
-where
-  Embedding._embedding (embedding) has (subject: reference)
-  Embedding._markup (embedding) has (markup)
-then
-  Referencing.answer (form: "markup", reference, value: markup)
-```
-
-### fullSite.DeploymentBeginFailuresDiagnose
-
-```reaction
-when refused Emitting.begin (producer, detail, error)
-where
-  view "committable deployment work of producer (producer)" with (producer) has (work)
-then
-  Deploying.reject (work)
-```
-
-### fullSite.DeploymentBeginFailuresDiagnose#2
-
-```reaction
-when Deploying.reject (work), asked by fullSite.DeploymentBeginFailuresDiagnose
-where
-  earlier, refused Emitting.begin (producer, detail, error)
-then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
-```
-
-### fullSite.DeploymentCommitFailuresDiagnose
-
-```reaction
-when refused Emitting.commit (attempt, producer, detail, error)
-where
-  view "committable deployment work of producer (producer)" with (producer) has (work)
-  Emitting._open (producer) has (attempt)
-then
-  Deploying.reject (work)
-```
-
-### fullSite.DeploymentCommitFailuresDiagnose#2
-
-```reaction
-when Deploying.reject (work), asked by fullSite.DeploymentCommitFailuresDiagnose
-where
-  earlier, refused Emitting.commit (attempt, producer, detail, error)
-then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
-```
-
-### fullSite.DeploymentIntentFailuresFailAndAbort
-
-```reaction
-when refused Emitting.intend (attempt, path, producer, detail, error)
-where
-  view "committable deployment work of producer (producer)" with (producer)
-  Emitting._open (producer) has (attempt)
-then
-  Deploying.fail (code: error, detail, path, producer)
-```
-
-### fullSite.DeploymentIntentFailuresFailAndAbort#2
-
-```reaction
-when Deploying.fail (code: error, detail, path, producer), asked by fullSite.DeploymentIntentFailuresFailAndAbort
-where
-  earlier, refused Emitting.intend (attempt, path, producer, detail, error)
-then
-  Emitting.abort (attempt, producer)
-```
-
-### fullSite.DeploymentOutputFailuresRelateProducers
-
-```reaction
-when Diagnosing.report (code: "PATH_CONTESTED", diagnostic)
-where
-  earlier, Deploying.fail (path)
-  Emitting._producers (path) has (producer)
-then
-  Diagnosing.relate (diagnostic, note: "Competing output producer.", source: producer)
-```
-
-### fullSite.DeploymentReferenceAnswerFailuresDiagnose:diagnose
-
-```reaction
-when refused Referencing.answer (reference, detail, error)
-where
-  Referencing._reference (reference) has (source)
-  Referencing._source (source) has (part: "deployment-layout", subject: owner)
-  Deploying._forOwner (owner)
-then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
-```
-
-### fullSite.DeploymentReferenceAnswerFailuresDiagnose:reject
-
-```reaction
-when refused Referencing.answer (reference, detail, error)
-where
-  Referencing._reference (reference) has (source)
-  Referencing._source (source) has (part: "deployment-layout", subject: owner)
-  Deploying._forOwner (owner)
-then
-  Deploying.rejectOwner (owner)
-```
-
-### fullSite.DeploymentReferenceScanFailuresDiagnose
-
-```reaction
-when refused Referencing.scan (part: "deployment-layout", subject: owner, detail, error)
-where
-  Deploying._forOwner (owner)
-then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
-```
-
-### fullSite.DeploymentReferenceScanFailuresDiagnose#2
-
-```reaction
-when Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml"), asked by fullSite.DeploymentReferenceScanFailuresDiagnose
-where
-  earlier, refused Referencing.scan (part: "deployment-layout", subject: owner, detail, error)
-then
-  Deploying.rejectOwner (owner)
-```
-
-### fullSite.DerivedRoutesClaim
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-where
-  Documenting._all () has (subject: page)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (path, root)
-  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
-  no Layering._value (path: ["build", "route"], subject: page)
-  view "derived address of path (path)" with (path) has (address)
-then
-  Routing.claim (address, owner: page)
-```
-
-### fullSite.DescribedDeploymentOutputFailuresDiagnose
-
-```reaction
-when Deploying.fail (path, code, message)
-then
-  Diagnosing.report (code, message, severity: "error", source: "site.yaml")
-```
-
-### fullSite.DestinationDirectsPublication
-
-```reaction
-when Locating.admit (name: "destination", path: directory, real, status: "admitted")
-where
-  view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
-then
-  Emitting.direct (destination: real, prefix)
-```
-
-### fullSite.DividedPaginationsDispatch
-
-```reaction
-when Deploying.divide (deployment, work)
-then
-  Deploying.dispatch (deployment, work)
-```
-
-### fullSite.DocumentParseFailuresDiagnose
-
-```reaction
-when refused Documenting.parse (subject: file, detail, error: "MALFORMED_ATTRIBUTES")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-  Filing._named (name: "content") has (root)
-  Filing._file (file) has (path, root)
-then
-  Diagnosing.report (code: "MALFORMED_ATTRIBUTES", message: detail, severity: "error", source: path)
-```
-
-### fullSite.EmitPhaseStartsDeployment
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "emit", transitioned: true)
-where
-  Governing._publishing () has (policy)
-then
-  Deploying.start (policy)
-```
-
-### fullSite.EmptyBodyScansSettleRendering
-
-```reaction
-when Referencing.scan (part: "body", subject: rendering, completed: true)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-then
-  Rendering.settleBody (rendering)
-```
-
-### fullSite.EmptyLayoutScansSettleRendering
-
-```reaction
-when Referencing.scan (part: "layout", subject: rendering, completed: true)
-where
-  Rendering._active (rendering)
-then
-  Rendering.settleLayout (rendering)
-```
-
-### fullSite.EmptyPaginationLayoutScansBegin
-
-```reaction
-when Referencing.scan (part: "deployment-layout", subject: owner, completed: true)
-where
-  Deploying._forOwner (owner) has (producer)
-then
-  Emitting.begin (producer)
-```
-
-### fullSite.EscapingConfiguredOutputDiagnoses
-
-```reaction
-when Locating.admit (name: "output", path: directory, place: admitted, status: "admitted")
-where
-  no Locating._place (place: admitted) has (contained: true, resolved: true)
-then
-  Diagnosing.report (code: "OUTPUT_OUTSIDE_SITE", message: "Configured paths.output must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.EscapingContentRootDiagnoses
-
-```reaction
-when Locating.admit (name: "content", path: directory, place: admitted, status: "admitted")
-where
-  no Locating._place (place: admitted) has (contained: true, resolved: true)
-then
-  Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.content must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.EscapingPublicRootDiagnoses
-
-```reaction
-when Locating.admit (name: "public", path: directory, place: admitted, status: "admitted")
-where
-  no Locating._place (place: admitted) has (contained: true, resolved: true)
-then
-  Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.public must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.EscapingTemplateRootDiagnoses
-
-```reaction
-when Locating.admit (name: "templates", path: directory, place: admitted, status: "admitted")
-where
-  no Locating._place (place: admitted) has (contained: true, resolved: true)
-then
-  Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.templates must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.ExcerptConversionFailuresDiagnose
-
-```reaction
-when refused Converting.convert (part: "excerpt", subject: page, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "excerpt", transitioned: true)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (path, root)
-then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
-```
-
-### fullSite.ExplicitRoutesClaim
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-where
-  Documenting._all () has (subject: page)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (root)
-  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
-  Layering._value (path: ["build", "route"], subject: page) has (value: address)
-then
-  Routing.claim (address, owner: page)
-```
-
-### fullSite.FailedDeploymentsDispatch
-
-```reaction
-when Deploying.fail (deployment, work)
-then
-  Deploying.dispatch (deployment, work)
-```
-
-### fullSite.FaultInterruptsAggregateDelivery
-
-```reaction
-when any action is faulted
-then
-  Diagnosing.interrupt ()
-```
-
-### fullSite.FeedWorkPrepares
-
-```reaction
-when Deploying.dispatch (deployment, work)
-where
-  Deploying._work (work) has (collection: collectionName, kind: "feed")
-  Cataloging._named (name: collectionName) has (catalog)
-  Governing._site () has (site)
-then
-  Deploying.feed (entries: former "the deployment entries of catalog (catalog)" with (catalog), site, work)
-```
-
-### fullSite.FilledBodiesConvert
-
-```reaction
-when Templating.fill (subject: rendering, output)
-where
-  Rendering._active (rendering) has (profile: name)
-  Converting._profile (name) has (profile)
-then
-  Converting.convert (part: "body", profile, source: output, subject: rendering)
-```
-
-### fullSite.FilledBodiesTrackTemplates
-
-```reaction
-when Templating.fill (subject: rendering, filling)
-where
-  Rendering._active (rendering) has (dependencyAttempt, subject: page)
-  Templating._tree (owner: filling) has (used)
-  Templating._template (name: used) has (template)
-then
-  Depending.use (attempt: dependencyAttempt, input: template, subject: page)
-```
-
-### fullSite.FinishedBodyAnswersSettleRendering
-
-```reaction
-when Referencing.answer (completed: true, part: "body", subject: rendering)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-then
-  Rendering.settleBody (rendering)
-```
-
-### fullSite.FinishedLayoutAnswersSettleRendering
-
-```reaction
-when Referencing.answer (completed: true, part: "layout", subject: rendering)
-where
-  Rendering._active (rendering)
-then
-  Rendering.settleLayout (rendering)
-```
-
-### fullSite.FinishedPaginationLayoutAnswersBegin
-
-```reaction
-when Referencing.answer (completed: true, part: "deployment-layout", subject: owner)
-where
-  Deploying._forOwner (owner) has (producer)
-then
-  Emitting.begin (producer)
-```
-
-### fullSite.FinishedRenderingsCommitOutput
-
-```reaction
-when Rendering.finish (rendering, subject: page, transitioned: true)
-where
-  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
-  Referencing._finished (part: "layout", subject: rendering) has (text)
-  Routing._address (owner: page) has (address)
-  view "output path of address (address)" with (address) has (path)
-then
-  Emitting.intend (attempt: emissionAttempt, content: text, medium: "text/html", path, producer: page)
-```
-
-### fullSite.FixedPatternsCompile:html
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-then
-  Matching.compile (text: "**/*.html")
-```
-
-### fullSite.FixedPatternsCompile:markdown
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-then
-  Matching.compile (text: "**/*.md")
-```
-
-### fullSite.FixedPatternsCompile:raster
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-then
-  Matching.compile (text: "**/*.{avif,gif,jpeg,jpg,png,webp}")
-```
-
-### fullSite.GeneratedClaimsBeginDependencies
-
-```reaction
-when Routing.claim (owner)
-where
-  Deploying._forOwner (owner)
-then
-  Depending.begin (subject: owner)
-```
-
-### fullSite.GeneratedDependenciesSettle
-
-```reaction
-when Depending.use (attempt, input: "site.yaml", subject: owner)
-where
-  Deploying._forOwner (owner)
-then
-  Depending.settle (attempt, subject: owner)
-```
-
-### fullSite.GeneratedDependenciesTrackConfiguration
-
-```reaction
-when Depending.begin (subject: owner, attempt)
-where
-  Deploying._forOwner (owner)
-then
-  Depending.use (attempt, input: "site.yaml", subject: owner)
-```
-
-### fullSite.GeneratedRouteCollisionsDiagnose
-
-```reaction
-when refused Routing.claim (owner, detail, error: "ADDRESS_TAKEN")
-where
-  Deploying._forOwner (owner)
-then
-  Diagnosing.report (code: "ROUTE_COLLISION", message: detail, severity: "error", source: "site.yaml")
-```
-
-### fullSite.GeneratedRouteCollisionsDiagnose#2
-
-```reaction
-when Diagnosing.report (code: "ROUTE_COLLISION", message: detail, severity: "error", source: "site.yaml"), asked by fullSite.GeneratedRouteCollisionsDiagnose
-where
-  earlier, refused Routing.claim (owner, detail, error: "ADDRESS_TAKEN")
-then
-  Deploying.rejectOwner (owner)
-```
-
-### fullSite.GroundedSiteAdmitsConfiguration
-
-```reaction
-when Locating.ground (status: "grounded")
-then
-  Locating.admit (name: "settings", path: "site.yaml")
-```
-
-### fullSite.HoldUntilStopped
-
-```reaction
-when RequestBoundary.request (path: "/cli/hold", requestId)
-then
-  Attending.hold ()
-```
-
-### fullSite.HoldUntilStopped#2
-
-```reaction
-when Attending.hold (reason), asked by fullSite.HoldUntilStopped
-where
-  earlier, RequestBoundary.request (path: "/cli/hold", requestId)
-then
-  RequestBoundary.respond (reason, requestId)
-```
-
-### fullSite.IncludeDefinitionFailuresDiagnose
-
-```reaction
-when refused Templating.register (name: path, origin: file, source: text, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-  Filing._named (name: "templates") has (root)
-  Filing._under (prefix: "includes", root) has (file, path: physicalPath)
-  view "path (path) relative to prefix (prefix)" with (path: physicalPath, prefix: "includes") has (relative: path)
-  Filing._text (file) has (text)
-then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
-```
-
-### fullSite.IncludesDefine
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-where
-  Filing._named (name: "templates") has (root)
-  Filing._under (prefix: "includes", root) has (file, path: physicalPath)
-  view "path (path) relative to prefix (prefix)" with (path: physicalPath, prefix: "includes") has (relative: path)
-  Filing._text (file) has (text)
-then
-  Templating.register (name: path, origin: file, source: text)
-```
-
-### fullSite.InspectSite
-
-```reaction
-when RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
-then
-  Locating.request (name: "site", path: directory)
-```
-
-### fullSite.InspectSite#2
-
-```reaction
-when Locating.request (name: "site", path: directory), asked by fullSite.InspectSite
-then
-  Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
-```
-
-### fullSite.InspectSite#3
-
-```reaction
-when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.InspectSite#2
-then
-  Phasing.start (sequence)
-```
-
-### fullSite.InspectSite:failed#4
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.InspectSite#3
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "failed")
-  Diagnosing._delivery () has (interrupted: false)
-  earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
-then
-  RequestBoundary.respond (error: "BUILD_FAILED", requestId)
-```
-
-### fullSite.InspectSite:found#4
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.InspectSite#3
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
-  Diagnosing._delivery () has (interrupted: false)
-  earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
-  view "the inspection owner of target (target)" with (target) has (owner)
-then
-  RequestBoundary.respond (inspection: former "the site inspection of owner (owner)" with (owner), owner, requestId)
-```
-
-### fullSite.InspectSite:missing#4
-
-```reaction
-when Phasing.start (sequence, job), asked by fullSite.InspectSite#3
-at the flow's settlement frontier
-where
-  view "the settled site build of sequence (sequence)" with (sequence) has (job, state: "finished")
-  Diagnosing._delivery () has (interrupted: false)
-  earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
-  no view "the inspection owner of target (target)" with (target)
-then
-  RequestBoundary.respond (error: "INSPECTION_TARGET_NOT_FOUND", requestId)
-```
-
-### fullSite.IntendedDeploymentArtifactsCommit
-
-```reaction
-when Emitting.intend (attempt, producer)
-where
-  view "committable deployment work of producer (producer)" with (producer)
-  Emitting._open (producer) has (attempt)
-then
-  Emitting.commit (attempt, producer)
-```
-
-### fullSite.IntendedPageOutputsCommit
-
-```reaction
-when Emitting.intend (attempt: emissionAttempt, producer: page)
-where
-  earlier, Rendering.finish (rendering, subject: page, transitioned: true)
-  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
-then
-  Emitting.commit (attempt: emissionAttempt, producer: page)
-```
-
-### fullSite.InterpretCommandLine
-
-```reaction
-when RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
-then
-  Commanding.capture (arguments: supplied)
-```
-
-### fullSite.InterpretCommandLine:invalid#2
-
-```reaction
-when Commanding.capture (arguments: supplied, words), asked by fullSite.InterpretCommandLine
-where
-  no view "the Syncpress command represented by words (words)" with (words)
-  earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
-then
-  RequestBoundary.respond (error: "INVALID_USAGE", requestId)
-```
-
-### fullSite.InterpretCommandLine:recognized#2
-
-```reaction
-when Commanding.capture (arguments: supplied, words), asked by fullSite.InterpretCommandLine
-where
-  view "the Syncpress command represented by words (words)" with (words) has (name, operands)
-then
-  Commanding.recognize (name, operands)
-```
-
-### fullSite.InterpretCommandLine:recognized#3
-
-```reaction
-when Commanding.recognize (name, operands), asked by fullSite.InterpretCommandLine:recognized#2
-where
-  earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
-then
-  RequestBoundary.respond (name, operands, requestId)
-```
-
-### fullSite.InvalidBodyReferencesDiagnose
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  view "relative body reference of source (source)" with (source) has (page, raw)
-  Filing._resolution (address: raw, file: page) has (status: "invalid")
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference has an invalid path spelling.", scope: "page-rendering", severity: "error", source: path)
-```
-
-### fullSite.InvalidDeploymentLayoutReferencesDiagnose:diagnose
-
-```reaction
-when Referencing.scan (part: "deployment-layout", source)
-where
-  Referencing._source (source) has (subject: owner)
-  Deploying._forOwner (owner)
-  Referencing._references (source) has (raw)
-  targetHasKind (kind: "relative", target: raw)
-then
-  Diagnosing.report (code: "RELATIVE_LAYOUT_REFERENCE", message: "A generated layout reference must be site-absolute, external, or fragment-only.", severity: "error", source: "site.yaml")
-```
-
-### fullSite.InvalidDeploymentLayoutReferencesDiagnose:reject
-
-```reaction
-when Referencing.scan (part: "deployment-layout", source)
-where
-  Referencing._source (source) has (subject: owner)
-  Deploying._forOwner (owner)
-  Referencing._references (source) has (raw)
-  targetHasKind (kind: "relative", target: raw)
-then
-  Deploying.rejectOwner (owner)
-```
-
-### fullSite.InvalidFeedEntriesDiagnose
-
-```reaction
-when Deploying.feed (work, origin: true, valid: false)
-then
-  Diagnosing.report (code: "INVALID_FEED_ENTRY", message: "Feed entries need a routed URL and a valid data.date.", severity: "error", source: "site.yaml")
-```
-
-### fullSite.InvalidFeedEntriesDiagnose#2
-
-```reaction
-when Diagnosing.report (code: "INVALID_FEED_ENTRY", message: "Feed entries need a routed URL and a valid data.date.", severity: "error", source: "site.yaml"), asked by fullSite.InvalidFeedEntriesDiagnose
-where
-  earlier, Deploying.feed (work, origin: true, valid: false)
-then
-  Deploying.reject (work)
-```
-
-### fullSite.InvalidGeneratedRoutesDiagnose
-
-```reaction
-when refused Routing.claim (owner, detail, error: "INVALID_ADDRESS")
-where
-  Deploying._forOwner (owner)
-then
-  Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "error", source: "site.yaml")
-```
-
-### fullSite.InvalidGeneratedRoutesDiagnose#2
-
-```reaction
-when Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "error", source: "site.yaml"), asked by fullSite.InvalidGeneratedRoutesDiagnose
-where
-  earlier, refused Routing.claim (owner, detail, error: "INVALID_ADDRESS")
-then
-  Deploying.rejectOwner (owner)
-```
-
-### fullSite.InvalidRouteClaimsDiagnose
-
-```reaction
-when refused Routing.claim (owner: page, detail, error: "INVALID_ADDRESS")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (path, root)
-then
-  Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "error", source: path)
-```
-
-### fullSite.LayoutTemplateFailuresDiagnose
-
-```reaction
-when refused Templating.render (subject: rendering, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._active (rendering) has (subject: page)
-  Filing._file (file: page) has (path)
-  Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
-then
-  Diagnosing.report (code: error, column, line, message: detail, scope: "page-rendering", severity: "error", source)
-```
-
-### fullSite.LoadedConfigurationIsAssessed
-
-```reaction
-when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
-where
-  Filing._named (name: "project") has (root)
-  Filing._text (file) has (text)
-then
-  Governing.assess (source: text)
-```
-
-### fullSite.LocateGroundsSiteDirectory
-
-```reaction
-when Diagnosing.retract (scope: "project-staging", source: "site.yaml")
-where
-  earlier, Phasing.start (name: "site-build", phase: "locate")
-  Locating._requested (name: "site") has (path)
-then
-  Locating.ground (path)
-```
-
-### fullSite.LocateResumesDiagnosticDelivery
-
-```reaction
-when Phasing.start (name: "site-build", phase: "locate")
-then
-  Diagnosing.resume ()
-```
-
-### fullSite.LocateRetractsStagingDiagnostics
-
-```reaction
-when Diagnosing.resume ()
-where
-  earlier, Phasing.start (name: "site-build", phase: "locate")
-then
-  Diagnosing.retract (scope: "project-staging", source: "site.yaml")
-```
-
-### fullSite.MatchingPagesEnterCatalogs
+### fullSite.collections.CollectPhaseIndexesPages
 
 ```reaction
 when Phasing.advance (name: "site-build", phase: "collect", transitioned: true)
@@ -2663,65 +1332,233 @@ then
   Cataloging.index (card: former "the publication card of page (page)" with (page), catalog, item: page, path, tiebreak: path)
 ```
 
-### fullSite.MissingBodyReferencesDiagnose
+### fullSite.commanding.AnnounceMisuse
 
 ```reaction
-when Referencing.scan (part: "body", source)
+when RequestBoundary.request (path: "/cli/misuse", requestId)
 where
-  view "relative body reference of source (source)" with (source) has (page, raw)
-  Filing._resolution (address: raw, file: page) has (status: "missing")
-  Filing._file (file: page) has (path)
+  view "the Syncpress misuse report" has (text)
 then
-  Diagnosing.report (code: "MISSING_LOCAL_REFERENCE", message: "This local reference names no staged content file.", scope: "page-rendering", severity: "error", source: path)
+  Commanding.write (stream: "error", text)
 ```
 
-### fullSite.MissingFeedCollectionsDiagnose
+### fullSite.commanding.AnnounceMisuse#2
 
 ```reaction
-when Deploying.dispatch (deployment, work)
+when Commanding.write (stream: "error", text), asked by fullSite.commanding.AnnounceMisuse
 where
+  earlier, RequestBoundary.request (path: "/cli/misuse", requestId)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### fullSite.commanding.AnnounceUsage
+
+```reaction
+when RequestBoundary.request (path: "/cli/usage", requestId)
+where
+  view "the Syncpress usage report" has (text)
+then
+  Commanding.write (stream: "output", text)
+```
+
+### fullSite.commanding.AnnounceUsage#2
+
+```reaction
+when Commanding.write (stream: "output", text), asked by fullSite.commanding.AnnounceUsage
+where
+  earlier, RequestBoundary.request (path: "/cli/usage", requestId)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### fullSite.commanding.HoldUntilStopped
+
+```reaction
+when RequestBoundary.request (path: "/cli/hold", requestId)
+then
+  Attending.hold ()
+```
+
+### fullSite.commanding.HoldUntilStopped#2
+
+```reaction
+when Attending.hold (reason), asked by fullSite.commanding.HoldUntilStopped
+where
+  earlier, RequestBoundary.request (path: "/cli/hold", requestId)
+then
+  RequestBoundary.respond (reason, requestId)
+```
+
+### fullSite.commanding.InterpretCommandLine
+
+```reaction
+when RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
+then
+  Commanding.capture (arguments: supplied)
+```
+
+### fullSite.commanding.InterpretCommandLine:invalid#2
+
+```reaction
+when Commanding.capture (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
+where
+  no view "the Syncpress command represented by words (words)" with (words)
+  earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
+then
+  RequestBoundary.respond (error: "INVALID_USAGE", requestId)
+```
+
+### fullSite.commanding.InterpretCommandLine:recognized#2
+
+```reaction
+when Commanding.capture (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
+where
+  view "the Syncpress command represented by words (words)" with (words)
+  earlier, RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
+then
+  RequestBoundary.respond (requestId, words)
+```
+
+### fullSite.commanding.SetCommandLineExit
+
+```reaction
+when RequestBoundary.request (code, path: "/cli/exit", requestId)
+then
+  Commanding.exit (code)
+```
+
+### fullSite.commanding.SetCommandLineExit#2
+
+```reaction
+when Commanding.exit (code), asked by fullSite.commanding.SetCommandLineExit
+where
+  earlier, RequestBoundary.request (code, path: "/cli/exit", requestId)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### fullSite.commanding.WriteCommandLine
+
+```reaction
+when RequestBoundary.request (path: "/cli/write", requestId, stream, text)
+then
+  Commanding.write (stream, text)
+```
+
+### fullSite.commanding.WriteCommandLine#2
+
+```reaction
+when Commanding.write (stream, text), asked by fullSite.commanding.WriteCommandLine
+where
+  earlier, RequestBoundary.request (path: "/cli/write", requestId, stream, text)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### fullSite.deployment.AbsoluteDeploymentLayoutReferencesRebase
+
+```reaction
+when Referencing.scan (part: "deployment-layout", source)
+where
+  Referencing._references (source) has (raw, reference)
+  targetHasKind (kind: "absolute", target: raw)
+  view "site URL of target (target)" with (target: raw) has (url)
+then
+  Referencing.answer (form: "address", reference, value: url)
+```
+
+### fullSite.deployment.ActivatedFeedWorkSnapshotsInputs
+
+```reaction
+when any action is returned (action, concept: "Deploying", result)
+where
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  Deploying._work (work) has (collection: collectionName, kind: "feed")
+  Cataloging._named (name: collectionName) has (catalog)
+  Governing._site () has (site)
+then
+  Deploying.snapshotFeed (entries: former "the deployment entries of catalog (catalog)" with (catalog), site, work)
+```
+
+### fullSite.deployment.ActivatedFeedsWithoutCollectionsDiagnose:diagnose
+
+```reaction
+when any action is returned (action, concept: "Deploying", result)
+where
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
   Deploying._work (work) has (collection: collectionName, kind: "feed")
   no Cataloging._named (name: collectionName)
 then
   Diagnosing.report (code: "FEED_COLLECTION_NOT_FOUND", message: "Feed names no configured collection.", severity: "error", source: "site.yaml")
 ```
 
-### fullSite.MissingFeedCollectionsDiagnose#2
+### fullSite.deployment.ActivatedFeedsWithoutCollectionsDiagnose:reject
 
 ```reaction
-when Diagnosing.report (code: "FEED_COLLECTION_NOT_FOUND", message: "Feed names no configured collection.", severity: "error", source: "site.yaml"), asked by fullSite.MissingFeedCollectionsDiagnose
+when any action is returned (action, concept: "Deploying", result)
 where
-  earlier, Deploying.dispatch (deployment, work)
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  Deploying._work (work) has (collection: collectionName, kind: "feed")
+  no Cataloging._named (name: collectionName)
 then
   Deploying.reject (work)
 ```
 
-### fullSite.MissingPaginationCollectionsDiagnose
+### fullSite.deployment.ActivatedNojekyllWorkBegins
 
 ```reaction
-when Deploying.dispatch (deployment, work)
+when any action is returned (action, concept: "Deploying", result)
 where
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  Deploying._work (work) has (kind: "nojekyll", producer)
+then
+  Emitting.begin (producer)
+```
+
+### fullSite.deployment.ActivatedPaginationPlansDivide
+
+```reaction
+when any action is returned (action, concept: "Deploying", result)
+where
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  Deploying._work (work) has (collection: collectionName, deployment, kind: "pagination-plan", templateName)
+  Cataloging._named (name: collectionName) has (catalog)
+  Templating._template (name: templateName) has (template)
+then
+  Deploying.divide (deployment, entries: former "the deployment entries of catalog (catalog)" with (catalog), template, work)
+```
+
+### fullSite.deployment.ActivatedPaginationPlansWithoutCollectionsDiagnose:diagnose
+
+```reaction
+when any action is returned (action, concept: "Deploying", result)
+where
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
   Deploying._work (work) has (collection: collectionName, kind: "pagination-plan")
   no Cataloging._named (name: collectionName)
 then
   Diagnosing.report (code: "PAGINATION_COLLECTION_NOT_FOUND", message: "A pagination rule names no configured collection.", severity: "error", source: "site.yaml")
 ```
 
-### fullSite.MissingPaginationCollectionsDiagnose#2
+### fullSite.deployment.ActivatedPaginationPlansWithoutCollectionsDiagnose:reject
 
 ```reaction
-when Diagnosing.report (code: "PAGINATION_COLLECTION_NOT_FOUND", message: "A pagination rule names no configured collection.", severity: "error", source: "site.yaml"), asked by fullSite.MissingPaginationCollectionsDiagnose
+when any action is returned (action, concept: "Deploying", result)
 where
-  earlier, Deploying.dispatch (deployment, work)
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  Deploying._work (work) has (collection: collectionName, kind: "pagination-plan")
+  no Cataloging._named (name: collectionName)
 then
   Deploying.reject (work)
 ```
 
-### fullSite.MissingPaginationTemplatesDiagnose
+### fullSite.deployment.ActivatedPaginationPlansWithoutTemplatesDiagnose:diagnose
 
 ```reaction
-when Deploying.dispatch (deployment, work)
+when any action is returned (action, concept: "Deploying", result)
 where
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
   Deploying._work (work) has (collection: collectionName, kind: "pagination-plan", templateName)
   Cataloging._named (name: collectionName)
   no Templating._template (name: templateName)
@@ -2729,41 +1566,441 @@ then
   Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "A pagination rule selects an undefined template.", severity: "error", source: "site.yaml")
 ```
 
-### fullSite.MissingPaginationTemplatesDiagnose#2
+### fullSite.deployment.ActivatedPaginationPlansWithoutTemplatesDiagnose:reject
 
 ```reaction
-when Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "A pagination rule selects an undefined template.", severity: "error", source: "site.yaml"), asked by fullSite.MissingPaginationTemplatesDiagnose
+when any action is returned (action, concept: "Deploying", result)
 where
-  earlier, Deploying.dispatch (deployment, work)
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  Deploying._work (work) has (collection: collectionName, kind: "pagination-plan", templateName)
+  Cataloging._named (name: collectionName)
+  no Templating._template (name: templateName)
 then
   Deploying.reject (work)
 ```
 
-### fullSite.MissingRenderingProfilesDiagnose
+### fullSite.deployment.ActivatedRoutedDeploymentWorkClaims
 
 ```reaction
-when Templating.fill (subject: rendering)
+when any action is returned (action, concept: "Deploying", result)
 where
-  Rendering._active (rendering) has (profile: name, subject: page)
-  no Converting._profile (name)
-  Filing._file (file: page) has (path)
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  view "routed deployment work (work)" with (work) has (address, owner)
 then
-  Diagnosing.report (code: "PROFILE_NOT_FOUND", message: "The selected body conversion profile is not defined.", scope: "page-rendering", severity: "error", source: path)
+  Routing.claim (address, owner)
 ```
 
-### fullSite.MissingRenderingTemplatesDiagnose
+### fullSite.deployment.ActivatedSitemapWorkSnapshotsUrls
 
 ```reaction
-when Rendering.settleBody (rendering, subject: page, transitioned: true)
+when any action is returned (action, concept: "Deploying", result)
 where
-  Rendering._active (rendering) has (template: name)
-  no Templating._template (name)
-  Filing._file (file: page) has (path)
+  view "active deployment work returned by queue transition (action, result)" with (action, result) has (work)
+  Deploying._work (work) has (kind: "sitemap")
 then
-  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", scope: "page-rendering", severity: "error", source: path)
+  Deploying.snapshotSitemap (urls: former "the sitemap urls", work)
 ```
 
-### fullSite.MissingRequiredNotFoundPagesDiagnose
+### fullSite.deployment.BegunFeedsIntend
+
+```reaction
+when Emitting.begin (producer, attempt)
+where
+  Deploying._forProducer (producer) has (kind: "feed", work)
+  earlier, Deploying.prepareFeed (work, content, origin: true, path)
+then
+  Emitting.intend (attempt, content, medium: "application/atom+xml", path, producer)
+```
+
+### fullSite.deployment.BegunNojekyllWorkIntends
+
+```reaction
+when Emitting.begin (producer, attempt)
+where
+  Deploying._forProducer (producer) has (kind: "nojekyll", path)
+then
+  Emitting.intend (attempt, content: "", medium: "text/plain", path, producer)
+```
+
+### fullSite.deployment.BegunPaginationPagesIntend
+
+```reaction
+when Emitting.begin (producer, attempt)
+where
+  Deploying._forProducer (producer) has (address, kind: "pagination-page")
+  view "output path of address (address)" with (address) has (path)
+  Referencing._finished (part: "deployment-layout", subject: producer) has (text)
+then
+  Emitting.intend (attempt, content: text, medium: "text/html", path, producer)
+```
+
+### fullSite.deployment.BegunRedirectsIntend
+
+```reaction
+when Emitting.begin (producer, attempt)
+where
+  Deploying._forProducer (producer) has (from: address, kind: "redirect", work)
+  view "output path of address (address)" with (address) has (path)
+  earlier, Deploying.redirect (work, content)
+then
+  Emitting.intend (attempt, content, medium: "text/html", path, producer)
+```
+
+### fullSite.deployment.BegunSitemapsIntend
+
+```reaction
+when Emitting.begin (producer, attempt)
+where
+  Deploying._forProducer (producer) has (kind: "sitemap", work)
+  earlier, Deploying.prepareSitemap (work, content, path)
+then
+  Emitting.intend (attempt, content, medium: "application/xml", path, producer)
+```
+
+### fullSite.deployment.ClaimedExternalRedirectsPrepare
+
+```reaction
+when Routing.claim (owner)
+where
+  Deploying._forOwner (owner) has (kind: "redirect", to: target, work)
+  targetHasKind (kind: "external", target)
+  content is deploymentRedirectDocument (canonical: target, target)
+then
+  Deploying.redirect (canonical: target, content, target, work)
+```
+
+### fullSite.deployment.ClaimedLocalRedirectsPrepare
+
+```reaction
+when Routing.claim (owner)
+where
+  Deploying._forOwner (owner) has (kind: "redirect", to: raw, work)
+  view "site URL of target (target)" with (target: raw) has (url: target)
+  view "absolute site URL of address (address)" with (address: raw) has (url: canonical)
+  content is deploymentRedirectDocument (canonical, target)
+then
+  Deploying.redirect (canonical, content, target, work)
+```
+
+### fullSite.deployment.ClaimedPaginationPagesPrepareContext
+
+```reaction
+when Routing.claim (owner)
+where
+  Deploying._forOwner (owner) has (address, cards, collection, kind: "pagination-page", next, number, pages, previous, sourcePath, title, work)
+  Governing._site () has (site)
+  Cataloging._record () has (catalogs: collections)
+  whether view "absolute site URL of address (address)" with (address) has (url: canonicalUrl)
+  context is deploymentPaginationContext (address, canonicalUrl, cards, collection, collections, next, number, pages, previous, site, sourcePath, title)
+then
+  Deploying.context (context, work)
+```
+
+### fullSite.deployment.ClaimedUnoriginatedRedirectsPrepare
+
+```reaction
+when Routing.claim (owner)
+where
+  Deploying._forOwner (owner) has (kind: "redirect", to: raw, work)
+  view "site URL of target (target)" with (target: raw) has (url: target)
+  no view "absolute site URL of address (address)" with (address: raw)
+  content is deploymentRedirectDocument (canonical: target, target)
+then
+  Deploying.redirect (canonical: target, content, target, work)
+```
+
+### fullSite.deployment.CommittedDeploymentArtifactsComplete
+
+```reaction
+when Emitting.commit (attempt, producer)
+where
+  view "committable deployment work of producer (producer)" with (producer) has (work)
+  Emitting._attempt (producer) has (attempt)
+then
+  Deploying.complete (work)
+```
+
+### fullSite.deployment.DeploymentBeginFailuresDiagnose
+
+```reaction
+when refused Emitting.begin (producer, detail, error)
+where
+  view "committable deployment work of producer (producer)" with (producer) has (work)
+then
+  Deploying.reject (work)
+```
+
+### fullSite.deployment.DeploymentBeginFailuresDiagnose#2
+
+```reaction
+when Deploying.reject (work), asked by fullSite.deployment.DeploymentBeginFailuresDiagnose
+where
+  earlier, refused Emitting.begin (producer, detail, error)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.DeploymentCommitFailuresDiagnose
+
+```reaction
+when refused Emitting.commit (attempt, producer, detail, error)
+where
+  view "committable deployment work of producer (producer)" with (producer) has (work)
+  Emitting._open (producer) has (attempt)
+then
+  Deploying.reject (work)
+```
+
+### fullSite.deployment.DeploymentCommitFailuresDiagnose#2
+
+```reaction
+when Deploying.reject (work), asked by fullSite.deployment.DeploymentCommitFailuresDiagnose
+where
+  earlier, refused Emitting.commit (attempt, producer, detail, error)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.DeploymentIntentFailuresFailAndAbort
+
+```reaction
+when refused Emitting.intend (attempt, path, producer, detail, error)
+where
+  view "committable deployment work of producer (producer)" with (producer)
+  Emitting._open (producer) has (attempt)
+then
+  Deploying.fail (code: error, detail, path, producer)
+```
+
+### fullSite.deployment.DeploymentIntentFailuresFailAndAbort#2
+
+```reaction
+when Deploying.fail (code: error, detail, path, producer), asked by fullSite.deployment.DeploymentIntentFailuresFailAndAbort
+where
+  earlier, refused Emitting.intend (attempt, path, producer, detail, error)
+then
+  Emitting.abort (attempt, producer)
+```
+
+### fullSite.deployment.DeploymentOutputFailuresRelateProducers
+
+```reaction
+when Diagnosing.report (code: "PATH_CONTESTED", diagnostic)
+where
+  earlier, Deploying.fail (path)
+  Emitting._producers (path) has (producer)
+then
+  Diagnosing.relate (diagnostic, note: "Competing output producer.", source: producer)
+```
+
+### fullSite.deployment.DeploymentReferenceAnswerFailuresDiagnose:diagnose
+
+```reaction
+when refused Referencing.answer (reference, detail, error)
+where
+  Referencing._reference (reference) has (source)
+  Referencing._source (source) has (part: "deployment-layout", subject: owner)
+  Deploying._forOwner (owner)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.DeploymentReferenceAnswerFailuresDiagnose:reject
+
+```reaction
+when refused Referencing.answer (reference, detail, error)
+where
+  Referencing._reference (reference) has (source)
+  Referencing._source (source) has (part: "deployment-layout", subject: owner)
+  Deploying._forOwner (owner)
+then
+  Deploying.rejectOwner (owner)
+```
+
+### fullSite.deployment.DeploymentReferenceScanFailuresDiagnose
+
+```reaction
+when refused Referencing.scan (part: "deployment-layout", subject: owner, detail, error)
+where
+  Deploying._forOwner (owner)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.DeploymentReferenceScanFailuresDiagnose#2
+
+```reaction
+when Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml"), asked by fullSite.deployment.DeploymentReferenceScanFailuresDiagnose
+where
+  earlier, refused Referencing.scan (part: "deployment-layout", subject: owner, detail, error)
+then
+  Deploying.rejectOwner (owner)
+```
+
+### fullSite.deployment.DescribedDeploymentOutputFailuresDiagnose
+
+```reaction
+when Deploying.fail (path, code, message)
+then
+  Diagnosing.report (code, message, severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.EmitPhaseStartsDeployment
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "emit", transitioned: true)
+where
+  Governing._publishing () has (policy)
+then
+  Deploying.start (policy)
+```
+
+### fullSite.deployment.EmptyPaginationLayoutScansBegin
+
+```reaction
+when Referencing.scan (part: "deployment-layout", subject: owner, completed: true)
+where
+  Deploying._forOwner (owner) has (producer)
+then
+  Emitting.begin (producer)
+```
+
+### fullSite.deployment.FinishedPaginationLayoutAnswersBegin
+
+```reaction
+when Referencing.answer (completed: true, part: "deployment-layout", subject: owner)
+where
+  Deploying._forOwner (owner) has (producer)
+then
+  Emitting.begin (producer)
+```
+
+### fullSite.deployment.GeneratedClaimsBeginDependencies
+
+```reaction
+when Routing.claim (owner)
+where
+  Deploying._forOwner (owner)
+then
+  Depending.begin (subject: owner)
+```
+
+### fullSite.deployment.GeneratedDependenciesSettle
+
+```reaction
+when Depending.use (attempt, input: "site.yaml", subject: owner)
+where
+  Deploying._forOwner (owner)
+then
+  Depending.settle (attempt, subject: owner)
+```
+
+### fullSite.deployment.GeneratedDependenciesTrackConfiguration
+
+```reaction
+when Depending.begin (subject: owner, attempt)
+where
+  Deploying._forOwner (owner)
+then
+  Depending.use (attempt, input: "site.yaml", subject: owner)
+```
+
+### fullSite.deployment.GeneratedRouteCollisionsDiagnose
+
+```reaction
+when refused Routing.claim (owner, detail, error: "ADDRESS_TAKEN")
+where
+  Deploying._forOwner (owner)
+then
+  Diagnosing.report (code: "ROUTE_COLLISION", message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.GeneratedRouteCollisionsDiagnose#2
+
+```reaction
+when Diagnosing.report (code: "ROUTE_COLLISION", message: detail, severity: "error", source: "site.yaml"), asked by fullSite.deployment.GeneratedRouteCollisionsDiagnose
+where
+  earlier, refused Routing.claim (owner, detail, error: "ADDRESS_TAKEN")
+then
+  Deploying.rejectOwner (owner)
+```
+
+### fullSite.deployment.IntendedDeploymentArtifactsCommit
+
+```reaction
+when Emitting.intend (attempt, producer)
+where
+  view "committable deployment work of producer (producer)" with (producer)
+  Emitting._open (producer) has (attempt)
+then
+  Emitting.commit (attempt, producer)
+```
+
+### fullSite.deployment.InvalidDeploymentLayoutReferencesDiagnose:diagnose
+
+```reaction
+when Referencing.scan (part: "deployment-layout", source)
+where
+  Referencing._source (source) has (subject: owner)
+  Deploying._forOwner (owner)
+  Referencing._references (source) has (raw)
+  targetHasKind (kind: "relative", target: raw)
+then
+  Diagnosing.report (code: "RELATIVE_LAYOUT_REFERENCE", message: "A generated layout reference must be site-absolute, external, or fragment-only.", severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.InvalidDeploymentLayoutReferencesDiagnose:reject
+
+```reaction
+when Referencing.scan (part: "deployment-layout", source)
+where
+  Referencing._source (source) has (subject: owner)
+  Deploying._forOwner (owner)
+  Referencing._references (source) has (raw)
+  targetHasKind (kind: "relative", target: raw)
+then
+  Deploying.rejectOwner (owner)
+```
+
+### fullSite.deployment.InvalidFeedEntriesDiagnose
+
+```reaction
+when Deploying.prepareFeed (work, origin: true, valid: false)
+then
+  Diagnosing.report (code: "INVALID_FEED_ENTRY", message: "Feed entries need a routed URL and a valid data.date.", severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.InvalidFeedEntriesDiagnose#2
+
+```reaction
+when Diagnosing.report (code: "INVALID_FEED_ENTRY", message: "Feed entries need a routed URL and a valid data.date.", severity: "error", source: "site.yaml"), asked by fullSite.deployment.InvalidFeedEntriesDiagnose
+where
+  earlier, Deploying.prepareFeed (work, origin: true, valid: false)
+then
+  Deploying.reject (work)
+```
+
+### fullSite.deployment.InvalidGeneratedRoutesDiagnose
+
+```reaction
+when refused Routing.claim (owner, detail, error: "INVALID_ADDRESS")
+where
+  Deploying._forOwner (owner)
+then
+  Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.InvalidGeneratedRoutesDiagnose#2
+
+```reaction
+when Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "error", source: "site.yaml"), asked by fullSite.deployment.InvalidGeneratedRoutesDiagnose
+where
+  earlier, refused Routing.claim (owner, detail, error: "INVALID_ADDRESS")
+then
+  Deploying.rejectOwner (owner)
+```
+
+### fullSite.deployment.MissingRequiredNotFoundPagesDiagnose
 
 ```reaction
 when Phasing.advance (name: "site-build", phase: "emit", transitioned: true)
@@ -2774,27 +2011,7 @@ then
   Diagnosing.report (code: "MISSING_NOT_FOUND", message: "deploy.requireNotFound requires an authored /404.html page.", severity: "error", source: "site.yaml")
 ```
 
-### fullSite.NojekyllWorkBegins
-
-```reaction
-when Deploying.dispatch (deployment, work)
-where
-  Deploying._work (work) has (kind: "nojekyll", producer)
-then
-  Emitting.begin (producer)
-```
-
-### fullSite.NonlocalBodyReferencesHold
-
-```reaction
-when Referencing.scan (part: "body", source)
-where
-  view "held body reference of source (source)" with (source) has (raw, reference)
-then
-  Referencing.answer (form: "address", reference, value: raw)
-```
-
-### fullSite.NonlocalDeploymentLayoutReferencesHold
+### fullSite.deployment.NonlocalDeploymentLayoutReferencesHold
 
 ```reaction
 when Referencing.scan (part: "deployment-layout", source)
@@ -2804,161 +2021,470 @@ then
   Referencing.answer (form: "address", reference, value: raw)
 ```
 
-### fullSite.NonlocalLayoutReferencesHold
+### fullSite.deployment.OriginlessFeedsDiagnose
 
 ```reaction
-when Referencing.scan (part: "layout", source)
-where
-  view "held layout reference of source (source)" with (source) has (raw, reference)
-then
-  Referencing.answer (form: "address", reference, value: raw)
-```
-
-### fullSite.OpenSiteServer
-
-```reaction
-when RequestBoundary.request (host, path: "/serve/open", port, requestId)
-then
-  Serving.open (host, port)
-```
-
-### fullSite.OpenSiteServer#2
-
-```reaction
-when Serving.open (host, port, result.port: bound, server), asked by fullSite.OpenSiteServer
-where
-  earlier, RequestBoundary.request (host, path: "/serve/open", port, requestId)
-then
-  RequestBoundary.respond (host, port: bound, requestId, server)
-```
-
-### fullSite.OpenSiteWatch
-
-```reaction
-when RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
-where
-  isTextValue (value: output)
-  view "the publication transaction prefix of destination (destination)" with (destination: output) has (prefix)
-then
-  Watching.observe (directory, excluded: output, prefix, settling)
-```
-
-### fullSite.OpenSiteWatch#2
-
-```reaction
-when Watching.observe (directory, excluded: output, prefix, settling, watch), asked by fullSite.OpenSiteWatch
-where
-  earlier, RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
-then
-  RequestBoundary.respond (requestId, watch)
-```
-
-### fullSite.OriginlessFeedsDiagnose
-
-```reaction
-when Deploying.feed (work, origin: false)
+when Deploying.prepareFeed (work, origin: false)
 then
   Diagnosing.report (code: "ORIGIN_REQUIRED", message: "Feed generation requires a valid site.origin.", severity: "error", source: "site.yaml")
 ```
 
-### fullSite.OriginlessFeedsDiagnose#2
+### fullSite.deployment.OriginlessFeedsDiagnose#2
 
 ```reaction
-when Diagnosing.report (code: "ORIGIN_REQUIRED", message: "Feed generation requires a valid site.origin.", severity: "error", source: "site.yaml"), asked by fullSite.OriginlessFeedsDiagnose
+when Diagnosing.report (code: "ORIGIN_REQUIRED", message: "Feed generation requires a valid site.origin.", severity: "error", source: "site.yaml"), asked by fullSite.deployment.OriginlessFeedsDiagnose
 where
-  earlier, Deploying.feed (work, origin: false)
+  earlier, Deploying.prepareFeed (work, origin: false)
 then
   Deploying.reject (work)
 ```
 
-### fullSite.OutputOverlappingConfigurationDiagnoses
+### fullSite.deployment.PaginationContextsRender
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-where
-  view "the publication place" has (place: publication)
-  Locating._named (name: "settings") has (place: settings)
-  Locating._overlapping (other: settings, place: publication) has (overlapping: true)
+when Deploying.context (work, context, owner, template)
 then
-  Diagnosing.report (code: "OUTPUT_OVERLAPS_CONFIGURATION", message: "The output directory must not contain the site configuration.", scope: "project-staging", severity: "error", source: "site.yaml")
+  Templating.render (context, subject: owner, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
 ```
 
-### fullSite.OutputOverlappingSourceRootDiagnoses
+### fullSite.deployment.PaginationTemplateFailuresDiagnose
 
 ```reaction
-when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+when refused Templating.render (subject: owner, detail, error)
 where
-  view "the publication place" has (place: publication)
-  Governing._sources () has (name: root)
-  Locating._named (name: root) has (place: source)
-  Locating._overlapping (other: source, place: publication) has (overlapping: true)
+  Deploying._forOwner (owner) has (kind: "pagination-page")
 then
-  Diagnosing.report (code: "OUTPUT_OVERLAPS_SOURCE", message: "The output directory must not overlap a configured source directory.", scope: "project-staging", severity: "error", source: root)
+  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
 ```
 
-### fullSite.OutsideBodyReferencesDiagnose
+### fullSite.deployment.PaginationTemplateFailuresDiagnose#2
 
 ```reaction
-when Referencing.scan (part: "body", source)
+when Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml"), asked by fullSite.deployment.PaginationTemplateFailuresDiagnose
 where
-  view "relative body reference of source (source)" with (source) has (page, raw)
-  Filing._resolution (address: raw, file: page) has (status: "outside")
-  Filing._file (file: page) has (path)
+  earlier, refused Templating.render (subject: owner, detail, error)
 then
-  Diagnosing.report (code: "OUTSIDE_LOCAL_REFERENCE", message: "This local reference leaves the content root.", scope: "page-rendering", severity: "error", source: path)
+  Deploying.rejectOwner (owner)
 ```
 
-### fullSite.PageAssetEmissionFailuresDiagnose
+### fullSite.deployment.PreparedFeedsBegin
 
 ```reaction
-when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
+when Deploying.prepareFeed (work, origin: true, valid: true)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (emissionAttempt, rendering: pageRendering)
-  Rendering._active (rendering: pageRendering)
-  Filing._file (file: page) has (path)
+  Deploying._work (work) has (producer)
 then
-  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
+  Emitting.begin (producer)
 ```
 
-### fullSite.PageDependenciesOpenEmission
+### fullSite.deployment.PreparedRedirectsBegin
 
 ```reaction
-when Depending.begin (subject: page)
+when Deploying.redirect (work)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-  Filing._file (file: page)
+  Deploying._work (work) has (producer)
 then
-  Emitting.begin (producer: page)
+  Emitting.begin (producer)
 ```
 
-### fullSite.PageEmissionFailuresDiagnose
+### fullSite.deployment.PreparedSitemapsBegin
 
 ```reaction
-when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
+when Deploying.prepareSitemap (work)
 where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (emissionAttempt, stage: "completed")
-  Filing._file (file: page) has (path)
+  Deploying._work (work) has (producer)
 then
-  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
+  Emitting.begin (producer)
 ```
 
-### fullSite.PageEmissionsBeginRendering
+### fullSite.deployment.RenderedPaginationLayoutsScan
 
 ```reaction
-when Emitting.begin (producer: page, attempt: emissionAttempt)
+when Templating.render (subject: owner, output)
 where
-  earlier, Depending.begin (subject: page, attempt: dependencyAttempt)
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
-  Filing._file (file: page) has (path)
-  Layering._resolved (subject: page) has (values: data)
+  Deploying._forOwner (owner) has (kind: "pagination-page")
 then
-  Rendering.begin (data, dependencyAttempt, emissionAttempt, path, subject: page)
+  Referencing.scan (part: "deployment-layout", subject: owner, text: output)
 ```
 
-### fullSite.PageExcerptsConvert
+### fullSite.deployment.SnapshottedFeedInputsPrepare
+
+```reaction
+when Deploying.snapshotFeed (work, description, entries, path, site, title)
+where
+  preparation is deploymentFeedPreparation (description, entries, path, site, title)
+then
+  Deploying.prepareFeed (preparation, work)
+```
+
+### fullSite.deployment.SnapshottedSitemapUrlsPrepare
+
+```reaction
+when Deploying.snapshotSitemap (work, urls)
+where
+  content is deploymentSitemapDocument (urls)
+then
+  Deploying.prepareSitemap (content, work)
+```
+
+### fullSite.deployment.UnprojectableDeploymentLayoutReferencesDiagnose:diagnose
+
+```reaction
+when Referencing.scan (part: "deployment-layout", source)
+where
+  Referencing._source (source) has (subject: owner)
+  Deploying._forOwner (owner)
+  Referencing._references (source) has (raw)
+  targetHasKind (kind: "absolute", target: raw)
+  no view "site URL of target (target)" with (target: raw)
+then
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "A generated layout reference could not be projected.", severity: "error", source: "site.yaml")
+```
+
+### fullSite.deployment.UnprojectableDeploymentLayoutReferencesDiagnose:reject
+
+```reaction
+when Referencing.scan (part: "deployment-layout", source)
+where
+  Referencing._source (source) has (subject: owner)
+  Deploying._forOwner (owner)
+  Referencing._references (source) has (raw)
+  targetHasKind (kind: "absolute", target: raw)
+  no view "site URL of target (target)" with (target: raw)
+then
+  Deploying.rejectOwner (owner)
+```
+
+### fullSite.endpoints.AdvanceSiteBuild
+
+```reaction
+when Phasing.advance (attempt, job, name: "site-build", transitioned: true)
+at the flow's settlement frontier
+where
+  Phasing._job (job) has (attempt: nextAttempt, name: "site-build", state: "running")
+  no view "pending failed rendering cleanup"
+then
+  Phasing.advance (attempt: nextAttempt, job)
+```
+
+### fullSite.endpoints.AdvanceStartedSiteBuild
+
+```reaction
+when Phasing.start (sequence, attempt, job, name: "site-build")
+at the flow's settlement frontier
+where
+  Phasing._running (sequence) has (attempt, job, name: "site-build")
+then
+  Phasing.advance (attempt, job)
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput
+
+```reaction
+when RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+where
+  isAbsentValue (value: destination)
+then
+  Locating.request (name: "site", path: directory)
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput#2
+
+```reaction
+when Locating.request (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput
+then
+  Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput#3
+
+```reaction
+when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#2
+then
+  Phasing.start (sequence)
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+
+```reaction
+when Phasing.start (sequence, job), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#3
+at the flow's settlement frontier
+where
+  view "the settled site build of job (job)" with (job)
+then
+  Delivering.settle (task: job)
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput:errors#5
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+where
+  view "the settled site build of job (job)" with (job) has (state: "finished")
+  Diagnosing._clean () has (clean: false)
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (error: "BUILD_HAS_ERRORS", requestId)
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput:failed#5
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+where
+  view "the settled site build of job (job)" with (job) has (state: "failed")
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (error: "BUILD_FAILED", requestId)
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput:incomplete#5
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+where
+  view "the settled site build of job (job)" with (job) has (state: "finished")
+  Diagnosing._clean () has (clean: true)
+  no view "job (job) is a publishable site build" with (job)
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (error: "BUILD_INCOMPLETE", requestId)
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput:published#5
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
+where
+  view "job (job) is a publishable site build" with (job)
+then
+  Emitting.reconcile ()
+```
+
+### fullSite.endpoints.BuildSiteAtConfiguredOutput:published#6
+
+```reaction
+when Emitting.reconcile (kept, removed, replaced, written), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput:published#5
+where
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (kept, removed, replaced, requestId, summary: former "the site build summary", written)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination
+
+```reaction
+when RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+where
+  isTextValue (value: destination)
+then
+  Locating.request (name: "site", path: directory)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination#2
+
+```reaction
+when Locating.request (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtDestination
+where
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  Locating.request (name: "destination", path: destination)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination#3
+
+```reaction
+when Locating.request (name: "destination", path: destination), asked by fullSite.endpoints.BuildSiteAtDestination#2
+then
+  Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
+```
+
+### fullSite.endpoints.BuildSiteAtDestination#4
+
+```reaction
+when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.endpoints.BuildSiteAtDestination#3
+then
+  Phasing.start (sequence)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination#5
+
+```reaction
+when Phasing.start (sequence, job), asked by fullSite.endpoints.BuildSiteAtDestination#4
+at the flow's settlement frontier
+where
+  view "the settled site build of job (job)" with (job)
+then
+  Delivering.settle (task: job)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination:errors#6
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+where
+  view "the settled site build of job (job)" with (job) has (state: "finished")
+  Diagnosing._clean () has (clean: false)
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (error: "BUILD_HAS_ERRORS", requestId)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination:failed#6
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+where
+  view "the settled site build of job (job)" with (job) has (state: "failed")
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (error: "BUILD_FAILED", requestId)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination:incomplete#6
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+where
+  view "the settled site build of job (job)" with (job) has (state: "finished")
+  Diagnosing._clean () has (clean: true)
+  no view "job (job) is a publishable site build" with (job)
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (error: "BUILD_INCOMPLETE", requestId)
+```
+
+### fullSite.endpoints.BuildSiteAtDestination:published#6
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
+where
+  view "job (job) is a publishable site build" with (job)
+then
+  Emitting.reconcile ()
+```
+
+### fullSite.endpoints.BuildSiteAtDestination:published#7
+
+```reaction
+when Emitting.reconcile (kept, removed, replaced, written), asked by fullSite.endpoints.BuildSiteAtDestination:published#6
+where
+  earlier, RequestBoundary.request (destination, directory, path: "/site/build", requestId)
+then
+  RequestBoundary.respond (kept, removed, replaced, requestId, summary: former "the site build summary", written)
+```
+
+### fullSite.endpoints.InspectSite
+
+```reaction
+when RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
+then
+  Locating.request (name: "site", path: directory)
+```
+
+### fullSite.endpoints.InspectSite#2
+
+```reaction
+when Locating.request (name: "site", path: directory), asked by fullSite.endpoints.InspectSite
+then
+  Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"])
+```
+
+### fullSite.endpoints.InspectSite#3
+
+```reaction
+when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.endpoints.InspectSite#2
+then
+  Phasing.start (sequence)
+```
+
+### fullSite.endpoints.InspectSite#4
+
+```reaction
+when Phasing.start (sequence, job), asked by fullSite.endpoints.InspectSite#3
+at the flow's settlement frontier
+where
+  view "the settled site build of job (job)" with (job)
+then
+  Delivering.settle (task: job)
+```
+
+### fullSite.endpoints.InspectSite:failed#5
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
+where
+  view "the settled site build of job (job)" with (job) has (state: "failed")
+  earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
+then
+  RequestBoundary.respond (error: "BUILD_FAILED", requestId)
+```
+
+### fullSite.endpoints.InspectSite:found#5
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
+where
+  view "the settled site build of job (job)" with (job) has (state: "finished")
+  earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
+  view "the inspection owner of target (target)" with (target) has (owner)
+then
+  RequestBoundary.respond (inspection: former "the site inspection of owner (owner)" with (owner), owner, requestId)
+```
+
+### fullSite.endpoints.InspectSite:missing#5
+
+```reaction
+when Delivering.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
+where
+  view "the settled site build of job (job)" with (job) has (state: "finished")
+  earlier, RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
+  no view "the inspection owner of target (target)" with (target)
+then
+  RequestBoundary.respond (error: "INSPECTION_TARGET_NOT_FOUND", requestId)
+```
+
+### fullSite.endpoints.ReadSiteSummary
+
+```reaction
+when RequestBoundary.request (path: "/site/summary", requestId)
+then
+  RequestBoundary.respond (requestId, summary: former "the site build summary")
+```
+
+### fullSite.endpoints.SiteBuildFaultsInterruptAggregateDelivery
+
+```reaction
+when any action is faulted
+where
+  earlier, Phasing.start (job, name: "site-build")
+then
+  Delivering.interrupt (task: job)
+```
+
+### fullSite.endpoints.SiteBuildRefusalsInterruptAggregateDelivery
+
+```reaction
+when any action is refused
+where
+  earlier, Phasing.start (job, name: "site-build")
+then
+  Delivering.interrupt (task: job)
+```
+
+### fullSite.excerpts.ExcerptConversionFailuresDiagnose
+
+```reaction
+when refused Converting.convert (part: "excerpt", subject: page, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "excerpt", transitioned: true)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.excerpts.PageExcerptsConvert
 
 ```reaction
 when Phasing.advance (name: "site-build", phase: "excerpt", transitioned: true)
@@ -2971,79 +2497,39 @@ then
   Converting.convert (part: "excerpt", profile, source: body, subject: page)
 ```
 
-### fullSite.PaginationContextsRender
+### fullSite.images.AdmittedRasterImagesRender
 
 ```reaction
-when Deploying.context (work, context, owner, template)
-then
-  Templating.render (context, subject: owner, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.PaginationPlansDivide
-
-```reaction
-when Deploying.dispatch (deployment, work)
+when Transcoding.admit (original)
 where
-  Deploying._work (work) has (collection: collectionName, kind: "pagination-plan", templateName)
-  Cataloging._named (name: collectionName) has (catalog)
-  Templating._template (name: templateName) has (template)
+  Governing._images () has (formats, widths)
 then
-  Deploying.divide (deployment, entries: former "the deployment entries of catalog (catalog)" with (catalog), template, work)
+  Transcoding.render (formats, original, widths)
 ```
 
-### fullSite.PaginationTemplateFailuresDiagnose
+### fullSite.images.CompletedEmbeddingsAnswer
 
 ```reaction
-when refused Templating.render (subject: owner, detail, error)
+when Embedding.offer (embedding, completed: true)
 where
-  Deploying._forOwner (owner) has (kind: "pagination-page")
+  Embedding._embedding (embedding) has (subject: reference)
+  Embedding._markup (embedding) has (markup)
 then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml")
+  Referencing.answer (form: "markup", reference, value: markup)
 ```
 
-### fullSite.PaginationTemplateFailuresDiagnose#2
+### fullSite.images.DeclaredEmbeddingsAnswer
 
 ```reaction
-when Diagnosing.report (code: error, message: detail, severity: "error", source: "site.yaml"), asked by fullSite.PaginationTemplateFailuresDiagnose
+when Embedding.declare (completed: true, embedding)
 where
-  earlier, refused Templating.render (subject: owner, detail, error)
+  Embedding._embedding (embedding) has (subject: reference)
+  Embedding._markup (embedding) has (markup)
 then
-  Deploying.rejectOwner (owner)
+  Referencing.answer (form: "markup", reference, value: markup)
 ```
 
-### fullSite.ParsedContentClearsLayers
-
-```reaction
-when Documenting.parse (subject)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: subject) has (root)
-then
-  Layering.clear (subject)
-```
-
-### fullSite.PreparedFeedsBegin
-
-```reaction
-when Deploying.feed (work, origin: true, valid: true)
-where
-  Deploying._work (work) has (producer)
-then
-  Emitting.begin (producer)
-```
-
-### fullSite.PreparedSitemapsBegin
-
-```reaction
-when Deploying.sitemap (work)
-where
-  Deploying._work (work) has (producer)
-then
-  Emitting.begin (producer)
-```
-
-### fullSite.PrimaryRasterImagesAdmit
+### fullSite.images.PrimaryRasterImagesAdmit
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3053,37 +2539,7 @@ then
   Transcoding.admit (content, subject: image)
 ```
 
-### fullSite.PublicFilesIntendOutput
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-where
-  Filing._named (name: "public") has (root)
-  Filing._under (prefix: "", root) has (file, path)
-  Filing._file (file) has (content)
-then
-  Emitting.intend (content, medium: "application/octet-stream", path, producer: file)
-```
-
-### fullSite.PublishSiteOutput
-
-```reaction
-when RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
-then
-  Serving.publish (directory, server)
-```
-
-### fullSite.PublishSiteOutput#2
-
-```reaction
-when Serving.publish (directory, server, readers), asked by fullSite.PublishSiteOutput
-where
-  earlier, RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
-then
-  RequestBoundary.respond (readers, requestId)
-```
-
-### fullSite.RasterAdmissionsDiagnose
+### fullSite.images.RasterAdmissionsDiagnose
 
 ```reaction
 when refused Transcoding.admit (subject: image, detail, error)
@@ -3095,7 +2551,7 @@ then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.RasterEmbeddingDeclarationsDiagnose
+### fullSite.images.RasterEmbeddingDeclarationsDiagnose
 
 ```reaction
 when refused Embedding.declare (subject: reference, detail, error)
@@ -3108,7 +2564,7 @@ then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.RasterFallbacksDeclare
+### fullSite.images.RasterFallbacksDeclare
 
 ```reaction
 when Emitting.intend (attempt: emissionAttempt, path, producer: page)
@@ -3127,7 +2583,7 @@ then
   Embedding.declare (alternative: label, attributes, expects: derived, height, original: fallback, originalFormat: format, subject: reference, width)
 ```
 
-### fullSite.RasterFallbacksStage
+### fullSite.images.RasterFallbacksStage
 
 ```reaction
 when Transcoding.render (original)
@@ -3142,7 +2598,7 @@ then
   Emitting.intend (attempt: emissionAttempt, claim: image, content, medium: mediaType, path, producer: page)
 ```
 
-### fullSite.RasterOffersDiagnose
+### fullSite.images.RasterOffersDiagnose
 
 ```reaction
 when refused Embedding.offer (embedding, detail, error)
@@ -3156,7 +2612,7 @@ then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.RasterRendersDiagnose
+### fullSite.images.RasterRendersDiagnose
 
 ```reaction
 when refused Transcoding.render (original, detail, error)
@@ -3169,7 +2625,7 @@ then
   Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.RasterRenditionsOffer
+### fullSite.images.RasterRenditionsOffer
 
 ```reaction
 when Emitting.intend (path, producer: page)
@@ -3184,7 +2640,7 @@ then
   Embedding.offer (address, embedding, format, order, width)
 ```
 
-### fullSite.RasterRenditionsStage
+### fullSite.images.RasterRenditionsStage
 
 ```reaction
 when Embedding.declare (embedding)
@@ -3198,47 +2654,127 @@ then
   Emitting.intend (attempt: emissionAttempt, claim: rendition, content, medium: mediaType, path, producer: page)
 ```
 
-### fullSite.ReadSiteSummary
+### fullSite.images.UnretargetableRasterPrimaryImagesDiagnose
 
 ```reaction
-when RequestBoundary.request (path: "/site/summary", requestId)
+when Referencing.scan (part: "body", source)
+where
+  view "primary raster body asset reference of source (source)" with (source) has (name, page, raw)
+  view "beside-page output for page (page) and name (name)" with (name, page) has (path: outputPath)
+  view "address of output path (path)" with (path: outputPath) has (address)
+  no view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address)
+  Filing._file (file: page) has (path: sourcePath)
 then
-  RequestBoundary.respond (requestId, summary: former "the site build summary")
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", scope: "page-rendering", severity: "error", source: sourcePath)
 ```
 
-### fullSite.RefusalInterruptsAggregateDelivery
+### fullSite.references.AbsoluteLayoutReferencesRebase
 
 ```reaction
-when any action is refused
+when Referencing.scan (part: "layout", source)
+where
+  Referencing._references (source) has (raw, reference)
+  targetHasKind (kind: "absolute", target: raw)
+  view "site URL of target (target)" with (target: raw) has (url)
 then
-  Diagnosing.interrupt ()
+  Referencing.answer (form: "address", reference, value: url)
 ```
 
-### fullSite.RejectedDeploymentsDispatch
+### fullSite.references.ClaimedBodyReferencesRetarget
 
 ```reaction
-when Deploying.reject (deployment, work)
+when Referencing.scan (part: "body", source)
+where
+  view "resolved local body reference of source (source)" with (source) has (raw, reference, target)
+  Routing._address (owner: target) has (address)
+  view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address) has (target: value)
 then
-  Deploying.dispatch (deployment, work)
+  Referencing.answer (form: "address", reference, value)
 ```
 
-### fullSite.RejectedOwnerDeploymentsDispatch
+### fullSite.references.CopiedBodyAssetsAnswer
 
 ```reaction
-when Deploying.rejectOwner (deployment, work)
+when Emitting.intend (path, producer: page)
+where
+  earlier, Referencing.scan (part: "body", subject: rendering, source)
+  view "copyable body asset of source (source)" with (source) has (name, page, raw, reference, rendering)
+  view "beside-page output for page (page) and name (name)" with (name, page) has (path)
+  view "address of output path (path)" with (path) has (address)
+  view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address) has (target: value)
 then
-  Deploying.dispatch (deployment, work)
+  Referencing.answer (form: "address", reference, value)
 ```
 
-### fullSite.RejectedProducerDeploymentsDispatch
+### fullSite.references.CopyableBodyAssetsCopy
 
 ```reaction
-when Deploying.rejectProducer (deployment, work)
+when Referencing.scan (part: "body", source)
+where
+  view "copyable body asset of source (source)" with (source) has (asset: target, content, name, page, rendering)
+  Rendering._active (rendering) has (emissionAttempt)
+  view "beside-page output for page (page) and name (name)" with (name, page) has (path)
 then
-  Deploying.dispatch (deployment, work)
+  Emitting.intend (attempt: emissionAttempt, claim: target, content, medium: "application/octet-stream", path, producer: page)
 ```
 
-### fullSite.RelativeLayoutReferencesDiagnose
+### fullSite.references.InvalidBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  view "relative body reference of source (source)" with (source) has (page, raw)
+  Filing._resolution (address: raw, file: page) has (status: "invalid")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference has an invalid path spelling.", scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.references.MissingBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  view "relative body reference of source (source)" with (source) has (page, raw)
+  Filing._resolution (address: raw, file: page) has (status: "missing")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "MISSING_LOCAL_REFERENCE", message: "This local reference names no staged content file.", scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.references.NonlocalBodyReferencesHold
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  view "held body reference of source (source)" with (source) has (raw, reference)
+then
+  Referencing.answer (form: "address", reference, value: raw)
+```
+
+### fullSite.references.NonlocalLayoutReferencesHold
+
+```reaction
+when Referencing.scan (part: "layout", source)
+where
+  view "held layout reference of source (source)" with (source) has (raw, reference)
+then
+  Referencing.answer (form: "address", reference, value: raw)
+```
+
+### fullSite.references.OutsideBodyReferencesDiagnose
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  view "relative body reference of source (source)" with (source) has (page, raw)
+  Filing._resolution (address: raw, file: page) has (status: "outside")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "OUTSIDE_LOCAL_REFERENCE", message: "This local reference leaves the content root.", scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.references.RelativeLayoutReferencesDiagnose
 
 ```reaction
 when Referencing.scan (part: "layout", source)
@@ -3252,502 +2788,7 @@ then
   Diagnosing.report (code: "RELATIVE_LAYOUT_REFERENCE", message: "A layout reference must be site-absolute, external, or fragment-only.", scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.RenderedLayoutsScan
-
-```reaction
-when Templating.render (subject: rendering, output)
-where
-  Rendering._active (rendering)
-then
-  Referencing.scan (part: "layout", subject: rendering, text: output)
-```
-
-### fullSite.RenderedLayoutsTrackTemplates
-
-```reaction
-when Templating.render (subject: attempt, rendering)
-where
-  Rendering._active (rendering: attempt) has (dependencyAttempt: attemptDependency, subject: page)
-  Templating._tree (owner: rendering) has (used)
-  Templating._template (name: used) has (template)
-then
-  Depending.use (attempt: attemptDependency, input: template, subject: page)
-```
-
-### fullSite.RenderedPaginationLayoutsScan
-
-```reaction
-when Templating.render (subject: owner, output)
-where
-  Deploying._forOwner (owner) has (kind: "pagination-page")
-then
-  Referencing.scan (part: "deployment-layout", subject: owner, text: output)
-```
-
-### fullSite.RenderedRedirectsBegin
-
-```reaction
-when Deploying.redirect (work)
-where
-  Deploying._work (work) has (producer)
-then
-  Emitting.begin (producer)
-```
-
-### fullSite.RenderingAttemptsRetractDiagnostics
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-where
-  Routing._claims () has (owner: page)
-  Rendering._latest (subject: page) has (stage: "started")
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.retract (scope: "page-rendering", source: path)
-```
-
-### fullSite.RenderingBeginningsAbortEmission
-
-```reaction
-when refused Rendering.begin (emissionAttempt, subject: page)
-where
-  earlier, Emitting.begin (producer: page, attempt: emissionAttempt)
-  Emitting._open (producer: page) has (attempt: emissionAttempt)
-then
-  Emitting.abort (attempt: emissionAttempt, producer: page)
-```
-
-### fullSite.RenderingBeginningsDiagnose
-
-```reaction
-when refused Rendering.begin (dependencyAttempt, emissionAttempt, subject: page, detail, error)
-where
-  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
-  Emitting._open (producer: page) has (attempt: emissionAttempt)
-  Filing._file (file: page) has (path)
-then
-  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
-```
-
-### fullSite.RetractedRenderingAttemptsTrackSource
-
-```reaction
-when Diagnosing.retract (scope: "page-rendering", source: path)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Routing._claims () has (owner: page)
-  Rendering._latest (subject: page) has (dependencyAttempt, stage: "started")
-  Filing._file (file: page) has (path)
-then
-  Depending.use (attempt: dependencyAttempt, input: page, subject: page)
-```
-
-### fullSite.RouteCollisionsReport
-
-```reaction
-when refused Routing.claim (owner: page, error: "ADDRESS_TAKEN")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (path, root)
-then
-  Diagnosing.report (code: "ROUTE_COLLISION", message: "Two pages claim one address.", severity: "error", source: path)
-```
-
-### fullSite.RoutedDeploymentWorkClaims
-
-```reaction
-when Deploying.dispatch (deployment, work)
-where
-  view "routed deployment work (work)" with (work) has (address, owner)
-then
-  Routing.claim (address, owner)
-```
-
-### fullSite.SetCommandLineExit
-
-```reaction
-when RequestBoundary.request (code, path: "/cli/exit", requestId)
-then
-  Commanding.exit (code)
-```
-
-### fullSite.SetCommandLineExit#2
-
-```reaction
-when Commanding.exit (code), asked by fullSite.SetCommandLineExit
-where
-  earlier, RequestBoundary.request (code, path: "/cli/exit", requestId)
-then
-  RequestBoundary.respond (requestId)
-```
-
-### fullSite.SettingsClearRoutingOrigin
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._policy ()
-  no Governing._origin ()
-then
-  Routing.reorigin ()
-```
-
-### fullSite.SettingsCollectionDeclarationFailuresDiagnose
-
-```reaction
-when refused Cataloging.declare (detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-then
-  Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
-```
-
-### fullSite.SettingsCompileDefaultPatterns
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._defaults () has (text)
-then
-  Matching.compile (text)
-```
-
-### fullSite.SettingsDeclareCatalogs
-
-```reaction
-when Cataloging.reset ()
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._collections () has (condition, direction, match, name, sort)
-then
-  Cataloging.declare (condition, direction, name, selector: match, sort)
-```
-
-### fullSite.SettingsDeclareMarkdownProfile
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._markdown () has (extensions, raw, separator)
-then
-  Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator)
-```
-
-### fullSite.SettingsDeclareVerbatimProfile
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._markdown () has (separator)
-then
-  Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator)
-```
-
-### fullSite.SettingsDefaultPatternFailuresDiagnose
-
-```reaction
-when refused Matching.compile (text, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._defaults () has (text)
-then
-  Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
-```
-
-### fullSite.SettingsMarkdownProfileFailuresDiagnose
-
-```reaction
-when refused Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._markdown () has (extensions, raw, separator)
-then
-  Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
-```
-
-### fullSite.SettingsPhasesRetractDiagnostics
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-then
-  Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-```
-
-### fullSite.SettingsRebaseFailuresDiagnose
-
-```reaction
-when refused Routing.rebase (base, detail, error: "INVALID_BASE")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._site () has (base)
-then
-  Diagnosing.report (code: "INVALID_BASE", message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
-```
-
-### fullSite.SettingsRebaseRouting
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._site () has (base)
-then
-  Routing.rebase (base)
-```
-
-### fullSite.SettingsReoriginFailuresDiagnose
-
-```reaction
-when refused Routing.reorigin (origin, detail, error: "INVALID_ORIGIN")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._origin () has (origin)
-then
-  Diagnosing.report (code: "INVALID_ORIGIN", message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
-```
-
-### fullSite.SettingsReoriginRouting
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._origin () has (origin)
-then
-  Routing.reorigin (origin)
-```
-
-### fullSite.SettingsResetCatalogs
-
-```reaction
-when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-then
-  Cataloging.reset ()
-```
-
-### fullSite.SettingsVerbatimProfileFailuresDiagnose
-
-```reaction
-when refused Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
-  Governing._markdown () has (separator)
-then
-  Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
-```
-
-### fullSite.SettledBodiesRenderOriginatedPages
-
-```reaction
-when Rendering.settleBody (rendering, subject: page, transitioned: true)
-where
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-  Rendering._active (rendering) has (template: name)
-  Templating._template (name) has (template)
-then
-  Templating.render (context: former "the originated completed render context of page (page)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.SettledBodiesRenderUnoriginatedPages
-
-```reaction
-when Rendering.settleBody (rendering, subject: page, transitioned: true)
-where
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-  Rendering._active (rendering) has (template: name)
-  Templating._template (name) has (template)
-then
-  Templating.render (context: former "the unoriginated completed render context of page (page)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.SettledLayoutsFinish
-
-```reaction
-when Rendering.settleLayout (rendering, transitioned: true)
-then
-  Rendering.finish (rendering)
-```
-
-### fullSite.SitemapWorkPrepares
-
-```reaction
-when Deploying.dispatch (deployment, work)
-where
-  Deploying._work (work) has (kind: "sitemap")
-then
-  Deploying.sitemap (urls: former "the sitemap urls", work)
-```
-
-### fullSite.StageAdmitsConfiguredOutput
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
-where
-  Governing._paths () has (output: directory)
-  no Locating._requested (name: "destination")
-then
-  Locating.admit (name: "output", path: directory)
-```
-
-### fullSite.StageAdmitsRequestedDestination
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
-where
-  Locating._requested (name: "destination") has (path: directory)
-then
-  Locating.admit (name: "destination", path: directory)
-```
-
-### fullSite.StageAdmitsSourceRoots
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
-where
-  Governing._sources () has (name: root, path: directory)
-then
-  Locating.admit (name: root, path: directory)
-```
-
-### fullSite.StartedDeploymentsDispatch
-
-```reaction
-when Deploying.start (deployment, work)
-then
-  Deploying.dispatch (deployment, work)
-```
-
-### fullSite.TemplateDefinitionFailuresDiagnose
-
-```reaction
-when refused Templating.register (name: path, origin: file, source: text, detail, error)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-  Filing._named (name: "templates") has (root)
-  Filing._under (prefix: "", root) has (file, path)
-  Filing._text (file) has (text)
-then
-  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
-```
-
-### fullSite.TemplatesDefine
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
-where
-  Filing._named (name: "templates") has (root)
-  Filing._under (prefix: "", root) has (file, path)
-  no view "path (path) relative to prefix (prefix)" with (path, prefix: "includes")
-  Filing._text (file) has (text)
-then
-  Templating.register (name: path, origin: file, source: text)
-```
-
-### fullSite.TrackedRenderingSourcesFillBodies:originated
-
-```reaction
-when Depending.use (attempt: dependencyAttempt, input: page, subject: page)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (path, root)
-  Documenting._document (subject: page) has (body, bodyLine)
-  Routing._address (owner: page) has (address)
-  Routing._absolute (address)
-then
-  Templating.fill (context: former "the originated render context of page (page)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.TrackedRenderingSourcesFillBodies:unoriginated
-
-```reaction
-when Depending.use (attempt: dependencyAttempt, input: page, subject: page)
-where
-  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
-  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (path, root)
-  Documenting._document (subject: page) has (body, bodyLine)
-  Routing._address (owner: page) has (address)
-  no Routing._absolute (address)
-then
-  Templating.fill (context: former "the unoriginated render context of page (page)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
-```
-
-### fullSite.UndecodableConfigurationDiagnoses
-
-```reaction
-when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
-where
-  Filing._named (name: "project") has (root)
-  no Filing._text (file)
-then
-  Diagnosing.report (code: "INVALID_TEXT", message: "The site configuration must be UTF-8 text.", scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.UndirectablePublicationDiagnoses
-
-```reaction
-when refused Emitting.direct (destination, detail, error)
-then
-  Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.UngroundableSiteDirectoryDiagnoses
-
-```reaction
-when Locating.ground (path, code, detail, status: "problem")
-then
-  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.UnloadableSourceRootDiagnoses
-
-```reaction
-when Filing.loadTree (name: root, code, detail, status: "problem")
-then
-  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: root)
-```
-
-### fullSite.UnprojectableDeploymentLayoutReferencesDiagnose:diagnose
-
-```reaction
-when Referencing.scan (part: "deployment-layout", source)
-where
-  Referencing._source (source) has (subject: owner)
-  Deploying._forOwner (owner)
-  Referencing._references (source) has (raw)
-  targetHasKind (kind: "absolute", target: raw)
-  no Routing._url (target: raw)
-then
-  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "A generated layout reference could not be projected.", severity: "error", source: "site.yaml")
-```
-
-### fullSite.UnprojectableDeploymentLayoutReferencesDiagnose:reject
-
-```reaction
-when Referencing.scan (part: "deployment-layout", source)
-where
-  Referencing._source (source) has (subject: owner)
-  Deploying._forOwner (owner)
-  Referencing._references (source) has (raw)
-  targetHasKind (kind: "absolute", target: raw)
-  no Routing._url (target: raw)
-then
-  Deploying.rejectOwner (owner)
-```
-
-### fullSite.UnpublishedDocumentBodyReferencesDiagnose
+### fullSite.references.UnpublishedDocumentBodyReferencesDiagnose
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3762,37 +2803,7 @@ then
   Diagnosing.report (code: "UNPUBLISHED_DOCUMENT_REFERENCE", message: "This local reference targets an unpublished document.", scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.UnpublishedRoutesRelease
-
-```reaction
-when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
-where
-  Documenting._all () has (subject: page)
-  Filing._named (name: "content") has (root)
-  Filing._file (file: page) has (root)
-  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: false)
-  Routing._address (owner: page)
-then
-  Routing.release (owner: page)
-```
-
-### fullSite.UnreadableConfigurationDiagnoses
-
-```reaction
-when Filing.loadFile (name: "project", path: "site.yaml", code, detail, status: "problem")
-then
-  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.UnresolvableLocationDiagnoses
-
-```reaction
-when Locating.admit (name, path, code, detail, status: "problem")
-then
-  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
-```
-
-### fullSite.UnretargetableClaimedBodyReferencesDiagnose
+### fullSite.references.UnretargetableClaimedBodyReferencesDiagnose
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3805,7 +2816,7 @@ then
   Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.UnretargetableCopiedBodyAssetsDiagnose
+### fullSite.references.UnretargetableCopiedBodyAssetsDiagnose
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3819,36 +2830,1111 @@ then
   Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", scope: "page-rendering", severity: "error", source: sourcePath)
 ```
 
-### fullSite.UnretargetableRasterPrimaryImagesDiagnose
+### fullSite.render.BodyConversionFailuresDiagnose
 
 ```reaction
-when Referencing.scan (part: "body", source)
+when refused Converting.convert (part: "body", subject: rendering, detail, error)
 where
-  view "primary raster body asset reference of source (source)" with (source) has (name, page, raw)
-  view "beside-page output for page (page) and name (name)" with (name, page) has (path: outputPath)
-  view "address of output path (path)" with (path: outputPath) has (address)
-  no view "retargeted reference from original (original) to replacement (replacement)" with (original: raw, replacement: address)
-  Filing._file (file: page) has (path: sourcePath)
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._active (rendering) has (subject: page)
+  Filing._file (file: page) has (path)
 then
-  Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference cannot be safely retargeted.", scope: "page-rendering", severity: "error", source: sourcePath)
+  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
 ```
 
-### fullSite.WriteCommandLine
+### fullSite.render.BodyTemplateFailuresDiagnose
 
 ```reaction
-when RequestBoundary.request (path: "/cli/write", requestId, stream, text)
+when refused Templating.fill (subject: rendering, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._active (rendering) has (subject: page)
+  Filing._file (file: page) has (path)
+  Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
 then
-  Commanding.write (stream, text)
+  Diagnosing.report (code: error, column, line, message: detail, scope: "page-rendering", severity: "error", source)
 ```
 
-### fullSite.WriteCommandLine#2
+### fullSite.render.BodyTemplateFailuresFailRendering
 
 ```reaction
-when Commanding.write (stream, text), asked by fullSite.WriteCommandLine
+when refused Templating.fill (subject: rendering, error)
 where
-  earlier, RequestBoundary.request (path: "/cli/write", requestId, stream, text)
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._active (rendering)
+then
+  Rendering.fail (reason: error, rendering)
+```
+
+### fullSite.render.ClaimedRoutesBeginPageDependencies
+
+```reaction
+when Routing.claim (owner: page)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+then
+  Depending.begin (subject: page)
+```
+
+### fullSite.render.CommittedPageOutputsSettleDependencies
+
+```reaction
+when Emitting.commit (attempt: emissionAttempt, producer: page)
+where
+  earlier, Rendering.settleLayout (rendering, subject: page, transitioned: true)
+  Rendering._latest (subject: page) has (dependencyAttempt, emissionAttempt, rendering, stage: "completed")
+then
+  Depending.settle (attempt: dependencyAttempt, subject: page)
+```
+
+### fullSite.render.ConvertedBodiesScan
+
+```reaction
+when Converting.convert (part: "body", subject: rendering, output)
+then
+  Referencing.scan (part: "body", subject: rendering, text: output)
+```
+
+### fullSite.render.EmptyBodyScansSettleRendering
+
+```reaction
+when Referencing.scan (part: "body", subject: rendering, completed: true)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+then
+  Rendering.settleBody (rendering)
+```
+
+### fullSite.render.EmptyLayoutScansSettleRendering
+
+```reaction
+when Referencing.scan (part: "layout", subject: rendering, completed: true)
+where
+  Rendering._active (rendering)
+then
+  Rendering.settleLayout (rendering)
+```
+
+### fullSite.render.FailedRenderingsAbandonDependencies
+
+```reaction
+when Rendering.fail (rendering, subject: page, transitioned: true)
+at the flow's settlement frontier
+where
+  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "failed")
+then
+  Depending.abandon (attempt: dependencyAttempt, subject: page)
+```
+
+### fullSite.render.FailedRenderingsAbortOutput
+
+```reaction
+when Rendering.fail (rendering, subject: page, transitioned: true)
+at the flow's settlement frontier
+where
+  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "failed")
+then
+  Emitting.abort (attempt: emissionAttempt, producer: page)
+```
+
+### fullSite.render.FilledBodiesConvert
+
+```reaction
+when Templating.fill (subject: rendering, output)
+where
+  Rendering._active (rendering) has (profile: name)
+  Converting._profile (name) has (profile)
+then
+  Converting.convert (part: "body", profile, source: output, subject: rendering)
+```
+
+### fullSite.render.FilledBodiesTrackTemplates
+
+```reaction
+when Templating.fill (subject: rendering, filling)
+where
+  Rendering._active (rendering) has (dependencyAttempt, subject: page)
+  Templating._tree (owner: filling) has (used)
+  Templating._template (name: used) has (template)
+then
+  Depending.use (attempt: dependencyAttempt, input: template, subject: page)
+```
+
+### fullSite.render.FinishedBodyAnswersSettleRendering
+
+```reaction
+when Referencing.answer (completed: true, part: "body", subject: rendering)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+then
+  Rendering.settleBody (rendering)
+```
+
+### fullSite.render.FinishedLayoutAnswersSettleRendering
+
+```reaction
+when Referencing.answer (completed: true, part: "layout", subject: rendering)
+where
+  Rendering._active (rendering)
+then
+  Rendering.settleLayout (rendering)
+```
+
+### fullSite.render.IntendedPageOutputsCommit
+
+```reaction
+when Emitting.intend (attempt: emissionAttempt, producer: page)
+where
+  earlier, Rendering.settleLayout (rendering, subject: page, transitioned: true)
+  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
+then
+  Emitting.commit (attempt: emissionAttempt, producer: page)
+```
+
+### fullSite.render.InvalidPageRenderingSelectionsAbandonDependencies
+
+```reaction
+when Emitting.begin (producer: page, attempt: emissionAttempt)
+where
+  earlier, Depending.begin (subject: page, attempt: dependencyAttempt)
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  Filing._file (file: page) has (path)
+  Layering._resolved (subject: page) has (values: data)
+  view "the invalid rendering selection for path (path) and data (data)" with (data, path)
+then
+  Depending.abandon (attempt: dependencyAttempt, subject: page)
+```
+
+### fullSite.render.InvalidPageRenderingSelectionsAbortOutput
+
+```reaction
+when Emitting.begin (producer: page, attempt: emissionAttempt)
+where
+  earlier, Depending.begin (subject: page)
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  Filing._file (file: page) has (path)
+  Layering._resolved (subject: page) has (values: data)
+  view "the invalid rendering selection for path (path) and data (data)" with (data, path)
+then
+  Emitting.abort (attempt: emissionAttempt, producer: page)
+```
+
+### fullSite.render.InvalidPageRenderingSelectionsDiagnose
+
+```reaction
+when Emitting.begin (producer: page, attempt: emissionAttempt)
+where
+  earlier, Depending.begin (subject: page)
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  Filing._file (file: page) has (path)
+  Layering._resolved (subject: page) has (values: data)
+  view "the invalid rendering selection for path (path) and data (data)" with (data, path) has (detail, error)
+then
+  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.render.LayoutTemplateFailuresDiagnose
+
+```reaction
+when refused Templating.render (subject: rendering, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._active (rendering) has (subject: page)
+  Filing._file (file: page) has (path)
+  Templating._failureLocation (fallbackSource: path, subject: rendering) has (column, line, source)
+then
+  Diagnosing.report (code: error, column, line, message: detail, scope: "page-rendering", severity: "error", source)
+```
+
+### fullSite.render.LayoutTemplateFailuresFailRendering
+
+```reaction
+when refused Templating.render (subject: rendering, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._active (rendering)
+then
+  Rendering.fail (reason: error, rendering)
+```
+
+### fullSite.render.MissingRenderingProfilesDiagnose
+
+```reaction
+when Templating.fill (subject: rendering)
+where
+  Rendering._active (rendering) has (profile: name, subject: page)
+  no Converting._profile (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "PROFILE_NOT_FOUND", message: "The selected body conversion profile is not defined.", scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.render.MissingRenderingTemplatesDiagnose
+
+```reaction
+when Rendering.settleBody (rendering, subject: page, transitioned: true)
+where
+  Rendering._active (rendering) has (template: name)
+  no Templating._template (name)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: "TEMPLATE_NOT_FOUND", message: "The selected page template is not defined.", scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.render.PageAssetEmissionFailuresDiagnose
+
+```reaction
+when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._latest (subject: page) has (emissionAttempt, rendering: pageRendering)
+  Rendering._active (rendering: pageRendering)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.render.PageDependenciesOpenEmission
+
+```reaction
+when Depending.begin (subject: page)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  Filing._file (file: page)
+then
+  Emitting.begin (producer: page)
+```
+
+### fullSite.render.PageEmissionFailuresDiagnose
+
+```reaction
+when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._latest (subject: page) has (emissionAttempt, stage: "completed")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.render.PageEmissionsBeginRendering
+
+```reaction
+when Emitting.begin (producer: page, attempt: emissionAttempt)
+where
+  earlier, Depending.begin (subject: page, attempt: dependencyAttempt)
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
+  Filing._file (file: page) has (path)
+  Layering._resolved (subject: page) has (values: data)
+  pageRenderingSelectionHasValidity (data, path, valid: true)
+  profile is pageRenderingProfile (data, path)
+  template is pageRenderingTemplate (data, path)
+then
+  Rendering.begin (dependencyAttempt, emissionAttempt, path, profile, subject: page, template)
+```
+
+### fullSite.render.RenderedLayoutsScan
+
+```reaction
+when Templating.render (subject: rendering, output)
+where
+  Rendering._active (rendering)
+then
+  Referencing.scan (part: "layout", subject: rendering, text: output)
+```
+
+### fullSite.render.RenderedLayoutsTrackTemplates
+
+```reaction
+when Templating.render (subject: attempt, rendering)
+where
+  Rendering._active (rendering: attempt) has (dependencyAttempt: attemptDependency, subject: page)
+  Templating._tree (owner: rendering) has (used)
+  Templating._template (name: used) has (template)
+then
+  Depending.use (attempt: attemptDependency, input: template, subject: page)
+```
+
+### fullSite.render.RenderingAttemptsRetractDiagnostics
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+where
+  Routing._claims () has (owner: page)
+  Rendering._latest (subject: page) has (stage: "started")
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.retract (scope: "page-rendering", source: path)
+```
+
+### fullSite.render.RenderingBeginningsAbandonDependencies
+
+```reaction
+when refused Rendering.begin (dependencyAttempt, subject: page, error)
+where
+  earlier, Depending.begin (subject: page, attempt: dependencyAttempt)
+  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
+then
+  Depending.abandon (attempt: dependencyAttempt, subject: page)
+```
+
+### fullSite.render.RenderingBeginningsAbortEmission
+
+```reaction
+when refused Rendering.begin (emissionAttempt, subject: page)
+where
+  earlier, Emitting.begin (producer: page, attempt: emissionAttempt)
+  Emitting._open (producer: page) has (attempt: emissionAttempt)
+then
+  Emitting.abort (attempt: emissionAttempt, producer: page)
+```
+
+### fullSite.render.RenderingBeginningsDiagnose
+
+```reaction
+when refused Rendering.begin (dependencyAttempt, emissionAttempt, subject: page, detail, error)
+where
+  Depending._attempt (subject: page) has (attempt: dependencyAttempt)
+  Emitting._open (producer: page) has (attempt: emissionAttempt)
+  Filing._file (file: page) has (path)
+then
+  Diagnosing.report (code: error, message: detail, scope: "page-rendering", severity: "error", source: path)
+```
+
+### fullSite.render.RenderingDiagnosticsFailActiveAttempts
+
+```reaction
+when Diagnosing.report (code, scope: "page-rendering", severity: "error", source: path)
+where
+  Filing._named (name: "content") has (root)
+  Filing._under (prefix: "", root) has (file: page, path)
+  Rendering._latest (subject: page) has (rendering)
+  Rendering._active (rendering)
+then
+  Rendering.fail (reason: code, rendering)
+```
+
+### fullSite.render.RetractedRenderingAttemptsTrackSource
+
+```reaction
+when Diagnosing.retract (scope: "page-rendering", source: path)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Routing._claims () has (owner: page)
+  Rendering._latest (subject: page) has (dependencyAttempt, stage: "started")
+  Filing._file (file: page) has (path)
+then
+  Depending.use (attempt: dependencyAttempt, input: page, subject: page)
+```
+
+### fullSite.render.SettledBodiesRenderOriginatedPages
+
+```reaction
+when Rendering.settleBody (rendering, subject: page, transitioned: true)
+where
+  Routing._address (owner: page) has (address)
+  view "absolute site URL of address (address)" with (address)
+  Rendering._active (rendering) has (template: name)
+  Templating._template (name) has (template)
+then
+  Templating.render (context: former "the originated completed render context of rendering (rendering)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.render.SettledBodiesRenderUnoriginatedPages
+
+```reaction
+when Rendering.settleBody (rendering, subject: page, transitioned: true)
+where
+  Routing._address (owner: page) has (address)
+  no view "absolute site URL of address (address)" with (address)
+  Rendering._active (rendering) has (template: name)
+  Templating._template (name) has (template)
+then
+  Templating.render (context: former "the unoriginated completed render context of rendering (rendering)" with (rendering), subject: rendering, template, trusted: [["page", "content"], (wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.render.SettledLayoutsStagePageOutput
+
+```reaction
+when Rendering.settleLayout (rendering, subject: page, transitioned: true)
+where
+  Rendering._latest (subject: page) has (emissionAttempt, rendering, stage: "completed")
+  Referencing._finished (part: "layout", subject: rendering) has (text)
+  Routing._address (owner: page) has (address)
+  view "output path of address (address)" with (address) has (path)
+then
+  Emitting.intend (attempt: emissionAttempt, content: text, medium: "text/html", path, producer: page)
+```
+
+### fullSite.render.TrackedRenderingSourcesFillBodies:originated
+
+```reaction
+when Depending.use (attempt: dependencyAttempt, input: page, subject: page)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+  Documenting._document (subject: page) has (body, bodyLine)
+  Routing._address (owner: page) has (address)
+  view "absolute site URL of address (address)" with (address)
+then
+  Templating.fill (context: former "the originated render context of rendering (rendering)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.render.TrackedRenderingSourcesFillBodies:unoriginated
+
+```reaction
+when Depending.use (attempt: dependencyAttempt, input: page, subject: page)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "render", transitioned: true)
+  Rendering._latest (subject: page) has (dependencyAttempt, rendering, stage: "started")
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+  Documenting._document (subject: page) has (body, bodyLine)
+  Routing._address (owner: page) has (address)
+  no view "absolute site URL of address (address)" with (address)
+then
+  Templating.fill (context: former "the unoriginated render context of rendering (rendering)" with (rendering), source: body, sourceLine: bodyLine, sourceName: path, subject: rendering, trusted: [(wildcard: ["collections", "*", "*", "excerpt"])])
+```
+
+### fullSite.routes.DerivedRoutesClaim
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+where
+  Documenting._all () has (subject: page)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
+  no Layering._value (path: ["build", "route"], subject: page)
+  view "derived address of path (path)" with (path) has (address)
+then
+  Routing.claim (address, owner: page)
+```
+
+### fullSite.routes.ExplicitRoutesClaim
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+where
+  Documenting._all () has (subject: page)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (root)
+  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: true)
+  Layering._value (path: ["build", "route"], subject: page) has (value: address)
+then
+  Routing.claim (address, owner: page)
+```
+
+### fullSite.routes.InvalidRouteClaimsDiagnose
+
+```reaction
+when refused Routing.claim (owner: page, detail, error: "INVALID_ADDRESS")
+where
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+then
+  Diagnosing.report (code: "INVALID_ADDRESS", message: detail, severity: "error", source: path)
+```
+
+### fullSite.routes.RouteCollisionsReport
+
+```reaction
+when refused Routing.claim (owner: page, error: "ADDRESS_TAKEN")
+where
+  earlier, Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (path, root)
+then
+  Diagnosing.report (code: "ROUTE_COLLISION", message: "Two pages claim one address.", severity: "error", source: path)
+```
+
+### fullSite.routes.UnpublishedRoutesRelease
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "route", transitioned: true)
+where
+  Documenting._all () has (subject: page)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: page) has (root)
+  Layering._flag (otherwise: true, path: ["build", "publish"], subject: page) has (value: false)
+  Routing._address (owner: page)
+then
+  Routing.release (owner: page)
+```
+
+### fullSite.serving.CloseSiteServer
+
+```reaction
+when RequestBoundary.request (path: "/serve/close", requestId, server)
+then
+  Serving.close (server)
+```
+
+### fullSite.serving.CloseSiteServer#2
+
+```reaction
+when Serving.close (server), asked by fullSite.serving.CloseSiteServer
+where
+  earlier, RequestBoundary.request (path: "/serve/close", requestId, server)
 then
   RequestBoundary.respond (requestId)
+```
+
+### fullSite.serving.OpenSiteServer
+
+```reaction
+when RequestBoundary.request (host, path: "/serve/open", port, requestId)
+then
+  Serving.open (host, port)
+```
+
+### fullSite.serving.OpenSiteServer#2
+
+```reaction
+when Serving.open (host, port, result.port: bound, server), asked by fullSite.serving.OpenSiteServer
+where
+  earlier, RequestBoundary.request (host, path: "/serve/open", port, requestId)
+then
+  RequestBoundary.respond (host, port: bound, requestId, server)
+```
+
+### fullSite.serving.PublishSiteOutput
+
+```reaction
+when RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
+then
+  Serving.publish (directory, server)
+```
+
+### fullSite.serving.PublishSiteOutput#2
+
+```reaction
+when Serving.publish (directory, server, readers), asked by fullSite.serving.PublishSiteOutput
+where
+  earlier, RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
+then
+  RequestBoundary.respond (readers, requestId)
+```
+
+### fullSite.settings.AssessedConfigurationProblemsDiagnose
+
+```reaction
+when refused Governing.assess (error: "INVALID_CONFIGURATION")
+where
+  Governing._problems () has (code, column, line, message)
+then
+  Diagnosing.report (code, column, line, message, scope: "configuration-assessment", severity: "error", source: "site.yaml")
+```
+
+### fullSite.settings.ConfigurationAssessmentRetractsDiagnostics
+
+```reaction
+when requested Governing.assess ()
+then
+  Diagnosing.retract (scope: "configuration-assessment", source: "site.yaml")
+```
+
+### fullSite.settings.SettingsCollectionDeclarationFailuresDiagnose
+
+```reaction
+when refused Cataloging.declare (detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+then
+  Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
+```
+
+### fullSite.settings.SettingsDeclareCatalogs
+
+```reaction
+when Cataloging.reset ()
+where
+  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  Governing._collections () has (condition, direction, match, name, sort)
+then
+  Cataloging.declare (condition, direction, name, selector: match, sort)
+```
+
+### fullSite.settings.SettingsDeclareMarkdownProfile
+
+```reaction
+when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+where
+  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  Governing._markdown () has (extensions, raw, separator)
+then
+  Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator)
+```
+
+### fullSite.settings.SettingsDeclareVerbatimProfile
+
+```reaction
+when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+where
+  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  Governing._markdown () has (separator)
+then
+  Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator)
+```
+
+### fullSite.settings.SettingsMarkdownProfileFailuresDiagnose
+
+```reaction
+when refused Converting.declare (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  Governing._markdown () has (extensions, raw, separator)
+then
+  Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
+```
+
+### fullSite.settings.SettingsPhaseRetractsDiagnostics
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+then
+  Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+```
+
+### fullSite.settings.SettingsResetCatalogs
+
+```reaction
+when Diagnosing.retract (scope: "configuration-settings", source: "site.yaml")
+where
+  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+then
+  Cataloging.reset ()
+```
+
+### fullSite.settings.SettingsVerbatimProfileFailuresDiagnose
+
+```reaction
+when refused Converting.declare (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+  Governing._markdown () has (separator)
+then
+  Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
+```
+
+### fullSite.sources.ClearedContentGetsAttributes
+
+```reaction
+when Layering.clear (subject)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: subject) has (root)
+  Documenting._document (subject) has (attributes)
+then
+  Layering.contribute (rank: 9007199254740991, subject, values: attributes)
+```
+
+### fullSite.sources.ClearedContentGetsDefaults
+
+```reaction
+when Layering.clear (subject)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  Filing._named (name: "content") has (root: content)
+  Filing._file (file: subject) has (path, root: content)
+  Governing._defaults () has (index, text, values)
+  patternHasResult (matched: true, path, pattern: text)
+then
+  Layering.contribute (rank: index, subject, values)
+```
+
+### fullSite.sources.ContentDocumentsParse
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+where
+  view "content document file" has (file, text)
+then
+  Documenting.parse (subject: file, text)
+```
+
+### fullSite.sources.DocumentParseFailuresDiagnose
+
+```reaction
+when refused Documenting.parse (subject: file, detail, error: "MALFORMED_ATTRIBUTES")
+where
+  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  Filing._named (name: "content") has (root)
+  Filing._file (file) has (path, root)
+then
+  Diagnosing.report (code: "MALFORMED_ATTRIBUTES", message: detail, severity: "error", source: path)
+```
+
+### fullSite.sources.IncludeDefinitionFailuresDiagnose
+
+```reaction
+when refused Templating.register (name: path, origin: file, source: text, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  Filing._named (name: "templates") has (root)
+  Filing._under (prefix: "includes", root) has (file, path: physicalPath)
+  view "path (path) relative to prefix (prefix)" with (path: physicalPath, prefix: "includes") has (relative: path)
+  Filing._text (file) has (text)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.sources.IncludesDefine
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+where
+  Filing._named (name: "templates") has (root)
+  Filing._under (prefix: "includes", root) has (file, path: physicalPath)
+  view "path (path) relative to prefix (prefix)" with (path: physicalPath, prefix: "includes") has (relative: path)
+  Filing._text (file) has (text)
+then
+  Templating.register (name: path, origin: file, source: text)
+```
+
+### fullSite.sources.ParsedContentClearsLayers
+
+```reaction
+when Documenting.parse (subject)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  Filing._named (name: "content") has (root)
+  Filing._file (file: subject) has (root)
+then
+  Layering.clear (subject)
+```
+
+### fullSite.sources.PublicFilesIntendOutput
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+where
+  Filing._named (name: "public") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Filing._file (file) has (content)
+then
+  Emitting.intend (content, medium: "application/octet-stream", path, producer: file)
+```
+
+### fullSite.sources.TemplateDefinitionFailuresDiagnose
+
+```reaction
+when refused Templating.register (name: path, origin: file, source: text, detail, error)
+where
+  earlier, Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+  Filing._named (name: "templates") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  Filing._text (file) has (text)
+then
+  Diagnosing.report (code: error, message: detail, severity: "error", source: path)
+```
+
+### fullSite.sources.TemplatesDefine
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "read", transitioned: true)
+where
+  Filing._named (name: "templates") has (root)
+  Filing._under (prefix: "", root) has (file, path)
+  no view "path (path) relative to prefix (prefix)" with (path, prefix: "includes")
+  Filing._text (file) has (text)
+then
+  Templating.register (name: path, origin: file, source: text)
+```
+
+### fullSite.staging.AdmittedConfigurationIsLoaded
+
+```reaction
+when Locating.admit (name: "settings", path, status: "admitted")
+then
+  Filing.loadFile (name: "project", path: "site.yaml", source: path)
+```
+
+### fullSite.staging.AdmittedSourceRootsAreLoaded
+
+```reaction
+when Locating.admit (name: root, path: directory, contained: true, real, resolved: true, status: "admitted")
+where
+  Governing._sources () has (name: root, path: directory)
+then
+  Filing.loadTree (directory: real, name: root)
+```
+
+### fullSite.staging.BegunSiteBuildDeliveriesRetractStagingDiagnostics
+
+```reaction
+when Delivering.begin (task: job)
+where
+  earlier, Phasing.start (job, name: "site-build", phase: "locate")
+then
+  Diagnosing.retract (scope: "project-staging", source: "site.yaml")
+```
+
+### fullSite.staging.ConfiguredOutputDirectsPublication
+
+```reaction
+when Locating.admit (name: "output", path: directory, contained: true, real, resolved: true, status: "admitted")
+where
+  view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
+then
+  Emitting.direct (destination: real, prefix)
+```
+
+### fullSite.staging.DestinationDirectsPublication
+
+```reaction
+when Locating.admit (name: "destination", path: directory, real, status: "admitted")
+where
+  view "the publication transaction prefix of destination (destination)" with (destination: real) has (prefix)
+then
+  Emitting.direct (destination: real, prefix)
+```
+
+### fullSite.staging.EscapingConfiguredOutputDiagnoses
+
+```reaction
+when Locating.admit (name: "output", path: directory, place: admitted, status: "admitted")
+where
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
+then
+  Diagnosing.report (code: "OUTPUT_OUTSIDE_SITE", message: "Configured paths.output must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.EscapingContentRootDiagnoses
+
+```reaction
+when Locating.admit (name: "content", path: directory, place: admitted, status: "admitted")
+where
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
+then
+  Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.content must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.EscapingPublicRootDiagnoses
+
+```reaction
+when Locating.admit (name: "public", path: directory, place: admitted, status: "admitted")
+where
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
+then
+  Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.public must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.EscapingTemplateRootDiagnoses
+
+```reaction
+when Locating.admit (name: "templates", path: directory, place: admitted, status: "admitted")
+where
+  no Locating._place (place: admitted) has (contained: true, resolved: true)
+then
+  Diagnosing.report (code: "SOURCE_OUTSIDE_SITE", message: "Configured paths.templates must stay inside the site directory after resolving symbolic links.", scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.GroundedSiteAdmitsConfiguration
+
+```reaction
+when Locating.ground (status: "grounded")
+then
+  Locating.admit (name: "settings", path: "site.yaml")
+```
+
+### fullSite.staging.LoadedConfigurationIsAssessed
+
+```reaction
+when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
+where
+  Filing._named (name: "project") has (root)
+  Filing._text (file) has (text)
+then
+  Governing.assess (source: text)
+```
+
+### fullSite.staging.LocateGroundsSiteDirectory
+
+```reaction
+when Diagnosing.retract (scope: "project-staging", source: "site.yaml")
+where
+  earlier, Phasing.start (name: "site-build", phase: "locate")
+  Locating._requested (name: "site") has (path)
+then
+  Locating.ground (path)
+```
+
+### fullSite.staging.OutputOverlappingConfigurationDiagnoses
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+where
+  view "the publication place" has (place: publication)
+  Locating._named (name: "settings") has (place: settings)
+  Locating._overlapping (other: settings, place: publication) has (overlapping: true)
+then
+  Diagnosing.report (code: "OUTPUT_OVERLAPS_CONFIGURATION", message: "The output directory must not contain the site configuration.", scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.OutputOverlappingSourceRootDiagnoses
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "settings", transitioned: true)
+where
+  view "the publication place" has (place: publication)
+  Governing._sources () has (name: root)
+  Locating._named (name: root) has (place: source)
+  Locating._overlapping (other: source, place: publication) has (overlapping: true)
+then
+  Diagnosing.report (code: "OUTPUT_OVERLAPS_SOURCE", message: "The output directory must not overlap a configured source directory.", scope: "project-staging", severity: "error", source: root)
+```
+
+### fullSite.staging.StageAdmitsConfiguredOutput
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
+where
+  Governing._paths () has (output: directory)
+  no Locating._requested (name: "destination")
+then
+  Locating.admit (name: "output", path: directory)
+```
+
+### fullSite.staging.StageAdmitsRequestedDestination
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
+where
+  Locating._requested (name: "destination") has (path: directory)
+then
+  Locating.admit (name: "destination", path: directory)
+```
+
+### fullSite.staging.StageAdmitsSourceRoots
+
+```reaction
+when Phasing.advance (name: "site-build", phase: "stage", transitioned: true)
+where
+  Governing._sources () has (name: root, path: directory)
+then
+  Locating.admit (name: root, path: directory)
+```
+
+### fullSite.staging.StartedSiteBuildsBeginAggregateDelivery
+
+```reaction
+when Phasing.start (job, name: "site-build", phase: "locate")
+then
+  Delivering.begin (task: job)
+```
+
+### fullSite.staging.UndecodableConfigurationDiagnoses
+
+```reaction
+when Filing.loadFile (name: "project", path: "site.yaml", file, root, status: "loaded")
+where
+  Filing._named (name: "project") has (root)
+  no Filing._text (file)
+then
+  Diagnosing.report (code: "INVALID_TEXT", message: "The site configuration must be UTF-8 text.", scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.UndirectablePublicationDiagnoses
+
+```reaction
+when refused Emitting.direct (destination, detail, error)
+then
+  Diagnosing.report (code: error, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.UngroundableSiteDirectoryDiagnoses
+
+```reaction
+when Locating.ground (path, code, detail, status: "problem")
+then
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.UnloadableSourceRootDiagnoses
+
+```reaction
+when Filing.loadTree (name: root, code, detail, status: "problem")
+then
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: root)
+```
+
+### fullSite.staging.UnreadableConfigurationDiagnoses
+
+```reaction
+when Filing.loadFile (name: "project", path: "site.yaml", code, detail, status: "problem")
+then
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.staging.UnresolvableLocationDiagnoses
+
+```reaction
+when Locating.admit (name, path, code, detail, status: "problem")
+then
+  Diagnosing.report (code, message: detail, scope: "project-staging", severity: "error", source: "site.yaml")
+```
+
+### fullSite.watching.AttendSiteWatch
+
+```reaction
+when RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
+then
+  Watching.attend (watch, within)
+```
+
+### fullSite.watching.AttendSiteWatch#2
+
+```reaction
+when Watching.attend (watch, within, changed, watching), asked by fullSite.watching.AttendSiteWatch
+where
+  earlier, RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
+then
+  RequestBoundary.respond (changed, requestId, watching)
+```
+
+### fullSite.watching.CloseSiteWatch
+
+```reaction
+when RequestBoundary.request (path: "/watch/close", requestId, watch)
+then
+  Watching.close (watch)
+```
+
+### fullSite.watching.CloseSiteWatch#2
+
+```reaction
+when Watching.close (watch), asked by fullSite.watching.CloseSiteWatch
+where
+  earlier, RequestBoundary.request (path: "/watch/close", requestId, watch)
+then
+  RequestBoundary.respond (requestId)
+```
+
+### fullSite.watching.OpenSiteWatch
+
+```reaction
+when RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
+where
+  isTextValue (value: output)
+  view "the publication transaction prefix of destination (destination)" with (destination: output) has (prefix)
+then
+  Watching.observe (directory, excluded: output, prefix, settling)
+```
+
+### fullSite.watching.OpenSiteWatch#2
+
+```reaction
+when Watching.observe (directory, excluded: output, prefix, settling, watch), asked by fullSite.watching.OpenSiteWatch
+where
+  earlier, RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
+then
+  RequestBoundary.respond (requestId, watch)
 ```
 
 ## Endpoint input contracts

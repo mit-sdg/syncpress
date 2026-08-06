@@ -16,7 +16,8 @@ test("superseded template work cannot enter the replacement dependency attempt",
   const first = value(await app.concepts.Rendering.begin({
     subject: page,
     path: "post.md",
-    data: {},
+    profile: "markdown",
+    template: "page.html",
     dependencyAttempt: firstDependency.attempt,
     emissionAttempt: 1,
   }));
@@ -24,7 +25,8 @@ test("superseded template work cannot enter the replacement dependency attempt",
   const second = value(await app.concepts.Rendering.begin({
     subject: page,
     path: "post.md",
-    data: {},
+    profile: "markdown",
+    template: "page.html",
     dependencyAttempt: secondDependency.attempt,
     emissionAttempt: 2,
   }));
@@ -60,14 +62,14 @@ test("superseded failures cannot recreate diagnostics for the replacement attemp
     path: "post.md",
     content: new TextEncoder().encode("post"),
   }));
-  const first = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", data: {}, dependencyAttempt: 1, emissionAttempt: 1 }));
+  const first = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", profile: "markdown", template: "page.html", dependencyAttempt: 1, emissionAttempt: 1 }));
   const firstScan = value(await app.concepts.Referencing.scan({
     subject: first.rendering,
     part: "body",
     text: '<img src="https://example.com/old.png">',
   }));
   const firstReference = (await app.concepts.Referencing._references({ source: firstScan.source }))[0]!;
-  const second = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", data: {}, dependencyAttempt: 2, emissionAttempt: 2 }));
+  const second = value(await app.concepts.Rendering.begin({ subject: page.file, path: "post.md", profile: "markdown", template: "page.html", dependencyAttempt: 2, emissionAttempt: 2 }));
   await app.concepts.Embedding.declare({
     subject: firstReference.reference,
     alternative: "old",
@@ -106,14 +108,14 @@ test("superseded failures cannot recreate diagnostics for the replacement attemp
 test("late reference completion cannot settle a superseded or replacement attempt", async () => {
   const app = assembleSyncpress();
   const page = "page:post";
-  const first = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {}, dependencyAttempt: 1, emissionAttempt: 1 }));
+  const first = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", profile: "markdown", template: "page.html", dependencyAttempt: 1, emissionAttempt: 1 }));
   const scanned = value(await app.concepts.Referencing.scan({
     subject: first.rendering,
     part: "body",
     text: '<a href="later">later</a>',
   }));
   const reference = (await app.concepts.Referencing._references({ source: scanned.source }))[0]!;
-  const second = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", data: {}, dependencyAttempt: 2, emissionAttempt: 2 }));
+  const second = value(await app.concepts.Rendering.begin({ subject: page, path: "post.md", profile: "markdown", template: "page.html", dependencyAttempt: 2, emissionAttempt: 2 }));
 
   await app.concepts.Referencing.answer({ reference: reference.reference, form: "address", value: "/later/" });
   await app.whenIdle();
@@ -124,4 +126,41 @@ test("late reference completion cannot settle a superseded or replacement attemp
   expect(await app.concepts.Rendering._attempt({ rendering: second.rendering })).toEqual([
     expect.objectContaining({ stage: "started" }),
   ]);
+});
+
+test("rendering diagnostics fail first and clean up owner-local attempts at the flow frontier", async () => {
+  const app = assembleSyncpress();
+  const root = value(await app.concepts.Filing.open({ name: "content" }));
+  const page = value(await app.concepts.Filing.place({
+    root: root.root,
+    path: "post.md",
+    content: new TextEncoder().encode("post"),
+  }));
+  const dependency = value(await app.concepts.Depending.begin({ subject: page.file }));
+  const emission = value(await app.concepts.Emitting.begin({ producer: page.file }));
+  const rendering = value(await app.concepts.Rendering.begin({
+    subject: page.file,
+    path: "post.md",
+    profile: "markdown",
+    template: "page.html",
+    dependencyAttempt: dependency.attempt,
+    emissionAttempt: emission.attempt,
+  }));
+
+  await app.concepts.Diagnosing.report({
+    scope: "page-rendering",
+    severity: "error",
+    code: "TEST_FAILURE",
+    message: "The rendering failed.",
+    source: "post.md",
+    line: undefined,
+    column: undefined,
+  });
+  await app.whenIdle();
+
+  expect(await app.concepts.Rendering._latest({ subject: page.file })).toEqual([
+    expect.objectContaining({ rendering: rendering.rendering, stage: "failed", failure: "TEST_FAILURE" }),
+  ]);
+  expect(await app.concepts.Emitting._open({ producer: page.file })).toEqual([]);
+  expect(await app.concepts.Depending._state({ subject: page.file })).toEqual({ state: "stale" });
 });

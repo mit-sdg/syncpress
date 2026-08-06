@@ -1,14 +1,10 @@
 export class InvalidText extends Error {}
-export class InvalidData extends Error {}
-export class InvalidProfile extends Error {}
-export class InvalidTemplate extends Error {}
 export class InvalidAttempt extends Error {}
 export class StaleAttempt extends Error {}
-export class UnknownSource extends Error {}
 export class RenderingNotFound extends Error {}
 export class StageNotReady extends Error {}
 
-export type RenderingStage = "started" | "body-settled" | "layout-settled" | "completed" | "superseded";
+export type RenderingStage = "started" | "body-settled" | "completed" | "failed" | "superseded";
 
 type RenderingRecord = {
   rendering: string;
@@ -17,6 +13,7 @@ type RenderingRecord = {
   profile: string;
   template: string;
   stage: RenderingStage;
+  failure?: string;
   order: bigint;
   dependencyAttempt: number;
   emissionAttempt: number;
@@ -28,39 +25,6 @@ function isText(value: unknown): value is string {
 
 function requireText(value: unknown): asserts value is string {
   if (!isText(value)) throw new InvalidText();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null
-    && typeof value === "object"
-    && !Array.isArray(value)
-    && Object.getPrototypeOf(value) === Object.prototype;
-}
-
-function renderingControls(data: unknown): { profile?: unknown; template?: unknown } {
-  if (!isRecord(data)) throw new InvalidData();
-  const build = data.build;
-  if (!isRecord(build)) return {};
-  return {
-    ...(Object.hasOwn(build, "markup") ? { profile: build.markup } : {}),
-    ...(Object.hasOwn(build, "template") ? { template: build.template } : {}),
-  };
-}
-
-function selectedProfile(path: string, requested: unknown): string {
-  if (requested !== undefined) {
-    if (!isText(requested)) throw new InvalidProfile();
-    return requested;
-  }
-  if (path.endsWith(".md")) return "markdown";
-  if (path.endsWith(".html")) return "verbatim";
-  throw new UnknownSource();
-}
-
-function selectedTemplate(requested: unknown): string {
-  if (requested === undefined) return "page.html";
-  if (!isText(requested)) throw new InvalidTemplate();
-  return requested;
 }
 
 function requireAttempt(value: unknown): asserts value is number {
@@ -76,23 +40,24 @@ export class RenderingConcept {
   begin({
     subject,
     path,
-    data,
+    profile,
+    template,
     dependencyAttempt,
     emissionAttempt,
   }: {
     subject: unknown;
     path: unknown;
-    data: unknown;
+    profile: unknown;
+    template: unknown;
     dependencyAttempt: unknown;
     emissionAttempt: unknown;
   }) {
     requireText(subject);
     requireText(path);
+    requireText(profile);
+    requireText(template);
     requireAttempt(dependencyAttempt);
     requireAttempt(emissionAttempt);
-    const controls = renderingControls(data);
-    const profile = selectedProfile(path, controls.profile);
-    const template = selectedTemplate(controls.template);
     const previous = this.#latestBySubject.get(subject);
     if (previous !== undefined) {
       const sameAttempts = previous.dependencyAttempt === dependencyAttempt && previous.emissionAttempt === emissionAttempt;
@@ -111,7 +76,7 @@ export class RenderingConcept {
         throw new StaleAttempt();
       }
     }
-    if (previous !== undefined && previous.stage !== "completed" && previous.stage !== "superseded") {
+    if (previous !== undefined && previous.stage !== "completed" && previous.stage !== "failed" && previous.stage !== "superseded") {
       previous.stage = "superseded";
     }
 
@@ -147,17 +112,18 @@ export class RenderingConcept {
     if (record.stage !== "body-settled") {
       return { rendering: record.rendering, subject: record.subject, transitioned: false };
     }
-    record.stage = "layout-settled";
+    record.stage = "completed";
     return { rendering: record.rendering, subject: record.subject, transitioned: true };
   }
 
-  finish({ rendering }: { rendering: unknown }) {
+  fail({ rendering, reason }: { rendering: unknown; reason: unknown }) {
     const record = this.#record(rendering);
-    if (record.stage === "started" || record.stage === "body-settled") throw new StageNotReady();
-    if (record.stage !== "layout-settled") {
+    requireText(reason);
+    if (record.stage !== "started" && record.stage !== "body-settled") {
       return { rendering: record.rendering, subject: record.subject, transitioned: false };
     }
-    record.stage = "completed";
+    record.stage = "failed";
+    record.failure = reason;
     return { rendering: record.rendering, subject: record.subject, transitioned: true };
   }
 
@@ -173,6 +139,7 @@ export class RenderingConcept {
     return record === undefined
       || this.#latestBySubject.get(record.subject) !== record
       || record.stage === "completed"
+      || record.stage === "failed"
       || record.stage === "superseded"
       ? []
       : [this.#row(record)];
@@ -189,6 +156,7 @@ export class RenderingConcept {
           profile: record.profile,
           template: record.template,
           stage: record.stage,
+          failure: record.failure,
           dependencyAttempt: record.dependencyAttempt,
           emissionAttempt: record.emissionAttempt,
         }];
@@ -213,6 +181,7 @@ export class RenderingConcept {
       profile: record.profile,
       template: record.template,
       stage: record.stage,
+      failure: record.failure,
       dependencyAttempt: record.dependencyAttempt,
       emissionAttempt: record.emissionAttempt,
     };

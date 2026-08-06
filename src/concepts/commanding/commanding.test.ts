@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   CommandingConcept,
+  ExitSelected,
   InvalidArguments,
-  InvalidCommand,
   InvalidExitCode,
   InvalidStream,
   InvalidText,
+  InvocationCaptured,
 } from "./commanding.ts";
 import { commanding as registration } from "./registry.ts";
 
@@ -25,20 +26,21 @@ describe("Commanding", () => {
     const { commanding, exits, written } = recorded(["publish", "notes"]);
 
     expect(commanding.capture({ arguments: null })).toEqual({ words: ["publish", "notes"] });
-    expect(commanding.capture({ arguments: ["inspect", "entry"] })).toEqual({ words: ["inspect", "entry"] });
-    expect(commanding.recognize({ name: "publish", operands: ["notes"] })).toEqual({
-      name: "publish",
-      operands: ["notes"],
-    });
+    expect(commanding.capture({ arguments: null })).toEqual({ words: ["publish", "notes"] });
+    expect(() => commanding.capture({ arguments: ["inspect", "entry"] })).toThrow(InvocationCaptured);
     commanding.write({ stream: "output", text: "Published notes." });
     commanding.write({ stream: "error", text: "One entry was skipped." });
-    expect(commanding.exit({ code: 2 })).toEqual({ code: 2 });
+    expect(commanding.exit({ code: 2 })).toEqual({ code: 2, changed: true });
+    expect(commanding.exit({ code: 2 })).toEqual({ code: 2, changed: false });
+    expect(() => commanding.exit({ code: 1 })).toThrow(ExitSelected);
 
     expect(written).toEqual([
       ["output", "Published notes."],
       ["error", "One entry was skipped."],
     ]);
     expect(exits).toEqual([2]);
+    expect(commanding._invocation()).toEqual([{ words: ["publish", "notes"] }]);
+    expect(commanding._outcome()).toEqual([{ code: 2 }]);
   });
 
   test("captures only ordinary dense text lists and returns a copy", () => {
@@ -63,26 +65,24 @@ describe("Commanding", () => {
     expect(written).toEqual([]);
   });
 
-  test("recognizes only named commands with ordinary text operands", () => {
-    const { commanding } = recorded();
-    expect(() => commanding.recognize({ name: "", operands: [] })).toThrow(InvalidCommand);
-    expect(() => commanding.recognize({ name: "build", operands: [1] as unknown as string[] })).toThrow(InvalidCommand);
-  });
-
   test("validates exit status before changing the environment", () => {
     const { commanding, exits } = recorded();
     for (const code of [-1, 1.5, 256]) expect(() => commanding.exit({ code })).toThrow(InvalidExitCode);
     expect(exits).toEqual([]);
   });
 
-  test("registry exposes the generic refusals and no state queries", () => {
+  test("registry exposes invocation refusals and lifecycle queries", () => {
     expect(Object.keys(registration.refusals ?? {}).sort()).toEqual([
+      "EXIT_SELECTED",
       "INVALID_ARGUMENTS",
-      "INVALID_COMMAND",
       "INVALID_EXIT_CODE",
       "INVALID_STREAM",
       "INVALID_TEXT",
+      "INVOCATION_CAPTURED",
     ]);
-    expect(registration.specification.queries).toEqual([]);
+    expect(registration.specification.queries.map(({ name, promise }) => [name, promise])).toEqual([
+      ["_invocation", "optional"],
+      ["_outcome", "optional"],
+    ]);
   });
 });

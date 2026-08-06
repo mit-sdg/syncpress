@@ -19,7 +19,7 @@ export const cataloging = registerConcept({
     INVALID_TEXT: InvalidText,
     INVALID_DIRECTION: InvalidDirection,
     INVALID_SELECTOR: InvalidSelector,
-    COLLECTION_NOT_FOUND: CatalogNotFound,
+    CATALOG_NOT_FOUND: CatalogNotFound,
     INVALID_FIELD: InvalidField,
     INVALID_CONDITION: InvalidCondition,
     INVALID_CARD: InvalidCard,

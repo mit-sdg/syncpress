@@ -4,7 +4,7 @@ import { RelativePath } from "./calculations.ts";
 import { MAX_PAGE_LAYER_RANK, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 import { ContentDocumentFile } from "./views.ts";
 
-const { Diagnosing, Documenting, Emitting, Filing, Governing, Layering, Matching, Phasing, Templating } = conceptRefs;
+const { Diagnosing, Documenting, Emitting, Filing, Governing, Layering, Phasing, Templating } = conceptRefs;
 
 export const ContentDocumentsParse = reaction(({ file, text }) =>
   when(Phasing.advance({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
@@ -103,15 +103,14 @@ export const ParsedContentClearsLayers = reaction(({ subject, root }) =>
 );
 
 export const ClearedContentGetsDefaults = reaction(
-  ({ subject, content, path, index, text, values, pattern }) =>
+  ({ subject, content, path, index, text, values }) =>
     when(Layering.clear({ subject }).responds({}))
       .where(
         earlier(Phasing.advance, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
         Filing._named({ name: ROOTS.content }).is({ root: content }),
         Filing._file({ file: subject }).is({ root: content, path }),
         Governing._defaults({}).is({ index, text, values }),
-        Matching._compiled({ text }).is({ pattern }),
-        computations.patternHasResult({ pattern, path, matched: true }),
+        computations.patternHasResult({ pattern: text, path, matched: true }),
       )
       .then(Layering.contribute({ subject, rank: index, values })),
 );

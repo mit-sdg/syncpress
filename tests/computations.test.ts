@@ -9,7 +9,12 @@ import {
   SYNCPRESS_MISUSE,
   SYNCPRESS_USAGE,
 } from "../src/compositions/command-line.ts";
-import { syncpressComputations } from "../src/compositions/computations.ts";
+import {
+  projectAbsoluteSiteUrl,
+  projectSiteUrl,
+  selectPageRendering,
+  syncpressComputations,
+} from "../src/compositions/computations.ts";
 
 test("the concept set registers every named pure computation", () => {
   expect(Object.keys(computations)).toEqual(Object.keys(syncpressComputations));
@@ -68,4 +73,26 @@ test("Syncpress reports are pure application wording", () => {
     .toBe("Serving ./site at http://127.0.0.1:3000/");
   expect(formatSyncpressServerReport("./site", "127.0.0.1", 0)).toBeUndefined();
   expect(formatSyncpressInspectionReport({ route: "/" })).toBe('{\n  "route": "/"\n}');
+});
+
+test("page rendering selection is pure application policy", () => {
+  expect(selectPageRendering("post.md", {})).toEqual({ profile: "markdown", template: "page.html" });
+  expect(selectPageRendering("about.html", {})).toEqual({ profile: "verbatim", template: "page.html" });
+  expect(selectPageRendering("page.txt", { build: { markup: "custom", template: "special.html" } })).toEqual({
+    profile: "custom",
+    template: "special.html",
+  });
+  expect(selectPageRendering("post.md", { build: { markup: undefined } })).toMatchObject({ error: "INVALID_PROFILE" });
+  expect(selectPageRendering("post.md", { build: { template: undefined } })).toMatchObject({ error: "INVALID_TEMPLATE" });
+  expect(selectPageRendering("page.txt", {})).toMatchObject({ error: "UNKNOWN_SOURCE" });
+});
+
+test("site URL projection is pure application policy", () => {
+  expect(projectSiteUrl("/", "/notes/?print=1#top")).toBe("/notes/?print=1#top");
+  expect(projectSiteUrl("/library/", "/notes/?print=1#top")).toBe("/library/notes/?print=1#top");
+  expect(projectSiteUrl("/library/", "relative")).toBeUndefined();
+  expect(projectAbsoluteSiteUrl("/library/", "https://example.test", "/caf%C3%A9/")).toBe(
+    "https://example.test/library/caf%C3%A9/",
+  );
+  expect(projectAbsoluteSiteUrl("/library/", "https://example.test", "/notes/?print=1")).toBeUndefined();
 });

@@ -11,7 +11,7 @@ build:
 
 <h2 id="build-lifecycle">Design overview</h2>
 
-Syncpress models a site build as a finite synchronization job. Concepts own every fact and every effect, including the host ones; composition derives publication work across them; and the package root is a thin adapter that assembles an application and asks it for one build, inspection, watch, or server.
+Syncpress models a site build as a finite synchronization job. Concepts own every fact and every effect, including the host ones; composition derives publication work across them; and the package root is a thin adapter that creates batch or controller applications for the requested operation.
 
 This page describes the current design for readers familiar with concept design and sync-engine composition. The user guide defines the package interface.
 
@@ -40,6 +40,20 @@ Filing owns filesystem policy, Documenting owns content parsing, Referencing own
 
 Composition consists of declarative views, formers, reactions, and endpoints exported from [`src/compositions/full-site.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/full-site.ts). Assembly connects those declarations to fresh concept instances. Calling an assembled concept action records an occurrence, and matching reactions perform the cross-concept work.
 
+## Application lifetime
+
+A batch build or inspection application is fresh and single-use by Syncpress policy. Concept state and retained occurrences belong to that application, and a Deploying instance owns only one deployment attempt. A failed batch may answer one read-only site summary before being discarded, but Syncpress never reuses that application for another build.
+
+| Public operation | Application lifetime |
+| --- | --- |
+| `buildSite` | One fresh application for one `/site/build` job. |
+| `inspectSite` | One fresh application for one `/site/inspect` job. |
+| `watchSite` | A retained Watching controller; its initial build and every rebuild use separate fresh batch applications. |
+| `serveSite` | A retained Serving controller plus the watch topology; builds remain fresh batches. |
+| `runCli` | A retained command controller for the invocation; the selected operation creates its own applications. |
+
+Single-use therefore describes strict batch applications, not every assembly. Watching, Serving, and command controllers intentionally accept repeated calls until closed. Fresh Emitting instances still serialize reconciliation to the same destination within one process.
+
 ## A batch uses explicit barriers
 
 The build sequence is declared in [`src/compositions/shared.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/shared.ts):
@@ -50,7 +64,7 @@ locate → stage → settings → read → route → excerpt → collect → ren
 
 Deferred reactions advance a phase only after the previous announcement's causal flow reaches a settlement frontier. The barriers make completion facts explicit: every published address exists before collection cards capture URLs, and every collection is ordered before a layout reads it.
 
-This batch design gives the composition simple global facts and deterministic ordering. Watch mode creates a fresh application and schedules another strict build after each source change.
+This batch design gives the composition simple global facts and deterministic ordering. Watch mode retains only its controller and schedules a fresh strict batch after each source change.
 
 | Phase | State established for later phases |
 | --- | --- |
@@ -68,13 +82,13 @@ Phasing owns progression and completion. The reactions under [`src/compositions/
 
 Composition forms complete values before handing them across concept boundaries. Page contexts contain resolved site, page, and collection projections. A collection card contains data, route, source path, and an optional excerpt. Cataloging receives the complete card and owns admission and total order.
 
-The same formed values support operational inspection through the shared views and formers in [`src/compositions/views.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/views.ts).
+The same formed values support operational inspection through focused formers in [`src/compositions/inspection.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/inspection.ts).
 
 ## Rendering is a per-page transaction
 
 At the render barrier, each routed page begins a Depending result and an Emitting replacement attempt. The composition tracks the source and every transitive body or layout template as inputs, fills and converts the body, resolves local references, renders the layout, and performs a final reference pass.
 
-Page output is committed only after the final scan completes. A failed transformation records a diagnostic and leaves the replacement attempt and dependency result unsettled, so the publication gate blocks reconciliation. Assets and responsive-image renditions are staged under producer claims before the page that refers to them commits.
+Page output is committed only after the final scan completes. A failed transformation records a diagnostic, marks the rendering failed, aborts staged replacement output, and abandons provisional dependency inputs while retaining the last settled graph. The diagnostic blocks reconciliation. Assets and responsive-image renditions are staged under producer claims before the page that refers to them commits.
 
 The full chain is in [`src/compositions/render.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/render.ts), with reference and image branches in [`references.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/references.ts) and [`images.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/images.ts).
 

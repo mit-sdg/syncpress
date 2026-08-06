@@ -7,6 +7,7 @@ import {
   OverlappingMarkup,
   ReferenceNotFound,
   ReferencingConcept,
+  SourceFinished,
   UnrepresentableAddress,
 } from "./referencing.ts";
 
@@ -92,7 +93,7 @@ test("discovers every supported HTML element and exposes structural roles and gr
   });
 });
 
-test("exposes deterministic Embedding-safe attributes only for primary image sources", () => {
+test("exposes deterministic source-backed attributes only for primary image sources", () => {
   const referencing = new ReferencingConcept();
   const text = [
     '<img src="primary.png" TITLE="Primary &amp; image" sizes="100vw" CLASS="hero" crossorigin="anonymous" dir="rtl" fetchpriority="high" id="hero" lang="en" referrerpolicy="strict-origin" role="img" DATA-owner="Ada&#39;s" ARIA-label="Primary &amp; image" srcset="candidate.png 2x" width="640" height="400" alt="Primary" loading="eager" decoding="sync" style="display:block" onload="unsafe">',
@@ -112,25 +113,46 @@ test("exposes deterministic Embedding-safe attributes only for primary image sou
 
   expect(Object.getPrototypeOf(primary.attributes!)).toBeNull();
   expect(Object.entries(primary.attributes!)).toEqual([
+    ["alt", "Primary"],
     ["aria-label", "Primary & image"],
     ["class", "hero"],
     ["crossorigin", "anonymous"],
     ["data-owner", "Ada's"],
+    ["decoding", "sync"],
     ["dir", "rtl"],
     ["fetchpriority", "high"],
+    ["height", "400"],
     ["id", "hero"],
     ["lang", "en"],
+    ["loading", "eager"],
+    ["onload", "unsafe"],
     ["referrerpolicy", "strict-origin"],
     ["role", "img"],
     ["sizes", "100vw"],
+    ["src", "primary.png"],
+    ["srcset", "candidate.png 2x"],
+    ["style", "display:block"],
     ["title", "Primary & image"],
+    ["width", "640"],
   ]);
-  expect(Object.entries(filtered.attributes!)).toEqual([["class", "kept"]]);
-  expect(Object.keys(bare.attributes!)).toEqual([]);
+  expect(Object.entries(filtered.attributes!)).toEqual([
+    ["alt", "Filtered"],
+    ["aria-1bad", "ignored"],
+    ["class", "kept"],
+    ["crossorigin", "Anonymous"],
+    ["data-", "ignored"],
+    ["dir", "sideways"],
+    ["fetchpriority", "urgent"],
+    ["referrerpolicy", "everything"],
+    ["src", "filtered.png"],
+    ["width", "1"],
+  ]);
+  expect(Object.keys(bare.attributes!)).toEqual(["alt", "decoding", "height", "loading", "src", "width"]);
   expect(recovered.raw).toBe("recovered.png");
   expect(Object.entries(recovered.attributes!)).toEqual([
     ["class", "first"],
     ["data-rank", "first"],
+    ["src", "recovered.png"],
   ]);
   for (const reference of references) expect(Object.hasOwn(reference, "attributes")).toBe(reference.role === "image");
 
@@ -226,7 +248,7 @@ test("refuses overlapping markup and trusts one non-overlapping whole-element re
   );
 });
 
-test("uses explicit completion transitions and permits later answer corrections without completing again", () => {
+test("makes completion terminal while keeping identical repeated answers idempotent", () => {
   const referencing = new ReferencingConcept();
   const empty = referencing.scan({ subject: "page", part: "empty", text: "<p>Nothing outward.</p>" });
   expect(empty).toEqual({ source: empty.source, count: 0, replaced: false, completed: true });
@@ -249,11 +271,15 @@ test("uses explicit completion transitions and permits later answer corrections 
     changed: true,
     completed: true,
   });
-  expect(referencing.answer({ reference: first!.reference, form: "address", value: "/one-corrected" })).toMatchObject({
-    changed: true,
+  expect(referencing.answer({ reference: first!.reference, form: "address", value: "/one" })).toMatchObject({
+    changed: false,
     completed: false,
   });
-  expect(referencing._finished({ subject: "page", part: "answers" })[0]!.text).toContain('href="/one-corrected"');
+  expect(() => referencing.answer({ reference: first!.reference, form: "address", value: "/one-corrected" })).toThrow(SourceFinished);
+  expect(() => referencing.answer({ reference: first!.reference, form: "markup", value: "/one" })).toThrow(SourceFinished);
+  expect(referencing._finished({ subject: "page", part: "answers" })[0]!.text).toBe(
+    '<a href="/one">One</a><a href="/two">Two</a>',
+  );
   expect(referencing._unanswered({ source: scanned.source })).toEqual([]);
 });
 
@@ -340,6 +366,7 @@ test("registry exposes every declared refusal with its normative message", async
     INVALID_TEXT: InvalidText,
     INVALID_FORM: InvalidForm,
     REFERENCE_NOT_FOUND: ReferenceNotFound,
+    SOURCE_FINISHED: SourceFinished,
     UNREPRESENTABLE_ADDRESS: UnrepresentableAddress,
     OVERLAPPING_MARKUP: OverlappingMarkup,
   });
@@ -352,6 +379,7 @@ test("registry exposes every declared refusal with its normative message", async
     ["INVALID_TEXT", "Subjects, parts, identities, HTML, and answers must be well-formed text."],
     ["INVALID_FORM", "Answer form must be address or markup."],
     ["REFERENCE_NOT_FOUND", "There is no such reference."],
+    ["SOURCE_FINISHED", "A finished source cannot accept a changed answer."],
     ["UNREPRESENTABLE_ADDRESS", "This address cannot be represented as one HTML reference."],
     ["OVERLAPPING_MARKUP", "A markup answer overlaps another markup answer."],
     ["INVALID_TEXT", "Subjects, parts, identities, HTML, and answers must be well-formed text."],

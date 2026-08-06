@@ -1,5 +1,7 @@
 import { compute, view, where } from "@mit-sdg/sync-engine/language";
-import { computations } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+
+const { Governing } = conceptRefs;
 
 /** Optional relational facades over nullable pure calculations. */
 export const DerivedAddress = view(
@@ -31,6 +33,25 @@ export const RetargetedReference = view(
   ({ replacement, original }, { target }) => where(
     compute(computations.retargetReference, { replacement, original }, target),
     computations.isTextValue({ value: target }),
+  ),
+).optional();
+
+export const SiteUrl = view(
+  "site URL of target (target)",
+  ({ target }, { url }, { base }) => where(
+    Governing._site({}).is({ base }),
+    compute(computations.projectSiteUrl, { base, target }, url),
+    computations.isTextValue({ value: url }),
+  ),
+).optional();
+
+export const AbsoluteSiteUrl = view(
+  "absolute site URL of address (address)",
+  ({ address }, { url }, { base, origin }) => where(
+    Governing._site({}).is({ base }),
+    Governing._origin({}).is({ origin }),
+    compute(computations.projectAbsoluteSiteUrl, { base, origin, address }, url),
+    computations.isTextValue({ value: url }),
   ),
 ).optional();
 

@@ -49,11 +49,13 @@ Formats are lowercase canonical names with these exact media types:
 | `webp` | `image/webp` |
 
 `attributes` is a plain or null-prototype record of own, enumerable text data
-properties. It may preserve `class`, `crossorigin`, `dir`, `fetchpriority`,
+properties. From that authored record it preserves `class`, `crossorigin`, `dir`, `fetchpriority`,
 `id`, `lang`, `referrerpolicy`, `role`, `sizes`, `title`, `aria-*`, and `data-*`.
 Names are lowercase. Enumerated attributes accept only their standard lowercase
 values. Accessors, non-enumerable properties, symbols, proxies, class instances,
-event handlers, `style`, and every other attribute are refused. The concept
+event handlers, `style`, invalid enumerated values, and every other safe text
+attribute are omitted. Structurally malformed records and non-text names or
+values are refused. The concept
 intentionally replaces authored `src`, `srcset`, `width`, `height`, `alt`,
 `loading`, and `decoding`:
 the output uses the declared original and dimensions, escaped alternative text,
@@ -128,7 +130,7 @@ declare (subject: Subject, alternative: Text, width: Number, height: Number, exp
     refuse INVALID_FORMAT "Image format must be one of the canonical supported formats."
   where attributes is not an approved attribute record
   then
-    refuse INVALID_ATTRIBUTES "Image attributes must be a plain record of approved text attributes."
+    refuse INVALID_ATTRIBUTES "Image attributes must be a plain record of text attributes."
   where the same declaration already exists
   then
     retain its offers and return embedding, changed false, and completed false

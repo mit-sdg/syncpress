@@ -6,21 +6,40 @@
  */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { faulted } from "@mit-sdg/sync-engine/advanced";
-import { no, reaction, refused, view, when, where } from "@mit-sdg/sync-engine/language";
+import { earlier, no, reaction, refused, view, when, where } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
 import { PHASES, PHASE_SEQUENCE, PLACES } from "./shared.ts";
-import { InspectionOwner, SiteBuildSummary, SiteInspection } from "./views.ts";
+import { PendingFailedRenderingCleanup } from "./render.ts";
+import { InspectionOwner, SiteInspection } from "./inspection.ts";
+import { SiteBuildSummary } from "./views.ts";
 
-const { Depending, Deploying, Diagnosing, Emitting, Locating, Phasing, Routing } = conceptRefs;
+const { Depending, Delivering, Deploying, Diagnosing, Emitting, Locating, Phasing, Routing } = conceptRefs;
 
-/** A direct refusal already owns boundary delivery; remember not to answer it again at settlement. */
-export const RefusalInterruptsAggregateDelivery = reaction(() =>
-  when(refused({})).then(Diagnosing.interrupt({})),
+function validBuildInput(value: unknown): { ok: true } | { ok: false; detail: string } {
+  if (value === null || typeof value !== "object") return { ok: false, detail: "A site build needs an input object." };
+  const input = value as Record<string, unknown>;
+  if (typeof input.directory !== "string" || !input.directory.isWellFormed() || input.directory === "") {
+    return { ok: false, detail: "A site build needs a non-empty text directory." };
+  }
+  if (input.destination !== null && input.destination !== undefined
+    && (typeof input.destination !== "string" || !input.destination.isWellFormed() || input.destination === "")) {
+    return { ok: false, detail: "A site build destination must be non-empty text when supplied." };
+  }
+  return { ok: true };
+}
+
+/** A direct refusal already owns this flow's boundary delivery. */
+export const SiteBuildRefusalsInterruptAggregateDelivery = reaction(({ job }) =>
+  when(refused({}))
+    .where(earlier(Phasing.start, {}, { job, name: PHASE_SEQUENCE }))
+    .then(Delivering.interrupt({ task: job })),
 );
 
-/** Runtime faults use the same one-answer boundary rule as refusals. */
-export const FaultInterruptsAggregateDelivery = reaction(() =>
-  when(faulted({})).then(Diagnosing.interrupt({})),
+/** Runtime faults use the same one-answer rule, scoped to their build flow. */
+export const SiteBuildFaultsInterruptAggregateDelivery = reaction(({ job }) =>
+  when(faulted({}))
+    .where(earlier(Phasing.start, {}, { job, name: PHASE_SEQUENCE }))
+    .then(Delivering.interrupt({ task: job })),
 );
 
 /** Enumerate routed owners without a current dependency result. */
@@ -35,23 +54,25 @@ export const UnsettledRouteOwners = view(
 
 /** A job that reached a terminal state, whatever that state turned out to be. */
 export const SettledSiteBuild = view(
-  "the settled site build of sequence (sequence)",
-  ({ sequence }, { job, state }) =>
-    where(Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state })),
+  "the settled site build of job (job)",
+  ({ job }, { state }) =>
+    where(
+      Phasing._job({ job }).is({ name: PHASE_SEQUENCE }),
+      Phasing._outcome({ job }).is({ state }),
+    ),
 ).optional();
 
 /** A finished job whose work left nothing to diagnose, deploy, or wait for. */
 export const PublishableSiteBuild = view(
-  "the publishable site build of sequence (sequence)",
-  ({ sequence }, { job }) =>
+  "job (job) is a publishable site build",
+  ({ job }) =>
     where(
-      Phasing._latest({ sequence }).is({ job, name: PHASE_SEQUENCE, state: "finished" }),
-      Diagnosing._delivery({}).is({ interrupted: false }),
+      SettledSiteBuild({ job }).is({ state: "finished" }),
       Diagnosing._clean({}).is({ clean: true }),
       Deploying._outcome({}).is({ state: "completed" }),
       no(UnsettledRouteOwners({})),
     ),
-).optional();
+).holds();
 
 /* Build: stage the host project, run every phase, then publish a clean result. */
 
@@ -65,34 +86,36 @@ export const BuildSiteAtDestination = endpoint(
       .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
       .then(Phasing.start({ sequence }).responds({ job }))
       .afterFlowSettles()
+      .where(SettledSiteBuild({ job }))
+      .then(Delivering.settle({ task: job }).responds({ task: job, interrupted: false }))
       .then(
-        where(PublishableSiteBuild({ sequence }).is({ job }))
+        where(PublishableSiteBuild({ job }))
           .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
           .then(respond({ written, replaced, kept, removed, summary: SiteBuildSummary({}) }))
           .named("published"),
         where(
-          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
-          Diagnosing._delivery({}).is({ interrupted: false }),
+          SettledSiteBuild({ job }).is({ state: "finished" }),
           Diagnosing._clean({}).is({ clean: false }),
         )
           .then(respond({ error: "BUILD_HAS_ERRORS" }))
           .named("errors"),
         where(
-          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
-          Diagnosing._delivery({}).is({ interrupted: false }),
+          SettledSiteBuild({ job }).is({ state: "finished" }),
           Diagnosing._clean({}).is({ clean: true }),
-          no(PublishableSiteBuild({ sequence })),
+          no(PublishableSiteBuild({ job })),
         )
           .then(respond({ error: "BUILD_INCOMPLETE" }))
           .named("incomplete"),
         where(
-          SettledSiteBuild({ sequence }).is({ job, state: "failed" }),
-          Diagnosing._delivery({}).is({ interrupted: false }),
+          SettledSiteBuild({ job }).is({ state: "failed" }),
         )
           .then(respond({ error: "BUILD_FAILED" }))
           .named("failed"),
       ),
-  { input: { required: ["directory"], defaults: { destination: null } } },
+  {
+    input: { required: ["directory"], defaults: { destination: null } },
+    validators: { input: validBuildInput },
+  },
 );
 
 export const BuildSiteAtConfiguredOutput = endpoint(
@@ -104,29 +127,28 @@ export const BuildSiteAtConfiguredOutput = endpoint(
       .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
       .then(Phasing.start({ sequence }).responds({ job }))
       .afterFlowSettles()
+      .where(SettledSiteBuild({ job }))
+      .then(Delivering.settle({ task: job }).responds({ task: job, interrupted: false }))
       .then(
-        where(PublishableSiteBuild({ sequence }).is({ job }))
+        where(PublishableSiteBuild({ job }))
           .then(Emitting.reconcile({}).responds({ written, replaced, kept, removed }))
           .then(respond({ written, replaced, kept, removed, summary: SiteBuildSummary({}) }))
           .named("published"),
         where(
-          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
-          Diagnosing._delivery({}).is({ interrupted: false }),
+          SettledSiteBuild({ job }).is({ state: "finished" }),
           Diagnosing._clean({}).is({ clean: false }),
         )
           .then(respond({ error: "BUILD_HAS_ERRORS" }))
           .named("errors"),
         where(
-          SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
-          Diagnosing._delivery({}).is({ interrupted: false }),
+          SettledSiteBuild({ job }).is({ state: "finished" }),
           Diagnosing._clean({}).is({ clean: true }),
-          no(PublishableSiteBuild({ sequence })),
+          no(PublishableSiteBuild({ job })),
         )
           .then(respond({ error: "BUILD_INCOMPLETE" }))
           .named("incomplete"),
         where(
-          SettledSiteBuild({ sequence }).is({ job, state: "failed" }),
-          Diagnosing._delivery({}).is({ interrupted: false }),
+          SettledSiteBuild({ job }).is({ state: "failed" }),
         )
           .then(respond({ error: "BUILD_FAILED" }))
           .named("failed"),
@@ -141,24 +163,23 @@ export const InspectSite = endpoint("/site/inspect", ({ directory, target, seque
     .then(Phasing.declare({ name: PHASE_SEQUENCE, phases: [...PHASES] }).responds({ sequence }))
     .then(Phasing.start({ sequence }).responds({ job }))
     .afterFlowSettles()
+    .where(SettledSiteBuild({ job }))
+    .then(Delivering.settle({ task: job }).responds({ task: job, interrupted: false }))
     .then(
       where(
-        SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
-        Diagnosing._delivery({}).is({ interrupted: false }),
+        SettledSiteBuild({ job }).is({ state: "finished" }),
         InspectionOwner({ target }).is({ owner }),
       )
         .then(respond({ owner, inspection: SiteInspection({ owner }) }))
         .named("found"),
       where(
-        SettledSiteBuild({ sequence }).is({ job, state: "finished" }),
-        Diagnosing._delivery({}).is({ interrupted: false }),
+        SettledSiteBuild({ job }).is({ state: "finished" }),
         no(InspectionOwner({ target })),
       )
         .then(respond({ error: "INSPECTION_TARGET_NOT_FOUND" }))
         .named("missing"),
       where(
-        SettledSiteBuild({ sequence }).is({ job, state: "failed" }),
-        Diagnosing._delivery({}).is({ interrupted: false }),
+        SettledSiteBuild({ job }).is({ state: "failed" }),
       )
         .then(respond({ error: "BUILD_FAILED" }))
         .named("failed"),
@@ -183,6 +204,9 @@ export const AdvanceStartedSiteBuild = reaction(({ sequence, job, attempt }) =>
 export const AdvanceSiteBuild = reaction(({ job, attempt, nextAttempt }) =>
   when(Phasing.advance({ job, attempt }).responds({ name: PHASE_SEQUENCE, transitioned: true }))
     .afterFlowSettles()
-    .where(Phasing._job({ job }).is({ name: PHASE_SEQUENCE, state: "running", attempt: nextAttempt }))
+    .where(
+      Phasing._job({ job }).is({ name: PHASE_SEQUENCE, state: "running", attempt: nextAttempt }),
+      no(PendingFailedRenderingCleanup({})),
+    )
     .then(Phasing.advance({ job, attempt: nextAttempt })),
 );

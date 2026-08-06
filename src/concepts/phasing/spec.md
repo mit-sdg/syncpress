@@ -126,9 +126,9 @@ abandon (job: Job, attempt: PhaseAttempt, reason: Text) : return (job: Job, reas
 
 ```queries
 _job (job: Job) : optional (sequence: Sequence, name: Name, phase: Phase, attempt: PhaseAttempt, state: State)
-_running (sequence: Sequence) : many (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt)
+_running (sequence: Sequence) : optional (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt)
 _latest (sequence: Sequence) : optional (job: Job, name: Name, phase: Phase, attempt: PhaseAttempt, state: State)
-_outcome (job: Job) : optional (state: State, reason: Text)
+_outcome (job: Job) : optional (state: State, reason: OptionalText)
 ```
 
 `_job` is absent for an unknown job. `_running` lists the sequence's running job.

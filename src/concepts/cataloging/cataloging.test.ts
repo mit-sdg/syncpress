@@ -258,7 +258,7 @@ test("invalid cards, proxies, cycles, and malformed text refuse atomically", () 
   expect(() => cataloging.withdraw({ item: "\ud800" })).toThrow(InvalidText);
 });
 
-test("unindex, withdraw, reset, membership, and positions cover the complete lifecycle", () => {
+test("unindex, catalog removal, withdrawal, reset, membership, and positions cover the complete lifecycle", () => {
   const cataloging = new CatalogingConcept();
   const first = declare(cataloging, "first", "asc", null);
   const second = declare(cataloging, "second", "asc", null);
@@ -270,9 +270,11 @@ test("unindex, withdraw, reset, membership, and positions cover the complete lif
   expect(cataloging._position({ catalog: first, item: "shared" })).toEqual([{ index: 0 }]);
   expect(cataloging.unindex({ catalog: first, item: "shared" })).toEqual({ entry });
   expect(() => cataloging.unindex({ catalog: first, item: "shared" })).toThrow(NotIncluded);
+  expect(cataloging.remove({ name: "first" })).toEqual({ catalog: first, count: 0 });
+  expect(() => cataloging.remove({ name: "first" })).toThrow(CatalogNotFound);
   expect(cataloging.withdraw({ item: "shared" })).toEqual({ item: "shared", count: 1 });
   expect(cataloging.withdraw({ item: "shared" })).toEqual({ item: "shared", count: 0 });
-  expect(cataloging.reset()).toEqual({ count: 2 });
+  expect(cataloging.reset()).toEqual({ count: 1 });
   expect(cataloging.reset()).toEqual({ count: 0 });
   expect(cataloging._catalogs()).toEqual([]);
   expect(() => index(cataloging, second, "late", 1)).toThrow(CatalogNotFound);
@@ -296,7 +298,7 @@ test("registry exposes every declared refusal with its normative message", async
     INVALID_TEXT: InvalidText,
     INVALID_DIRECTION: InvalidDirection,
     INVALID_SELECTOR: InvalidSelector,
-    COLLECTION_NOT_FOUND: CatalogNotFound,
+    CATALOG_NOT_FOUND: CatalogNotFound,
     INVALID_FIELD: InvalidField,
     INVALID_CONDITION: InvalidCondition,
     INVALID_CARD: InvalidCard,
