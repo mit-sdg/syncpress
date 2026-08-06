@@ -5,6 +5,8 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-06
+
 ### Changed
 
 - Upgraded to sync engine beta 5 and moved phase progression from the host loop
@@ -23,6 +25,9 @@ refactoring appear when documented behavior changes.
   symbolic link, and an output directory that overlaps a source are now reported
   with every other diagnostic instead of ending the run early, and they still
   leave the previous output destination unchanged.
+- Renamed concepts and actions to describe their responsibilities and effects
+  directly. Notable concept names are now `Holding`, `DependencyTracking`,
+  `DeliveryArbitration`, `DocumentParsing`, and `RenderTracking`.
 
 ### Added
 
@@ -59,5 +64,6 @@ Initial npm release of `@mit-sdg/syncpress`.
   destination when a build fails before reconciliation.
 - ESM packaging for Node.js `>=24 <25` and Bun `>=1.3.14 <1.4`.
 
-[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mit-sdg/syncpress/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mit-sdg/syncpress/tree/v0.1.0
