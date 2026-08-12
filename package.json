@@ -33,6 +33,7 @@
     "build": "rm -rf dist && bun build src/syncpress.ts src/cli.ts --outdir dist --target=node --packages=external --splitting --banner='#!/usr/bin/env node'",
     "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check --config generated.config.ts && tsc --noEmit",
     "generate": "sync-engine artifacts pin",
+    "external-golden:update": "bun tests/external-golden/update.ts",
     "prepack": "bun run build",
     "typecheck": "tsc --noEmit",
     "principle": "bun test src/concepts",
