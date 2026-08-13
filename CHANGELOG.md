@@ -5,6 +5,13 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-13
+
+### Fixed
+
+- Allow `build --watch` and `dev --port` options to appear after site and
+  destination operands.
+
 ## [0.2.0] — 2026-08-06
 
 ### Changed
@@ -64,6 +71,7 @@ Initial npm release of `@mit-sdg/syncpress`.
   destination when a build fails before reconciliation.
 - ESM packaging for Node.js `>=24 <25` and Bun `>=1.3.14 <1.4`.
 
-[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/mit-sdg/syncpress/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mit-sdg/syncpress/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mit-sdg/syncpress/tree/v0.1.0
