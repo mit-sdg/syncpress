@@ -35,7 +35,22 @@ test("Syncpress command policy is an application computation", () => {
     port: null,
   });
   expect(parseSyncpressCommand(["build", "--watch"])).toMatchObject({ name: "watch", directory: "." });
+  expect(parseSyncpressCommand(["build", "./site", "--watch", "out"])).toMatchObject({
+    name: "watch",
+    directory: "./site",
+    destination: "out",
+  });
   expect(parseSyncpressCommand(["dev", "--port", "8080"])).toMatchObject({ name: "develop", port: 8080 });
+  expect(parseSyncpressCommand(["dev", "./site", "--port", "8081"])).toMatchObject({
+    name: "develop",
+    directory: "./site",
+    port: 8081,
+  });
+  expect(parseSyncpressCommand(["dev", "--port", "3000", ".", "--port", "8082"])).toMatchObject({
+    name: "develop",
+    directory: ".",
+    port: 8082,
+  });
   expect(parseSyncpressCommand(["dev"])).toMatchObject({ name: "develop", port: 3000 });
   expect(parseSyncpressCommand(["inspect", "/posts/first/", "./site"])).toMatchObject({
     name: "inspect",
@@ -50,6 +65,8 @@ test("Syncpress command policy is an application computation", () => {
     ["dev", "--port", "0"],
     ["dev", "--port", "70000"],
     ["dev", "--port", "eight"],
+    ["dev", "--unknown"],
+    ["build", "--unknown"],
     ["--help", "extra"],
   ]) expect(parseSyncpressCommand(words)).toBeUndefined();
 
@@ -58,7 +75,7 @@ test("Syncpress command policy is an application computation", () => {
     name: "build",
     operands: ["./site", "out"],
   });
-  expect(recognizeSyncpressCommand(["dev", "--port", "8080", "./site"])).toEqual({
+  expect(recognizeSyncpressCommand(["dev", "./site", "--port", "8080"])).toEqual({
     name: "develop",
     operands: ["./site", "8080"],
   });

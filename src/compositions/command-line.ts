@@ -1,3 +1,5 @@
+import { parseArgs } from "node:util";
+
 type CommandName = "help" | "build" | "watch" | "develop" | "inspect";
 type Command = {
   name: CommandName;
@@ -55,19 +57,36 @@ export function parseSyncpressCommand(words: unknown): Command | undefined {
       : undefined;
   }
   if (word === "dev") {
-    const chosen = rest[0] === "--port" ? commandPort(rest[1]) : DEFAULT_PORT;
-    if (chosen === undefined) return undefined;
-    const operands = rest[0] === "--port" ? rest.slice(2) : rest;
-    return operands.length <= 2
-      ? command("develop", operands[0], { destination: operands[1] ?? null, port: chosen })
-      : undefined;
+    try {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { port: { type: "string" } },
+        allowPositionals: true,
+        strict: true,
+      });
+      const chosen = values.port === undefined ? DEFAULT_PORT : commandPort(values.port);
+      if (chosen === undefined) return undefined;
+      return positionals.length <= 2
+        ? command("develop", positionals[0], { destination: positionals[1] ?? null, port: chosen })
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
   if (word !== "build") return undefined;
-  const watching = rest[0] === "--watch";
-  const operands = watching ? rest.slice(1) : rest;
-  return operands.length <= 2
-    ? command(watching ? "watch" : "build", operands[0], { destination: operands[1] ?? null })
-    : undefined;
+  try {
+    const { values, positionals } = parseArgs({
+      args: rest,
+      options: { watch: { type: "boolean" } },
+      allowPositionals: true,
+      strict: true,
+    });
+    return positionals.length <= 2
+      ? command(values.watch ? "watch" : "build", positionals[0], { destination: positionals[1] ?? null })
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function recognizeSyncpressCommand(words: unknown): { name: CommandName; operands: string[] } | undefined {
