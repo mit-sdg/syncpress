@@ -437,6 +437,36 @@ test("the development server serves reconciled output with a live-reload client"
   }
 }, BUILD_TEST_TIMEOUT_MS);
 
+test("the development server does not reload when a rebuild leaves its output unchanged", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-dev-reload-site-"));
+  const destination = await mkdtemp(join(tmpdir(), "syncpress-dev-reload-output-"));
+  let server: Awaited<ReturnType<typeof serveSite>> | undefined;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+
+  try {
+    await copyExample(project);
+    server = await serveSite(project, destination, { port: 0 });
+    const listening = await fetch(`http://${server.host}:${server.port}/__syncpress/live-reload`);
+    reader = listening.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("retry: 1000\n\n");
+
+    // The project watch sees this file, but it is not one of the configured site inputs.
+    await writeFile(join(project, "editor-note.tmp"), "not a site input\n");
+    await Bun.sleep(250);
+    const about = join(project, "content", "about.md");
+    await writeFile(about, (await readFile(about, "utf8")).replace("Design overview", "Updated design overview"));
+
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("data: reload\n\n");
+    const duplicate = reader.read().then(() => true);
+    expect(await Promise.race([duplicate, Bun.sleep(500).then(() => false)])).toBe(false);
+  } finally {
+    await reader?.cancel();
+    await server?.close();
+    await rm(project, { recursive: true, force: true });
+    await rm(destination, { recursive: true, force: true });
+  }
+}, BUILD_TEST_TIMEOUT_MS);
+
 test("watch ignores its own reconciliation transactions", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-watch-site-"));
   let builds = 0;
