@@ -1,5 +1,5 @@
 import { compute, view, where } from "@mit-sdg/sync-engine/language";
-import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 
 const { Governing } = conceptRefs;
 

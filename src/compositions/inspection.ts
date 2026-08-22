@@ -1,5 +1,5 @@
 import { each, form, former, view, where, whether } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { concepts as conceptRefs } from "@syncpress/concepts";
 import { PARTS, ROOTS } from "./shared.ts";
 
 const {

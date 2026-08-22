@@ -1,5 +1,5 @@
 import { earlier, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { concepts as conceptRefs } from "@syncpress/concepts";
 import { PARTS, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 
 const { Converting, Diagnosing, DocumentParsing, Filing, Phasing, RenderTracking, Routing } = conceptRefs;

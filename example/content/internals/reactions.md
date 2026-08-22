@@ -10,11 +10,11 @@ This page assumes knowledge of sync-engine actions, queries, views, formers, cau
 
 ## Reading a reaction locally
 
-[`src/concept-set.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/concept-set.ts) declares the inert concept and computation references used while authoring composition. In a reaction, `when(action(...).responds(...))` observes a successful returned action occurrence, while `.refuses(...)` observes a declared refusal. A variable first binds where it appears; reusing that variable, or using a literal, tests the occurrence or current state. `where(...)` asks views and concept queries without changing state, and `then(...)` asks the next action.
+[`src/concepts.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/concepts.ts) declares the inert concept and computation references used while authoring composition. In a reaction, `when(action(...).responds(...))` observes a successful returned action occurrence, while `.refuses(...)` observes a declared refusal. A variable first binds where it appears; reusing that variable, or using a literal, tests the occurrence or current state. `where(...)` asks views and concept queries without changing state, and `then(...)` asks the next action.
 
 Later stages of one declaration appear in the generated read-back as `#2`, `#3`, and so on. Named alternatives add `:name`. Alternatives are independently eligible: their conditions must partition the cases rather than relying on registration order. `earlier(...)` requires causal evidence from the same flow, while `.afterFlowSettles()` waits for the current flow's ordinary work to reach a settlement frontier. It does not wait for the whole application to become idle.
 
-Reaction exports are grouped by composition module. For example, `AdmittedConfigurationIsLoaded` in [`src/compositions/staging.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/staging.ts) appears as `fullSite.staging.AdmittedConfigurationIsLoaded`. Read the source export for intent, its module-qualified entry in `generated/syncpress.md` for the expanded construction, and the participating concepts' `spec.md` files for action and query contracts.
+Reaction exports are grouped by composition module. For example, `AdmittedConfigurationIsLoaded` in [`src/compositions/staging.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/staging.ts) appears as `fullSite.staging.AdmittedConfigurationIsLoaded`. Read the source export for intent, its module-qualified entry in `generated/syncpress.md` for the expanded construction, and the participating specifications in `design/concepts/` for action and query contracts.
 
 ## Explicit and derived routes
 
@@ -61,7 +61,7 @@ Expected domain failures are translated into Diagnosing actions near the reactio
 
 A render diagnostic marks the rendering failed. Cleanup waits until already-qualified work in that flow settles, then independently aborts staged output and abandons provisional dependency inputs. Phase progression remains blocked while either failed owner-local attempt is still open.
 
-The relevant terminal reactions are near the end of [`src/compositions/render.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/render.ts). Diagnostic ordering and source data remain owned by [Diagnosing](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/diagnosing/spec.md).
+The relevant terminal reactions are near the end of [`src/compositions/render.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/render.ts). Diagnostic ordering and source data remain owned by [Diagnosing](https://github.com/mit-sdg/syncpress/blob/main/design/concepts/Diagnosing.md).
 
 ## Deployment is serialized deliberately
 

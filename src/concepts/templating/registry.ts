@@ -13,7 +13,7 @@ import {
   UnsupportedTemplate,
   UsedTemplateNotFound,
 } from "./templating.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "@design/concepts/Templating.md" with { type: "text" };
 
 export const templating = registerConcept({
   class: TemplatingConcept,

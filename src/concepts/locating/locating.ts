@@ -24,6 +24,23 @@ export class NotGrounded extends Error {
 }
 
 type Base = { path: string; real: string };
+type BaseResult = {
+  status: "problem" | "grounded";
+  path?: string;
+  real?: string;
+  code?: string;
+  detail?: string;
+};
+type PlaceResult = {
+  status: "problem" | "admitted";
+  place?: string;
+  path?: string;
+  real?: string;
+  contained?: boolean;
+  resolved?: boolean;
+  code?: string;
+  detail?: string;
+};
 type PlaceRecord = {
   place: string;
   name: string;
@@ -78,7 +95,7 @@ export class LocatingConcept {
     return { name, path };
   }
 
-  async establishBase({ path }: { path: string }) {
+  async establishBase({ path }: { path: string }): Promise<BaseResult> {
     if (!isLocationText(path)) throw new InvalidLocation();
     const absolute = resolve(path);
 
@@ -109,7 +126,7 @@ export class LocatingConcept {
     return { status: "grounded" as const, path: absolute, real };
   }
 
-  async inspectLocation({ name, path }: { name: string; path: string }) {
+  async inspectLocation({ name, path }: { name: string; path: string }): Promise<PlaceResult> {
     const base = this.#base;
     if (base === undefined) throw new NotGrounded();
     if (!isLocationText(name) || !isLocationText(path)) throw new InvalidLocation();

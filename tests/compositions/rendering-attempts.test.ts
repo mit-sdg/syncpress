@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { assembleSyncpress } from "../../src/assembly.ts";
+import { assembleSyncpress } from "@syncpress/assembly";
 
 type ActionValue<T> = T extends { readonly error: string } ? never : T;
 

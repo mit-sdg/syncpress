@@ -1,5 +1,5 @@
 import { compute, earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
-import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { AbsoluteSiteUrl, AddressOutputPath } from "./calculations.ts";
 import { DIAGNOSTIC_SCOPES, PAGE_CONTENT_PATH, PARTS, PHASE_SEQUENCE, ROOTS, TRUSTED_COLLECTION_EXCERPTS } from "./shared.ts";
 import {

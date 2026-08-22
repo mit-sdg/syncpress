@@ -1,5 +1,5 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
-import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { RelativePath } from "./calculations.ts";
 import { MAX_PAGE_LAYER_RANK, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 import { ContentDocumentFile } from "./views.ts";

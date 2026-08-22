@@ -1,5 +1,5 @@
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { concepts as conceptRefs } from "@syncpress/concepts";
 import { DerivedAddress } from "./calculations.ts";
 import { PATHS, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 

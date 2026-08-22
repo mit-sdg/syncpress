@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { computations } from "../src/concept-set.ts";
+import { computations } from "../src/concepts.ts";
 import {
   formatSyncpressBuildReport,
   formatSyncpressInspectionReport,

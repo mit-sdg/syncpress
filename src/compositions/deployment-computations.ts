@@ -228,7 +228,7 @@ export function deploymentFeedPreparation(input: DeploymentFeedInput): Deploymen
   };
 }
 
-/** Pure deployment projections registered with the Syncpress vocabulary. */
+/** Pure deployment projections registered with the Syncpress concept set. */
 export const deploymentComputations = {
   deploymentTransitionWork: ({ action, result }: { action: unknown; result: unknown }) =>
     deploymentTransitionWork(action, result),

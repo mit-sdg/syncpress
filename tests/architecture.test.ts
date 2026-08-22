@@ -31,7 +31,7 @@ test("concept implementations do not import peer concepts", async () => {
   }
 });
 
-test("composition depends only on vocabulary references and value contracts", async () => {
+test("composition depends only on concept references and value contracts", async () => {
   for (const file of await typescriptFiles(join(root, "src", "compositions"))) {
     const source = await readFile(file, "utf8");
     expect(source, file).not.toContain("@syncpress/concepts/");

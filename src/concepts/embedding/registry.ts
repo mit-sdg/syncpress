@@ -13,7 +13,7 @@ import {
   InvalidWidth,
   OfferConflict,
 } from "./embedding.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "@design/concepts/Embedding.md" with { type: "text" };
 
 export const embedding = registerConcept({
   class: EmbeddingConcept,

@@ -1,6 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { AttemptExhausted, DependencyTrackingConcept, InvalidText, NotBuilding, StaleAttempt } from "./dependency-tracking.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "@design/concepts/DependencyTracking.md" with { type: "text" };
 
 export const dependencyTracking = registerConcept({
   class: DependencyTrackingConcept,

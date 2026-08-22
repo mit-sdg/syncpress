@@ -1,4 +1,4 @@
-import type { SyncpressWire } from "../../generated/wire.ts";
+import type { SyncpressWire } from "@generated/wire.ts";
 import {
   formatSyncpressBuildReport,
   formatSyncpressInspectionReport,

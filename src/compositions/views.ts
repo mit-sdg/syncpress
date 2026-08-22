@@ -1,5 +1,5 @@
 import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
-import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { PAGE_PATTERNS, PARTS, PLACES, ROOTS } from "./shared.ts";
 import { AbsoluteSiteUrl } from "./calculations.ts";
 

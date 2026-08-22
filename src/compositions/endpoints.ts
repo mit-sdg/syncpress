@@ -7,7 +7,7 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { faulted } from "@mit-sdg/sync-engine/advanced";
 import { earlier, no, reaction, refused, view, when, where } from "@mit-sdg/sync-engine/language";
-import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { PHASES, PHASE_SEQUENCE, PLACES } from "./shared.ts";
 import { PendingFailedRenderingCleanup } from "./render.ts";
 import { InspectionOwner, SiteInspection } from "./inspection.ts";

@@ -16,7 +16,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - run: bun run check
-      - run: bun test
-      - run: npm pack --dry-run
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Check design, generated artifacts, and types
+        run: bun run check
+      - name: Run the complete test suite
+        run: bun test
+      - name: Build and inspect the npm package
+        run: npm pack --dry-run

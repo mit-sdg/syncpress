@@ -9,7 +9,7 @@ import {
   UnsupportedFormat,
   UnsupportedSourceFormat,
 } from "./transcoding.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "@design/concepts/Transcoding.md" with { type: "text" };
 
 export const transcoding = registerConcept({
   class: TranscodingConcept,
