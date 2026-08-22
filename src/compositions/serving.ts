@@ -4,7 +4,7 @@
  * output as it appears; refreshing it tells every listening reader to reload.
  */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { concepts as conceptRefs } from "@syncpress/concepts";
 
 const { Serving } = conceptRefs;
 

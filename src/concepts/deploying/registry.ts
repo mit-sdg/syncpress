@@ -12,7 +12,7 @@ import {
   WorkNotCurrent,
   WorkNotPrepared,
 } from "./deploying.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Deploying.md" with { type: "text" };
 
 export const deploying = registerConcept({
   class: DeployingConcept,

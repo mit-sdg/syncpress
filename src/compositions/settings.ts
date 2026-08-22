@@ -1,5 +1,5 @@
 import { earlier, reaction, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { concepts as conceptRefs } from "@syncpress/concepts";
 import {
   CONFIGURATION_PATH,
   DIAGNOSTIC_SCOPES,

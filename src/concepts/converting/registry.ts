@@ -10,7 +10,7 @@ import {
   UnsupportedExtension,
   UnsupportedProfileKind,
 } from "./converting.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Converting.md" with { type: "text" };
 
 export const converting = registerConcept({
   class: ConvertingConcept,

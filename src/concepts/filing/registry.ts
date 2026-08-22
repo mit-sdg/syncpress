@@ -8,7 +8,7 @@ import {
   PathLeavesRoot,
   RootNotFound,
 } from "./filing.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Filing.md" with { type: "text" };
 
 export const filing = registerConcept({
   class: FilingConcept,

@@ -62,6 +62,29 @@ type FeedWork = BaseWork & {
   description: string | null;
 };
 type Work = NojekyllWork | RedirectWork | PaginationPlanWork | PaginationPageWork | SitemapWork | FeedWork;
+type WorkQueryRow = BaseWork & {
+  kind: Work["kind"];
+  producer?: string;
+  path?: string;
+  owner?: string;
+  from?: string;
+  to?: string;
+  name?: string;
+  collection?: string;
+  perPage?: number;
+  route?: string;
+  templateName?: string;
+  title?: string | null;
+  template?: string;
+  number?: number;
+  pages?: number;
+  address?: string;
+  previous?: string | null;
+  next?: string | null;
+  cards?: unknown[];
+  sourcePath?: string;
+  description?: string | null;
+};
 type Deployment = { deployment: string; works: Work[]; position: number };
 
 export class WorkNotCurrent extends Error {
@@ -576,24 +599,28 @@ export class DeployingConcept {
     return { ...this.#result(current.deployment), path, code, message: `${path}: ${detail}` };
   }
 
-  _work({ work }: { work: string }): Work[] {
+  _work({ work }: { work: string }): WorkQueryRow[] {
     const found = this.#works.get(work);
-    return found === undefined ? [] : [structuredClone(found)];
+    return found === undefined ? [] : [structuredClone(found) as WorkQueryRow];
   }
 
-  _forOwner({ owner }: { owner: string }): Work[] {
-    return this.#latestWorks().filter((work) => "owner" in work && work.owner === owner).map((work) => structuredClone(work));
+  _forOwner({ owner }: { owner: string }): WorkQueryRow[] {
+    return this.#latestWorks()
+      .filter((work) => "owner" in work && work.owner === owner)
+      .map((work) => structuredClone(work) as WorkQueryRow);
   }
 
-  _forProducer({ producer }: { producer: string }): Work[] {
-    return this.#latestWorks().filter((work) => "producer" in work && work.producer === producer).map((work) => structuredClone(work));
+  _forProducer({ producer }: { producer: string }): WorkQueryRow[] {
+    return this.#latestWorks()
+      .filter((work) => "producer" in work && work.producer === producer)
+      .map((work) => structuredClone(work) as WorkQueryRow);
   }
 
-  _current(): Work[] {
+  _current(): WorkQueryRow[] {
     if (this.#latest === undefined) return [];
     const deployment = this.#deployments.get(this.#latest);
     const work = deployment?.works[deployment.position];
-    return work === undefined ? [] : [structuredClone(work)];
+    return work === undefined ? [] : [structuredClone(work) as WorkQueryRow];
   }
 
   _outcome(): { state: DeploymentOutcome } {

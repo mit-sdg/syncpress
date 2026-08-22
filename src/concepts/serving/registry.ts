@@ -9,7 +9,7 @@ import {
   ServerNotOpen,
   ServingConcept,
 } from "./serving.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Serving.md" with { type: "text" };
 
 export const serving = registerConcept({
   class: ServingConcept,

@@ -8,7 +8,7 @@ import {
   SourceFinished,
   UnrepresentableAddress,
 } from "./referencing.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Referencing.md" with { type: "text" };
 
 export const referencing = registerConcept({
   class: ReferencingConcept,

@@ -1,7 +1,7 @@
 /** Syncpress command policy applied to generic process-facing concepts. */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { compute, no, view, where } from "@mit-sdg/sync-engine/language";
-import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 
 const { Commanding, Holding } = conceptRefs;
 

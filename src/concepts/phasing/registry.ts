@@ -10,7 +10,7 @@ import {
   SequenceNotFound,
   StaleAttempt,
 } from "./phasing.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Phasing.md" with { type: "text" };
 
 export const phasing = registerConcept({
   class: PhasingConcept,

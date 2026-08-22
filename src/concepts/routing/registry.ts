@@ -6,7 +6,7 @@ import {
   NotClaimed,
   RoutingConcept,
 } from "./routing.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Routing.md" with { type: "text" };
 
 export const routing = registerConcept({
   class: RoutingConcept,

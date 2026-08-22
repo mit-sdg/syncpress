@@ -114,6 +114,25 @@ function errorCode(error: unknown): string | undefined {
     : undefined;
 }
 
+type FileLoadResult = {
+  status: "problem" | "loaded";
+  root?: string;
+  file?: string;
+  digest?: string;
+  count?: number;
+  changed?: boolean;
+  code?: LoadProblemCode;
+  detail?: string;
+};
+
+type DirectoryLoadResult = {
+  status: "problem" | "loaded";
+  root?: string;
+  count?: number;
+  changed?: boolean;
+  code?: LoadProblemCode;
+  detail?: string;
+};
 function problem(code: LoadProblemCode, detail: string) {
   return { status: "problem" as const, code, detail };
 }
@@ -139,7 +158,9 @@ export class FilingConcept {
   }
 
   /** Read one complete host file before replacing its named singleton tree. */
-  async replaceTreeFromFile({ name, source, path }: { name: string; source: string; path: string }) {
+  async replaceTreeFromFile(
+    { name, source, path }: { name: string; source: string; path: string },
+  ): Promise<FileLoadResult> {
     if (!isScalarText(name) || name === "" || !isScalarText(source) || source === "") throw new InvalidSource();
     const status = pathStatus(path);
     if (status === "outside") throw new PathLeavesRoot();
@@ -175,7 +196,9 @@ export class FilingConcept {
   }
 
   /** Read a complete host tree before replacing the corresponding named tree. */
-  async replaceTreeFromDirectory({ name, directory }: { name: string; directory: string }) {
+  async replaceTreeFromDirectory(
+    { name, directory }: { name: string; directory: string },
+  ): Promise<DirectoryLoadResult> {
     if (!isScalarText(name) || name === "" || !isScalarText(directory) || directory === "") throw new InvalidSource();
 
     let rootStatus: Awaited<ReturnType<typeof lstat>>;

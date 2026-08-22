@@ -5,6 +5,11 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded sync-engine from beta 6 to beta 16 and migrated Syncpress's concept
+  specifications and application design to the current version-1 format.
+
 ## [0.2.1] — 2026-08-13
 
 ### Fixed

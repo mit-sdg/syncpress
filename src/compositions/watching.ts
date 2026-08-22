@@ -6,7 +6,7 @@
  */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { where } from "@mit-sdg/sync-engine/language";
-import { computations, concepts as conceptRefs } from "@syncpress/concept-set";
+import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { PublicationTransactionPrefix } from "./calculations.ts";
 import { publicationTransactionPrefix } from "./computations.ts";
 

@@ -54,7 +54,7 @@ directly.
 
 ## Trace an application flow
 
-Start with the reaction export in `src/compositions/`. Assembly retains its module in the registered name: `AdmittedConfigurationIsLoaded` from `staging.ts`, for example, appears as `fullSite.staging.AdmittedConfigurationIsLoaded`. Read that entry in `generated/syncpress.md` for the expanded stages, then read each participating concept's `spec.md` for its action and query contract.
+Start with the reaction export in `src/compositions/`. Assembly retains its module in the registered name: `AdmittedConfigurationIsLoaded` from `staging.ts`, for example, appears as `fullSite.staging.AdmittedConfigurationIsLoaded`. Read that entry in `generated/syncpress.md` for the expanded stages, then read each participating specification in `design/concepts/` for its action and query contract.
 
 `generated/syncpress.md` is a static design read-back, not an execution log, and it may be stale while source changes are in progress. Run `bunx sync-engine artifacts spec --config generated.config.ts` to render the current design to standard output without writing artifacts. Run `bun run generate` before reviewing the generated diff and `bun run check` to verify source and artifacts agree.
 

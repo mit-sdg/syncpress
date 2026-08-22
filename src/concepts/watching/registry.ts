@@ -8,7 +8,7 @@ import {
   WatchFailed,
   WatchNotFound,
 } from "./watching.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Watching.md" with { type: "text" };
 
 export const watching = registerConcept({
   class: WatchingConcept,

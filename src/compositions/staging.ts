@@ -6,7 +6,7 @@
  * race the endpoint's one terminal answer.
  */
 import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts as conceptRefs } from "@syncpress/concept-set";
+import { concepts as conceptRefs } from "@syncpress/concepts";
 import { CONFIGURATION_PATH, DIAGNOSTIC_SCOPES, PHASE_SEQUENCE, PLACES, ROOTS } from "./shared.ts";
 import { PublicationTransactionPrefix } from "./calculations.ts";
 import { PublicationPlace } from "./views.ts";

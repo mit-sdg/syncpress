@@ -8,7 +8,7 @@ import {
   InvalidText,
   InvocationCaptured,
 } from "./commanding.ts";
-import spec from "./spec.md" with { type: "text" };
+import spec from "../../../design/concepts/Commanding.md" with { type: "text" };
 
 export const commanding = registerConcept({
   class: CommandingConcept,

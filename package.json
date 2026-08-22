@@ -36,12 +36,12 @@
     "external-golden:update": "bun tests/external-golden/update.ts",
     "prepack": "bun run build",
     "typecheck": "tsc --noEmit",
-    "principle": "bun test src/concepts",
+    "principle": "bun test tests/concepts",
     "site": "bun src/cli.ts",
     "test": "bun test"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.6",
+    "@mit-sdg/sync-engine": "1.0.0-beta.16",
     "liquidjs": "^10.27.2",
     "marked": "^18.0.7",
     "parse5": "^8.0.1",
