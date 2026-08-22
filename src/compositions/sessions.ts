@@ -95,9 +95,13 @@ export async function serveSite(
 
   let watcher: SiteWatcher | undefined;
   let firstPublication: Promise<void> | undefined;
+  let publishedDirectory: string | undefined;
   try {
     watcher = await watchSite(projectDirectory, destination, {
-      onBuild: (_result, outputDirectory) => {
+      onBuild: (result, outputDirectory) => {
+        const outputChanged = result.written > 0 || result.replaced > 0 || result.removed > 0;
+        if (publishedDirectory === outputDirectory && !outputChanged) return;
+        publishedDirectory = outputDirectory;
         const publishing = publish(outputDirectory);
         if (firstPublication === undefined) firstPublication = publishing;
         else void publishing.catch((error) => options.onError?.(error));
