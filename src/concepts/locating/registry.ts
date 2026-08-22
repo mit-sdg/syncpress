@@ -4,7 +4,7 @@ import {
   LocatingConcept,
   NotGrounded,
 } from "./locating.ts";
-import spec from "../../../design/concepts/Locating.md" with { type: "text" };
+import spec from "@design/concepts/Locating.md" with { type: "text" };
 
 export const locating = registerConcept({
   class: LocatingConcept,

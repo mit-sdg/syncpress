@@ -10,7 +10,7 @@ import {
   InvalidText,
   NotIncluded,
 } from "./cataloging.ts";
-import spec from "../../../design/concepts/Cataloging.md" with { type: "text" };
+import spec from "@design/concepts/Cataloging.md" with { type: "text" };
 
 export const cataloging = registerConcept({
   class: CatalogingConcept,

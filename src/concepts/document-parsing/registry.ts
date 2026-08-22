@@ -1,6 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { DocumentParsingConcept, DocumentNotFound, MalformedAttributes } from "./document-parsing.ts";
-import spec from "../../../design/concepts/DocumentParsing.md" with { type: "text" };
+import spec from "@design/concepts/DocumentParsing.md" with { type: "text" };
 
 export const documentParsing = registerConcept({
   class: DocumentParsingConcept,

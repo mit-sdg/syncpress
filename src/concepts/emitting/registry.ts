@@ -16,7 +16,7 @@ import {
   ReconciliationFailed,
   StaleAttempt,
 } from "./emitting.ts";
-import spec from "../../../design/concepts/Emitting.md" with { type: "text" };
+import spec from "@design/concepts/Emitting.md" with { type: "text" };
 
 export const emitting = registerConcept({
   class: EmittingConcept,

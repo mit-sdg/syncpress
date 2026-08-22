@@ -7,7 +7,7 @@ import {
   StaleAttempt,
   StageNotReady,
 } from "./render-tracking.ts";
-import spec from "../../../design/concepts/RenderTracking.md" with { type: "text" };
+import spec from "@design/concepts/RenderTracking.md" with { type: "text" };
 
 export const renderTracking = registerConcept({
   class: RenderTrackingConcept,

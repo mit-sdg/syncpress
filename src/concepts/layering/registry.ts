@@ -1,6 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { InvalidRank, InvalidValues, LayeringConcept, NoSuchLayer, RankTaken } from "./layering.ts";
-import spec from "../../../design/concepts/Layering.md" with { type: "text" };
+import spec from "@design/concepts/Layering.md" with { type: "text" };
 
 export const layering = registerConcept({
   class: LayeringConcept,
