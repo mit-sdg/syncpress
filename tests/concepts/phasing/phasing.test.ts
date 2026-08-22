@@ -10,8 +10,8 @@ import {
   SequenceActive,
   SequenceNotFound,
   StaleAttempt,
-} from "../../../src/concepts/phasing/phasing.ts";
-import { phasing as registration } from "../../../src/concepts/phasing/registry.ts";
+} from "@concepts/phasing/phasing.ts";
+import { phasing as registration } from "@concepts/phasing/registry.ts";
 
 function completePhase(phasing: PhasingConcept, cursor: { job: string; attempt: string }) {
   const result = phasing.completePhase(cursor);

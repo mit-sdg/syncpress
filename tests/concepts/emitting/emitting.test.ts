@@ -3,7 +3,7 @@ import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { lstat, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publicationTransactionPrefix } from "../../../src/compositions/computations.ts";
+import { publicationTransactionPrefix } from "@compositions/computations.ts";
 import {
   AttemptExhausted,
   DestinationNotDirected,
@@ -20,8 +20,8 @@ import {
   PathLeavesDestination,
   ReconciliationFailed,
   StaleAttempt,
-} from "../../../src/concepts/emitting/emitting.ts";
-import { emitting as emittingRegistration } from "../../../src/concepts/emitting/registry.ts";
+} from "@concepts/emitting/emitting.ts";
+import { emitting as emittingRegistration } from "@concepts/emitting/registry.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (content: Uint8Array) => new TextDecoder().decode(content);

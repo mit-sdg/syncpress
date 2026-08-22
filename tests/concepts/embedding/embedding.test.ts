@@ -13,8 +13,8 @@ import {
   InvalidWidth,
   MEDIA_TYPE_BY_FORMAT,
   OfferConflict,
-} from "../../../src/concepts/embedding/embedding.ts";
-import { embedding as registeredEmbedding } from "../../../src/concepts/embedding/registry.ts";
+} from "@concepts/embedding/embedding.ts";
+import { embedding as registeredEmbedding } from "@concepts/embedding/registry.ts";
 
 type Declaration = Parameters<EmbeddingConcept["declare"]>[0];
 type Candidate = Parameters<EmbeddingConcept["provideCandidate"]>[0];

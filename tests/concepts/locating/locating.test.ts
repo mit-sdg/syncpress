@@ -6,7 +6,7 @@ import {
   InvalidLocation,
   LocatingConcept,
   NotGrounded,
-} from "../../../src/concepts/locating/locating.ts";
+} from "@concepts/locating/locating.ts";
 
 let base: string;
 let outside: string;

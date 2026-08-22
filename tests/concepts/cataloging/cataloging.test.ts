@@ -12,8 +12,8 @@ import {
   NotIncluded,
   type CatalogCondition,
   type NormalizedValue,
-} from "../../../src/concepts/cataloging/cataloging.ts";
-import { cataloging as catalogingRegistration } from "../../../src/concepts/cataloging/registry.ts";
+} from "@concepts/cataloging/cataloging.ts";
+import { cataloging as catalogingRegistration } from "@concepts/cataloging/registry.ts";
 
 function declare(
   cataloging: CatalogingConcept,

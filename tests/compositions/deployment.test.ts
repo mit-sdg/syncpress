@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { assembleSyncpress } from "../../src/assembly.ts";
+import { assembleSyncpress } from "@syncpress/assembly";
 
 test("queue-transition returns drive marker and sitemap work without dispatch", async () => {
   const app = assembleSyncpress();

@@ -10,7 +10,7 @@ import {
   ServerNotFound,
   ServerNotOpen,
   ServingConcept,
-} from "../../../src/concepts/serving/serving.ts";
+} from "@concepts/serving/serving.ts";
 
 /** Ask for a path exactly as written, past the normalization a URL client would apply. */
 function rawStatus(host: string, port: number, path: string): Promise<number> {

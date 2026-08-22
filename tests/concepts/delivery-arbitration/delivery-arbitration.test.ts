@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { DeliveryArbitrationConcept, DeliveryNotActive, InvalidTask } from "../../../src/concepts/delivery-arbitration/delivery-arbitration.ts";
+import { DeliveryArbitrationConcept, DeliveryNotActive, InvalidTask } from "@concepts/delivery-arbitration/delivery-arbitration.ts";
 
 test("its principle: task deliveries settle independently after interruption", () => {
   const delivering = new DeliveryArbitrationConcept();

@@ -7,8 +7,8 @@ import {
   RenderingNotFound,
   StageNotReady,
   StaleAttempt,
-} from "../../../src/concepts/render-tracking/render-tracking.ts";
-import { renderTracking as registration } from "../../../src/concepts/render-tracking/registry.ts";
+} from "@concepts/render-tracking/render-tracking.ts";
+import { renderTracking as registration } from "@concepts/render-tracking/registry.ts";
 
 const attempts = { dependencyAttempt: 1, emissionAttempt: 1 } as const;
 const markdown = { profile: "markdown", template: "page.html" } as const;

@@ -7,8 +7,8 @@ import {
   NoSuchLayer,
   RankTaken,
   type LayerValues,
-} from "../../../src/concepts/layering/layering.ts";
-import { layering } from "../../../src/concepts/layering/registry.ts";
+} from "@concepts/layering/layering.ts";
+import { layering } from "@concepts/layering/registry.ts";
 
 function one<T>(rows: T[]): T {
   expect(rows).toHaveLength(1);

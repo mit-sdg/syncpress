@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { GoverningConcept, InvalidConfiguration } from "../../../src/concepts/governing/governing.ts";
-import { governing as registration } from "../../../src/concepts/governing/registry.ts";
+import { GoverningConcept, InvalidConfiguration } from "@concepts/governing/governing.ts";
+import { governing as registration } from "@concepts/governing/registry.ts";
 
 test("its principle: replace one isolated, location-aware policy assessment", () => {
   const governing = new GoverningConcept();

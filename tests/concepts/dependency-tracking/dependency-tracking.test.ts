@@ -6,8 +6,8 @@ import {
   InvalidText,
   NotBuilding,
   StaleAttempt,
-} from "../../../src/concepts/dependency-tracking/dependency-tracking.ts";
-import { dependencyTracking as dependencyTrackingRegistration } from "../../../src/concepts/dependency-tracking/registry.ts";
+} from "@concepts/dependency-tracking/dependency-tracking.ts";
+import { dependencyTracking as dependencyTrackingRegistration } from "@concepts/dependency-tracking/registry.ts";
 
 class DependencyTrackingConcept extends StrictDependencyTrackingConcept {
   recordDependency(input: { subject: unknown; attempt?: unknown; input: unknown }) {

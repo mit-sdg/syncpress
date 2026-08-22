@@ -6,8 +6,8 @@ import {
   InvalidLocation,
   InvalidText,
   UnknownSeverity,
-} from "../../../src/concepts/diagnosing/diagnosing.ts";
-import { diagnosing as registeredDiagnosing } from "../../../src/concepts/diagnosing/registry.ts";
+} from "@concepts/diagnosing/diagnosing.ts";
+import { diagnosing as registeredDiagnosing } from "@concepts/diagnosing/registry.ts";
 
 type Report = Parameters<DiagnosingConcept["report"]>[0];
 type Relation = Parameters<DiagnosingConcept["addRelatedLocation"]>[0];

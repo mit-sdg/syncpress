@@ -3,7 +3,7 @@ import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { syncpressComputations } from "../../../src/compositions/computations.ts";
+import { syncpressComputations } from "@compositions/computations.ts";
 import {
   FileNotFound,
   FilingConcept,
@@ -12,8 +12,8 @@ import {
   InvalidSource,
   PathLeavesRoot,
   RootNotFound,
-} from "../../../src/concepts/filing/filing.ts";
-import { filing } from "../../../src/concepts/filing/registry.ts";
+} from "@concepts/filing/filing.ts";
+import { filing } from "@concepts/filing/registry.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (content: Uint8Array) => new TextDecoder().decode(content);

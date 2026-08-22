@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { AddressTaken, InvalidAddress, InvalidOwner, NotClaimed, RoutingConcept } from "../../../src/concepts/routing/routing.ts";
-import { routing as registration } from "../../../src/concepts/routing/registry.ts";
+import { AddressTaken, InvalidAddress, InvalidOwner, NotClaimed, RoutingConcept } from "@concepts/routing/routing.ts";
+import { routing as registration } from "@concepts/routing/registry.ts";
 
 test("its principle: claims are exclusive, movable, releasable, and stable", () => {
   const routing = new RoutingConcept();

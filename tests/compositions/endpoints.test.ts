@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSyncpressRuntime } from "../../src/compositions/api.ts";
+import { createSyncpressRuntime } from "@compositions/api.ts";
 
 const BATCH_TIMEOUT_MS = 60_000;
 

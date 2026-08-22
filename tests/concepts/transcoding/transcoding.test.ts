@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 import sharp from "sharp";
-import { transcoding as transcodingRegistration } from "../../../src/concepts/transcoding/registry.ts";
+import { transcoding as transcodingRegistration } from "@concepts/transcoding/registry.ts";
 import {
   InvalidSubject,
   InvalidWidths,
@@ -13,7 +13,7 @@ import {
   UnsupportedFormat,
   UnsupportedSourceFormat,
   type ImageFormat,
-} from "../../../src/concepts/transcoding/transcoding.ts";
+} from "@concepts/transcoding/transcoding.ts";
 
 function sha256(content: Uint8Array): string {
   return createHash("sha256").update(content).digest("hex");

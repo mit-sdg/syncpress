@@ -7,8 +7,8 @@ import {
   InvalidStream,
   InvalidText,
   InvocationCaptured,
-} from "../../../src/concepts/commanding/commanding.ts";
-import { commanding as registration } from "../../../src/concepts/commanding/registry.ts";
+} from "@concepts/commanding/commanding.ts";
+import { commanding as registration } from "@concepts/commanding/registry.ts";
 
 function recorded(arguments_: readonly string[] = []) {
   const written: [string, string][] = [];

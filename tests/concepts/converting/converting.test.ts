@@ -10,8 +10,8 @@ import {
   ProfileNotFound,
   UnsupportedExtension,
   UnsupportedProfileKind,
-} from "../../../src/concepts/converting/converting.ts";
-import { converting as convertingRegistration } from "../../../src/concepts/converting/registry.ts";
+} from "@concepts/converting/converting.ts";
+import { converting as convertingRegistration } from "@concepts/converting/registry.ts";
 
 const ALL_EXTENSIONS = ["tables", "footnotes", "strikethrough", "autolinks"];
 const FEATURE_SOURCE = `| A |

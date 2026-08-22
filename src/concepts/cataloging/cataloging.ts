@@ -1,5 +1,5 @@
 import { isProxy } from "node:util/types";
-import { compilePortableGlob } from "../../compositions/computations.ts";
+import { compilePortableGlob } from "@compositions/computations.ts";
 
 export class InvalidText extends Error {}
 export class InvalidDirection extends Error {}

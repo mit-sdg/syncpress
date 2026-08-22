@@ -11,13 +11,13 @@ import {
   WorkNotActive,
   WorkNotCurrent,
   WorkNotPrepared,
-} from "../../../src/concepts/deploying/deploying.ts";
-import { deploying as registration } from "../../../src/concepts/deploying/registry.ts";
+} from "@concepts/deploying/deploying.ts";
+import { deploying as registration } from "@concepts/deploying/registry.ts";
 import {
   deploymentFeedPreparation,
   deploymentRedirectDocument,
   deploymentSitemapDocument,
-} from "../../../src/compositions/deployment-computations.ts";
+} from "@compositions/deployment-computations.ts";
 
 const emptyPolicy = {
   nojekyll: false,

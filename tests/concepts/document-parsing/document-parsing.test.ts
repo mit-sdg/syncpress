@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { DocumentParsingConcept, DocumentNotFound, MalformedAttributes } from "../../../src/concepts/document-parsing/document-parsing.ts";
-import { documentParsing } from "../../../src/concepts/document-parsing/registry.ts";
+import { DocumentParsingConcept, DocumentNotFound, MalformedAttributes } from "@concepts/document-parsing/document-parsing.ts";
+import { documentParsing } from "@concepts/document-parsing/registry.ts";
 
 function one<T>(rows: T[]): T {
   expect(rows).toHaveLength(1);

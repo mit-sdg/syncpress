@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { referencing as referencingRegistration } from "../../../src/concepts/referencing/registry.ts";
+import { referencing as referencingRegistration } from "@concepts/referencing/registry.ts";
 import {
   InvalidForm,
   InvalidText,
@@ -9,7 +9,7 @@ import {
   ReferencingConcept,
   SourceFinished,
   UnrepresentableAddress,
-} from "../../../src/concepts/referencing/referencing.ts";
+} from "@concepts/referencing/referencing.ts";
 
 test("discovers every supported HTML element and exposes structural roles and groups", () => {
   const referencing = new ReferencingConcept();

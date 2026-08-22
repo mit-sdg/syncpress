@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { HoldingConcept } from "../../../src/concepts/holding/holding.ts";
-import { holding as registration } from "../../../src/concepts/holding/registry.ts";
+import { HoldingConcept } from "@concepts/holding/holding.ts";
+import { holding as registration } from "@concepts/holding/registry.ts";
 
 describe("Holding", () => {
   test("its principle: each hold ends on its own operator stop request", async () => {

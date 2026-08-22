@@ -1,5 +1,5 @@
 import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Node } from "yaml";
-import { isPortableGlob } from "../../compositions/computations.ts";
+import { isPortableGlob } from "@compositions/computations.ts";
 
 export type ConfigurationProblem = {
   code: "INVALID_CONFIGURATION";

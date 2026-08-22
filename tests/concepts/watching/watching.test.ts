@@ -8,7 +8,7 @@ import {
   InvalidWatch,
   WatchingConcept,
   WatchNotFound,
-} from "../../../src/concepts/watching/watching.ts";
+} from "@concepts/watching/watching.ts";
 
 const SETTLING_MS = 40;
 const WITHIN_MS = 2_000;

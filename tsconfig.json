@@ -10,7 +10,10 @@
     "skipLibCheck": true,
     "types": ["bun", "node"],
     "paths": {
+      "@compositions/*": ["./src/compositions/*"],
+      "@concepts/*": ["./src/concepts/*"],
       "@design/*": ["./design/*"],
+      "@generated/*": ["./generated/*"],
       "@syncpress/*": ["./src/*.ts"]
     }
   },

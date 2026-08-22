@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { templating as registration } from "../../../src/concepts/templating/registry.ts";
+import { templating as registration } from "@concepts/templating/registry.ts";
 import {
   InvalidTrustedPath,
   InvalidTemplateOrigin,
@@ -14,7 +14,7 @@ import {
   UndefinedVariable,
   UnsupportedTemplate,
   UsedTemplateNotFound,
-} from "../../../src/concepts/templating/templating.ts";
+} from "@concepts/templating/templating.ts";
 
 const TRUSTED_COLLECTION_EXCERPTS = { wildcard: ["collections", "*", "*", "excerpt"] } as const;
 
