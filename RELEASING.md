@@ -9,12 +9,21 @@ workflow `release.yml`. The release workflow authenticates through GitHub OIDC.
 
 ## Publish a package version
 
+Releases must come from `main`. Begin from an up-to-date, clean checkout:
+
+```sh
+git switch main
+git pull --ff-only origin main
+test "$(git branch --show-current)" = main
+test -z "$(git status --porcelain)"
+```
+
 1. Update `CHANGELOG.md`: move the applicable entries from `Unreleased` into a
    section named for the release version and date, then update the `Unreleased`
    comparison link to start at the new tag and add a link definition for the
    released version.
 2. Update `package.json` with the release version.
-3. From a clean checkout, run:
+3. With no unrelated working-tree changes, run:
 
    ```sh
    bun install --frozen-lockfile
@@ -23,11 +32,20 @@ workflow `release.yml`. The release workflow authenticates through GitHub OIDC.
    npm pack --dry-run
    ```
 
-4. Commit the changelog and version changes.
-5. Create and push a tag named `v` followed by the exact package version, such
-   as `v0.2.0`.
+4. Commit the changelog and version changes, then push that commit to `main`.
+5. Confirm the release commit is reachable from `origin/main`, then create and
+   push a tag named `v` followed by the exact package version, such as `v0.2.0`:
 
-A pushed `v*` tag starts `.github/workflows/release.yml`. The workflow checks
+   ```sh
+   git fetch origin main
+   git merge-base --is-ancestor HEAD origin/main
+   version=$(node -p "require('./package.json').version")
+   git tag "v$version"
+   git push origin "v$version"
+   ```
+
+A pushed `v*` tag starts `.github/workflows/release.yml`. The workflow rejects
+any tag whose commit is not already reachable from `origin/main`, then checks
 the tag against `package.json`, runs `bun run check` and `bun test`, then
 publishes with npm provenance. If the package version already exists in npm,
 the workflow does not publish it.
