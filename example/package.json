@@ -9,7 +9,7 @@
     "inspect": "syncpress inspect"
   },
   "devDependencies": {
-    "@mit-sdg/syncpress": "0.2.1"
+    "@mit-sdg/syncpress": "0.3.0"
   },
   "engines": {
     "node": ">=24 <25"
