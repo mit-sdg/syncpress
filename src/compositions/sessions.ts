@@ -160,6 +160,16 @@ function operatorSession(gateway: Gateway) {
       if (text === undefined) throw new Error("Could not format the build report.");
       return write("output", text);
     },
+    diagnose: async (diagnostics: BuildResult["diagnostics"]) => {
+      if (diagnostics.length === 0) return;
+      const text = diagnostics.map(({ severity, code, message, source, line, column }) => {
+        const at = source === undefined
+          ? ""
+          : ` ${source}${line === undefined ? "" : `:${line}${column === undefined ? "" : `:${column}`}`}`;
+        return `${severity.toUpperCase()} ${code}${at}: ${message}`;
+      }).join("\n");
+      return write("error", text);
+    },
     inspect: async (inspection: unknown) => {
       const text = formatSyncpressInspectionReport(inspection);
       if (text === undefined) throw new Error("Could not format the inspection report.");
@@ -205,9 +215,13 @@ async function carryOut(
   }
   if ((name === "build" || name === "watch") && (operands.length === 1 || operands.length === 2)) {
     const [directory, destination] = operands as [string, string?];
-    if (name === "build") return void await operator.summarize(await buildSite(directory, destination));
+    const report = async (result: BuildResult) => {
+      await operator.diagnose(result.diagnostics);
+      await operator.summarize(result);
+    };
+    if (name === "build") return void await report(await buildSite(directory, destination));
     const watcher = await watchSite(directory, destination, {
-      onBuild: (result) => void operator.summarize(result),
+      onBuild: (result) => void report(result),
       onError: (error) => void operator.warn(error),
     });
     try {

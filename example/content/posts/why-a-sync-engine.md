@@ -48,7 +48,7 @@ The final directory swap provides process-local recovery. Process termination du
 
 Today, Syncpress is a usable, if deliberately narrow, static publisher. It reads YAML configuration, Markdown or verbatim HTML, Liquid layouts, and ordinary local assets, with support for front matter, ordered defaults, explicit and derived routes, collections, excerpts, content-relative links, responsive images, redirects, pagination, sitemaps, and Atom feeds. The [user guide](../reference/index.md) covers the full feature set.
 
-Builds are strict. A bad local reference, malformed template, invalid image, route conflict, or output collision stops publication. The command line provides build, watch, local development, and inspection commands, while the programmatic API exposes the same operations to Node.js callers. The generated directory is ready for an ordinary static host.
+Builds are strict about unsafe local references, malformed templates, invalid images, route conflicts, and output collisions. Missing output references warn without stopping publication. The command line provides build, watch, local development, and inspection commands, while the programmatic API exposes the same operations to Node.js callers. The generated directory is ready for an ordinary static host.
 
 Syncpress targets build-time static pages with analyzable template dependencies. Liquid partial names and context paths must be static, and the `include`, `layout`, and `cycle` tags are rejected. Pages that require request-time state, database access, or arbitrary build-time code require another system.
 

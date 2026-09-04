@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { computations } from "../src/concepts.ts";
+import { deploymentTransitionCompleted } from "../src/compositions/deployment-computations.ts";
 import {
   formatSyncpressBuildReport,
   formatSyncpressInspectionReport,
@@ -10,8 +11,12 @@ import {
   SYNCPRESS_USAGE,
 } from "../src/compositions/command-line.ts";
 import {
+  absoluteReferenceAddress,
+  absoluteReferenceOutputPath,
+  absoluteReferencePath,
   projectAbsoluteSiteUrl,
   projectSiteUrl,
+  prospectiveLocalReferenceAddress,
   selectPageRendering,
   syncpressComputations,
 } from "../src/compositions/computations.ts";
@@ -112,4 +117,33 @@ test("site URL projection is pure application policy", () => {
     "https://example.test/library/caf%C3%A9/",
   );
   expect(projectAbsoluteSiteUrl("/library/", "https://example.test", "/notes/?print=1")).toBeUndefined();
+});
+
+test("reference target projection ignores URL suffixes and distinguishes routes from files", () => {
+  expect(absoluteReferencePath("/notes/?print=1#top")).toBe("/notes/");
+  expect(absoluteReferenceAddress("/notes/?print=1#top")).toBe("/notes/");
+  expect(absoluteReferenceOutputPath("/notes/?print=1#top")).toBe("notes/index.html");
+  expect(absoluteReferenceAddress("/notes/index.html")).toBeUndefined();
+  expect(absoluteReferenceOutputPath("/notes/index.html#top")).toBe("notes/index.html");
+  expect(absoluteReferenceOutputPath("/")).toBe("index.html");
+  expect(absoluteReferenceOutputPath("/caf%C3%A9.txt")).toBe("café.txt");
+  expect(absoluteReferenceOutputPath("/bad%ZZ")).toBeUndefined();
+  expect(absoluteReferencePath("https://example.test/notes/")).toBeUndefined();
+});
+
+test("missing local references project to prospective document and asset URLs", () => {
+  expect(prospectiveLocalReferenceAddress("guides/start.md", "../reference/config.md?view=all#paths"))
+    .toBe("/reference/config/?view=all#paths");
+  expect(prospectiveLocalReferenceAddress("guides/start.md", "./files/check.txt#done"))
+    .toBe("/guides/files/check.txt#done");
+  expect(prospectiveLocalReferenceAddress("index.md", "../outside.md")).toBeUndefined();
+  expect(prospectiveLocalReferenceAddress("index.md", "https://example.test/page.md")).toBeUndefined();
+});
+
+test("absolute reference checking waits for the final deployment transition", () => {
+  expect(deploymentTransitionCompleted("start", { deployment: "one", completed: true })).toBe(true);
+  expect(deploymentTransitionCompleted("complete", { deployment: "one", completed: true })).toBe(true);
+  expect(deploymentTransitionCompleted("complete", { deployment: "one", work: "next", completed: false })).toBe(false);
+  expect(deploymentTransitionCompleted("prepareFeed", { deployment: "one", completed: true })).toBe(false);
+  expect(deploymentTransitionCompleted("complete", { completed: true })).toBe(false);
 });

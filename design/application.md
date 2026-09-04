@@ -94,12 +94,15 @@ step of those flows; each view and former derives the named reusable read model.
 - [CopiedBodyAssetsAnswer](reaction:fullSite.references.CopiedBodyAssetsAnswer)
 - [CopyableBodyAssetsCopy](reaction:fullSite.references.CopyableBodyAssetsCopy)
 - [InvalidBodyReferencesDiagnose](reaction:fullSite.references.InvalidBodyReferencesDiagnose)
+- [MissingAbsoluteReferencesDiagnose](reaction:fullSite.references.MissingAbsoluteReferencesDiagnose)
 - [MissingBodyReferencesDiagnose](reaction:fullSite.references.MissingBodyReferencesDiagnose)
+- [MissingBodyReferencesHold](reaction:fullSite.references.MissingBodyReferencesHold)
 - [NonlocalBodyReferencesHold](reaction:fullSite.references.NonlocalBodyReferencesHold)
 - [NonlocalLayoutReferencesHold](reaction:fullSite.references.NonlocalLayoutReferencesHold)
 - [OutsideBodyReferencesDiagnose](reaction:fullSite.references.OutsideBodyReferencesDiagnose)
 - [RelativeLayoutReferencesDiagnose](reaction:fullSite.references.RelativeLayoutReferencesDiagnose)
 - [UnpublishedDocumentBodyReferencesDiagnose](reaction:fullSite.references.UnpublishedDocumentBodyReferencesDiagnose)
+- [UnpublishedDocumentBodyReferencesHold](reaction:fullSite.references.UnpublishedDocumentBodyReferencesHold)
 - [UnretargetableClaimedBodyReferencesDiagnose](reaction:fullSite.references.UnretargetableClaimedBodyReferencesDiagnose)
 - [UnretargetableCopiedBodyAssetsDiagnose](reaction:fullSite.references.UnretargetableCopiedBodyAssetsDiagnose)
 - [BodyConversionFailuresDiagnose](reaction:fullSite.render.BodyConversionFailuresDiagnose)
@@ -253,6 +256,15 @@ fullSite.watching.OpenSiteWatch at /watch/open
 These named calculations project paths, rendering choices, deployment documents, and command-line values without host effects.
 
 ```computations
+absoluteReferenceAddress(target: Value) : Value
+  Returns the canonical routed address named by a site-absolute reference when one exists.
+
+absoluteReferenceOutputPath(target: Value) : Value
+  Returns the emitted file path named by a site-absolute reference when it is safely representable.
+
+absoluteReferencePath(target: Value) : Value
+  Returns a site-absolute reference's path without its query string or fragment.
+
 addressOutputPath(address: Value) : Value
   Computes the deterministic addressOutputPath projection used by composition.
 
@@ -267,6 +279,9 @@ deploymentRedirectDocument(target: Value, canonical: Value) : Value
 
 deploymentSitemapDocument(urls: Value) : Value
   Computes the deterministic deploymentSitemapDocument projection used by composition.
+
+deploymentTransitionCompleted(action: Value, result: Value) : Value
+  Reports whether a deployment queue transition exhausted the complete work queue.
 
 deploymentTransitionWork(action: Value, result: Value) : Value
   Computes the deterministic deploymentTransitionWork projection used by composition.
@@ -312,6 +327,9 @@ projectAbsoluteSiteUrl(base: Value, origin: Value, address: Value) : Value
 
 projectSiteUrl(base: Value, target: Value) : Value
   Computes the deterministic projectSiteUrl projection used by composition.
+
+prospectiveLocalReferenceAddress(sourcePath: Value, target: Value) : Value
+  Projects a missing content-relative reference to the URL it would use if its target were produced.
 
 publicationTransactionPrefix(destination: Value) : Value
   Computes the deterministic publicationTransactionPrefix projection used by composition.

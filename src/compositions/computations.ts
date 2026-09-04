@@ -237,6 +237,70 @@ function suffixStart(target: string): number {
   return Math.min(query, fragment);
 }
 
+/** The path portion of one site-absolute reference, without query or fragment. */
+export function absoluteReferencePath(target: unknown): string | undefined {
+  if (!isText(target) || targetKind(target) !== "absolute") return undefined;
+  const start = suffixStart(target);
+  return start === -1 ? target : target.slice(0, start);
+}
+
+/** The canonical route named by a site-absolute reference, when it names one. */
+export function absoluteReferenceAddress(target: unknown): string | undefined {
+  const path = absoluteReferencePath(target);
+  return parseAddress(path)?.address;
+}
+
+/** The exact emitted path named by a site-absolute reference, including explicit index.html paths. */
+export function absoluteReferenceOutputPath(target: unknown): string | undefined {
+  const path = absoluteReferencePath(target);
+  if (path === undefined) return undefined;
+  if (path === "/") return "index.html";
+  const directory = path.endsWith("/");
+  const body = path.slice(1, directory ? -1 : path.length);
+  if (body === "") return undefined;
+  const segments: string[] = [];
+  for (const encoded of body.split("/")) {
+    const decoded = decodeSegment(encoded);
+    if (decoded === undefined) return undefined;
+    segments.push(decoded);
+  }
+  return `${segments.join("/")}${directory ? "/index.html" : ""}`;
+}
+
+function resolvedContentRelativePath(sourcePath: unknown, target: unknown): string | undefined {
+  if (!isText(sourcePath) || pathStatus(sourcePath) !== "canonical" || !isText(target) || targetKind(target) !== "relative") return undefined;
+  const start = suffixStart(target);
+  const referencePath = start === -1 ? target : target.slice(0, start);
+  if (referencePath === "" || referencePath.endsWith("/")) return undefined;
+
+  const segments = sourcePath.split("/").slice(0, -1);
+  for (const encoded of referencePath.split("/")) {
+    let segment: string;
+    try {
+      segment = decodeURIComponent(encoded);
+    } catch {
+      return undefined;
+    }
+    if (segment === ".") continue;
+    if (segment === "..") {
+      if (segments.length === 0) return undefined;
+      segments.pop();
+      continue;
+    }
+    if (!isPathSegment(segment)) return undefined;
+    segments.push(segment);
+  }
+  return segments.length === 0 ? undefined : segments.join("/");
+}
+
+/** Project a missing content-relative reference to the URL it would have had if produced. */
+export function prospectiveLocalReferenceAddress(sourcePath: unknown, target: unknown): string | undefined {
+  const path = resolvedContentRelativePath(sourcePath, target);
+  if (path === undefined) return undefined;
+  const replacement = path.endsWith(".md") || path.endsWith(".html") ? deriveAddress(path) : outputPathAddress(path);
+  return replacement === undefined ? undefined : retargetReference(replacement, target);
+}
+
 function isSafeRelativeReference(target: unknown): target is string {
   if (!isText(target) || targetKind(target) !== "relative" || !hasSafeReferenceSpelling(target)) return false;
   const fragment = target.indexOf("#");
@@ -295,6 +359,11 @@ export const syncpressComputations = {
   projectSiteUrl: ({ base, target }: { base: unknown; target: unknown }) => optional(projectSiteUrl(base, target)),
   projectAbsoluteSiteUrl: ({ base, origin, address }: { base: unknown; origin: unknown; address: unknown }) =>
     optional(projectAbsoluteSiteUrl(base, origin, address)),
+  absoluteReferencePath: ({ target }: { target: unknown }) => optional(absoluteReferencePath(target)),
+  absoluteReferenceAddress: ({ target }: { target: unknown }) => optional(absoluteReferenceAddress(target)),
+  absoluteReferenceOutputPath: ({ target }: { target: unknown }) => optional(absoluteReferenceOutputPath(target)),
+  prospectiveLocalReferenceAddress: ({ sourcePath, target }: { sourcePath: unknown; target: unknown }) =>
+    optional(prospectiveLocalReferenceAddress(sourcePath, target)),
   targetHasKind: ({ target, kind }: { target: unknown; kind: AddressKind }) => targetKind(target) === kind,
   relativePath: ({ path, prefix }: { path: unknown; prefix: unknown }) => optional(relativePath(path, prefix)),
   joinPath: ({ prefix, name }: { prefix: unknown; name: unknown }) => optional(joinPath(prefix, name)),

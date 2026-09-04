@@ -4,7 +4,7 @@ import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } 
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import sharp from "sharp";
-import { buildSite, inspectSite, serveSite, watchSite } from "@syncpress/syncpress";
+import { buildSite, inspectSite, runCli, serveSite, watchSite } from "@syncpress/syncpress";
 
 const exampleDirectory = resolve(import.meta.dir, "../../example");
 const goldenPath = resolve(import.meta.dir, "../golden/example-site.json");
@@ -133,7 +133,14 @@ test("renders without an origin and does not invent a canonical URL", async () =
     );
 
     const result = await buildSite(project);
-    expect(result).toMatchObject({ pages: 21, diagnostics: [] });
+    expect(result).toMatchObject({
+      pages: 21,
+      diagnostics: [{
+        severity: "warning",
+        code: "MISSING_OUTPUT_REFERENCE",
+        source: "/feed.xml",
+      }],
+    });
     const index = await readFile(join(project, "dist", "index.html"), "utf8");
     expect(index).toContain("Source file: <code>index.md</code>");
     expect(index).not.toContain('<link rel="canonical"');
@@ -544,18 +551,75 @@ test("watch replaces its exclusions when configured output changes", async () =>
   }
 }, BUILD_TEST_TIMEOUT_MS);
 
-test("a missing local reference reports a diagnostic and preserves the prior destination", async () => {
-  const project = await mkdtemp(join(tmpdir(), "syncpress-invalid-site-"));
+test("a missing local reference warns, remains linked, and does not block publication", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-missing-reference-site-"));
   const destination = join(project, "dist");
 
   try {
     await copyExample(project);
     await writeFile(join(project, "content", "index.md"), "---\ntitle: Broken\n---\n[Missing](./assets/nope.txt)\n");
     await mkdir(destination);
-    await writeFile(join(destination, "previous.txt"), "keep this file\n");
+    await writeFile(join(destination, "previous.txt"), "replace this tree\n");
 
-    await expect(buildSite(project, "dist")).rejects.toThrow("MISSING_LOCAL_REFERENCE");
-    expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
+    const result = await buildSite(project, "dist");
+    expect(result.diagnostics).toEqual([{
+      severity: "warning",
+      code: "MISSING_OUTPUT_REFERENCE",
+      message: "No generated route or output file matches this reference.",
+      source: "/assets/nope.txt",
+      line: undefined,
+      column: undefined,
+    }]);
+    expect(await readFile(join(destination, "index.html"), "utf8")).toContain('href="/syncpress/assets/nope.txt"');
+    expect(await lstat(join(destination, "previous.txt")).catch(() => undefined)).toBeUndefined();
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+}, BUILD_TEST_TIMEOUT_MS);
+
+test("the build command prints successful-build warnings", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-warning-command-site-"));
+  const errors: string[] = [];
+  const output: string[] = [];
+  const originalError = console.error;
+  const originalLog = console.log;
+
+  try {
+    await copyExample(project);
+    await writeFile(join(project, "content", "index.md"), "---\ntitle: Broken\n---\n[Missing](./missing.md)\n");
+    console.error = (...values: unknown[]) => errors.push(values.map(String).join(" "));
+    console.log = (...values: unknown[]) => output.push(values.map(String).join(" "));
+
+    await runCli(["build", project, "dist"]);
+
+    expect(errors).toEqual([
+      "WARNING MISSING_OUTPUT_REFERENCE /missing/: No generated route or output file matches this reference.",
+    ]);
+    expect(output).toEqual(["Built 21 pages from 38 input files (30 written, 0 replaced, 0 kept, 0 removed)."]);
+  } finally {
+    console.error = originalError;
+    console.log = originalLog;
+    await rm(project, { recursive: true, force: true });
+  }
+}, BUILD_TEST_TIMEOUT_MS);
+
+test("missing absolute references warn once after all generated and public outputs exist", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-absolute-reference-site-"));
+
+  try {
+    await copyExample(project);
+    const indexPath = join(project, "content", "index.md");
+    await writeFile(indexPath, `${await readFile(indexPath, "utf8")}\n[First](/not-produced/?one=1) [Second](/not-produced/#two) [Relative](./not-produced.md)\n[Feed](/feed.xml) [Generated index](/journal/1/index.html) [Public](/styles.css) [External](https://example.test/missing) [Here](#top)\n`);
+
+    const result = await buildSite(project, "dist");
+    expect(result.diagnostics).toEqual([{
+      severity: "warning",
+      code: "MISSING_OUTPUT_REFERENCE",
+      message: "No generated route or output file matches this reference.",
+      source: "/not-produced/",
+      line: undefined,
+      column: undefined,
+    }]);
   } finally {
     await rm(project, { recursive: true, force: true });
   }
@@ -595,7 +659,7 @@ test("body Liquid failures report their original source coordinate after front m
   }
 }, BUILD_TEST_TIMEOUT_MS);
 
-test("a link to an unpublished document is not copied as an asset", async () => {
+test("a link to an unpublished document warns without copying the document as an asset", async () => {
   const project = await mkdtemp(join(tmpdir(), "syncpress-unpublished-site-"));
   const destination = join(project, "dist");
 
@@ -603,11 +667,18 @@ test("a link to an unpublished document is not copied as an asset", async () => 
     await copyExample(project);
     const indexPath = join(project, "content", "index.md");
     await writeFile(indexPath, `${await readFile(indexPath, "utf8")}\n[Hidden draft](./drafts/hidden.md)\n`);
-    await mkdir(destination);
-    await writeFile(join(destination, "previous.txt"), "keep this file\n");
 
-    await expect(buildSite(project, "dist")).rejects.toThrow("UNPUBLISHED_DOCUMENT_REFERENCE");
-    expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
+    const result = await buildSite(project, "dist");
+    expect(result.diagnostics).toEqual([{
+      severity: "warning",
+      code: "MISSING_OUTPUT_REFERENCE",
+      message: "No generated route or output file matches this reference.",
+      source: "/drafts/hidden/",
+      line: undefined,
+      column: undefined,
+    }]);
+    expect(await readFile(join(destination, "index.html"), "utf8")).toContain('href="/syncpress/drafts/hidden/"');
+    expect(await lstat(join(destination, "drafts", "hidden", "index.html")).catch(() => undefined)).toBeUndefined();
   } finally {
     await rm(project, { recursive: true, force: true });
   }

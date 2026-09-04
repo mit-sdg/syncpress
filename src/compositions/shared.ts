@@ -5,6 +5,7 @@ export const DIAGNOSTIC_SCOPES = {
   cataloging: "collection-indexing",
   configuration: "configuration-assessment",
   rendering: "page-rendering",
+  references: "site-reference-checking",
   settings: "configuration-settings",
   staging: "project-staging",
 } as const;
@@ -35,6 +36,7 @@ export const PAGE_PATTERNS = {
 
 export const PARTS = {
   body: "body",
+  deploymentLayout: "deployment-layout",
   excerpt: "excerpt",
   layout: "layout",
 } as const;

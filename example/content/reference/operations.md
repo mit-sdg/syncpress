@@ -115,8 +115,8 @@ For generated page number `N`, `page.source.path` is `[generated]/<pagination-na
 
 The host rejects project-boundary failures immediately, including missing roots, unsafe configured paths, symbolic links, non-regular files, inaccessible entries, source/output overlap, and duplicate logical template names.
 
-Build diagnostics accumulate independent domain failures. Current categories include malformed front matter, invalid configuration, malformed patterns, route and output collisions, missing profiles or templates, Liquid failures, conversion and image failures, invalid local references, unsupported relative layout references, and deployment failures.
+Build diagnostics accumulate independent domain failures. Current error categories include malformed front matter, invalid configuration, malformed patterns, route and output collisions, missing profiles or templates, Liquid failures, conversion and image failures, invalid local references, unsupported relative layout references, and deployment failures. Missing relative targets, unpublished document targets, and site-absolute paths absent from the completed route and output set are warnings; they do not block publication.
 
 Diagnostics use the form `SEVERITY CODE source:line:column: message` when a source position is available. Configuration diagnostics point to YAML nodes. Liquid diagnostics point to the named template or authored body; body positions account for front matter. Generated references omit authored coordinates.
 
-Strict errors retain error severity in watch and development mode. The previous successful site remains available until a clean rebuild reconciles.
+Strict errors retain error severity in watch and development mode. The previous successful site remains available until a clean rebuild reconciles. Successful command-line builds print warnings to standard error, while the programmatic API returns them in `BuildResult.diagnostics`.

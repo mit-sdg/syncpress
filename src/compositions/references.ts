@@ -1,4 +1,4 @@
-import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
+import { compute, earlier, no, reaction, returned, view, when, where } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import {
   OutputPathAddress,
@@ -7,10 +7,12 @@ import {
 } from "./calculations.ts";
 import { DIAGNOSTIC_SCOPES, PAGE_PATTERNS, PARTS, ROOTS } from "./shared.ts";
 
-const { Diagnosing, DocumentParsing, Emitting, Filing, Referencing, RenderTracking, Routing } = conceptRefs;
+const { Deploying, Diagnosing, DocumentParsing, Emitting, Filing, Referencing, RenderTracking, Routing } = conceptRefs;
 
 
 const ASSET_MEDIUM = "application/octet-stream";
+const MISSING_OUTPUT_REFERENCE_CODE = "MISSING_OUTPUT_REFERENCE";
+const MISSING_OUTPUT_REFERENCE_MESSAGE = "No generated route or output file matches this reference.";
 
 export const RelativeBodyReference = view(
   "relative body reference of source (source)",
@@ -30,6 +32,65 @@ export const ResolvedLocalBodyReference = view(
       RelativeBodyReference({ source }).is({ rendering, page, reference, raw, role }),
       Filing._resolve({ file: page, address: raw }).is({ target }),
     ),
+).many();
+
+const ProspectiveLocalReference = view(
+  "prospective URL for local reference (raw) from source path (sourcePath)",
+  ({ raw, sourcePath }, { value, target }, _bindings) => where(
+    compute(computations.prospectiveLocalReferenceAddress, { sourcePath, target: raw }, value),
+    computations.isTextValue({ value }),
+    compute(computations.absoluteReferencePath, { target: value }, target),
+    computations.isTextValue({ value: target }),
+  ),
+).optional();
+
+const FinalPageAbsoluteReference = view(
+  "site-absolute reference in a completed page",
+  (_inputs, { raw, sourcePath }, { source, rendering, page, owner }) => [
+    where(
+      RenderTracking._all({}).is({ rendering, subject: page, stage: "completed" }),
+      Referencing._finished({ subject: rendering, part: PARTS.layout }).is({ source }),
+      Referencing._references({ source }).is({ raw }),
+      computations.targetHasKind({ target: raw, kind: "absolute" }),
+      Filing._file({ file: page }).is({ path: sourcePath }),
+    ),
+    where(
+      Routing._claims({}).is({ owner }),
+      Deploying._forOwner({ owner }).is({ kind: "pagination-page", sourcePath }),
+      Referencing._finished({ subject: owner, part: PARTS.deploymentLayout }).is({ source }),
+      Referencing._references({ source }).is({ raw }),
+      computations.targetHasKind({ target: raw, kind: "absolute" }),
+    ),
+  ],
+).many();
+
+const RoutedAbsoluteReference = view(
+  "site-absolute reference (raw) names a routed address",
+  ({ raw }, _outputs, { address }) => where(
+    compute(computations.absoluteReferenceAddress, { target: raw }, address),
+    computations.isTextValue({ value: address }),
+    Routing._owner({ address }),
+  ),
+).holds();
+
+const EmittedAbsoluteReference = view(
+  "site-absolute reference (raw) names an emitted path",
+  ({ raw }, _outputs, { path }) => where(
+    compute(computations.absoluteReferenceOutputPath, { target: raw }, path),
+    computations.isTextValue({ value: path }),
+    Emitting._intent({ path }),
+  ),
+).holds();
+
+const MissingAbsoluteReference = view(
+  "site-absolute reference without a produced target",
+  (_inputs, { raw, target, sourcePath }, _bindings) => where(
+    FinalPageAbsoluteReference({}).is({ raw, sourcePath }),
+    compute(computations.absoluteReferencePath, { target: raw }, target),
+    computations.isTextValue({ value: target }),
+    no(RoutedAbsoluteReference({ raw })),
+    no(EmittedAbsoluteReference({ raw })),
+  ),
 ).many();
 
 export const UnroutedContentBodyAsset = view(
@@ -118,27 +179,41 @@ export const CopiedBodyAssetsAnswer = reaction(
     .then(Referencing.resolve({ reference, form: "address", value })),
 );
 
-/** Parsed documents without a route are pages, not copyable local assets. */
+/** Parsed documents without a route remain linked at their prospective route and warn. */
 export const UnpublishedDocumentBodyReferencesDiagnose = reaction(
-  ({ source, page, target, root, path }) =>
+  ({ source, page, raw, target, root, pagePath, address }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        ResolvedLocalBodyReference({ source }).is({ page, target }),
+        ResolvedLocalBodyReference({ source }).is({ page, raw, target }),
         no(Routing._address({ owner: target })),
         DocumentParsing._document({ subject: target }).is({}),
         Filing._file({ file: target }).is({ root }),
         Filing._root({ root }).is({ name: ROOTS.content }),
-        Filing._file({ file: page }).is({ path }),
+        Filing._file({ file: page }).is({ path: pagePath }),
+        ProspectiveLocalReference({ raw, sourcePath: pagePath }).is({ target: address }),
       )
-      .then(
-        Diagnosing.report({
-          scope: DIAGNOSTIC_SCOPES.rendering,
-          severity: "error",
-          code: "UNPUBLISHED_DOCUMENT_REFERENCE",
-          message: "This local reference targets an unpublished document.",
-          source: path,
-        }),
-      ),
+      .then(Diagnosing.report({
+        scope: DIAGNOSTIC_SCOPES.references,
+        severity: "warning",
+        code: MISSING_OUTPUT_REFERENCE_CODE,
+        message: MISSING_OUTPUT_REFERENCE_MESSAGE,
+        source: address,
+      })),
+);
+
+export const UnpublishedDocumentBodyReferencesHold = reaction(
+  ({ source, page, reference, raw, target, root, pagePath, value }) =>
+    when(Referencing.scan({ part: PARTS.body }).responds({ source }))
+      .where(
+        ResolvedLocalBodyReference({ source }).is({ page, reference, raw, target }),
+        no(Routing._address({ owner: target })),
+        DocumentParsing._document({ subject: target }).is({}),
+        Filing._file({ file: target }).is({ root }),
+        Filing._root({ root }).is({ name: ROOTS.content }),
+        Filing._file({ file: page }).is({ path: pagePath }),
+        ProspectiveLocalReference({ raw, sourcePath: pagePath }).is({ value }),
+      )
+      .then(Referencing.resolve({ reference, form: "address", value })),
 );
 
 /** Body URLs that are already nonlocal are complete without rewriting. */
@@ -161,10 +236,34 @@ function localReferenceDiagnostic(status: "missing" | "outside" | "invalid", cod
   );
 }
 
-export const MissingBodyReferencesDiagnose = localReferenceDiagnostic(
-  "missing",
-  "MISSING_LOCAL_REFERENCE",
-  "This local reference names no staged content file.",
+export const MissingBodyReferencesDiagnose = reaction(
+  ({ source, page, raw, pagePath, address }) =>
+    when(Referencing.scan({ part: PARTS.body }).responds({ source }))
+      .where(
+        RelativeBodyReference({ source }).is({ page, raw }),
+        Filing._resolution({ file: page, address: raw }).is({ status: "missing" }),
+        Filing._file({ file: page }).is({ path: pagePath }),
+        ProspectiveLocalReference({ raw, sourcePath: pagePath }).is({ target: address }),
+      )
+      .then(Diagnosing.report({
+        scope: DIAGNOSTIC_SCOPES.references,
+        severity: "warning",
+        code: MISSING_OUTPUT_REFERENCE_CODE,
+        message: MISSING_OUTPUT_REFERENCE_MESSAGE,
+        source: address,
+      })),
+);
+
+export const MissingBodyReferencesHold = reaction(
+  ({ source, page, reference, raw, pagePath, value }) =>
+    when(Referencing.scan({ part: PARTS.body }).responds({ source }))
+      .where(
+        RelativeBodyReference({ source }).is({ page, reference, raw }),
+        Filing._resolution({ file: page, address: raw }).is({ status: "missing" }),
+        Filing._file({ file: page }).is({ path: pagePath }),
+        ProspectiveLocalReference({ raw, sourcePath: pagePath }).is({ value }),
+      )
+      .then(Referencing.resolve({ reference, form: "address", value })),
 );
 export const OutsideBodyReferencesDiagnose = localReferenceDiagnostic(
   "outside",
@@ -216,6 +315,23 @@ export const UnretargetableCopiedBodyAssetsDiagnose = reaction(
           source: pagePath,
         }),
       ),
+);
+
+/** Check final page references only after routes and every output intention are complete. */
+export const MissingAbsoluteReferencesDiagnose = reaction(({ action, result, target }) =>
+  when(returned({ concept: "Deploying", action, result }))
+    .where(
+      computations.deploymentTransitionCompleted({ action, result }),
+      Deploying._outcome({}).is({ state: "completed" }),
+      MissingAbsoluteReference({}).is({ target }),
+    )
+    .then(Diagnosing.report({
+      scope: DIAGNOSTIC_SCOPES.references,
+      severity: "warning",
+      code: MISSING_OUTPUT_REFERENCE_CODE,
+      message: MISSING_OUTPUT_REFERENCE_MESSAGE,
+      source: target,
+    })),
 );
 
 /** The completed layout is the only pass that applies the configured site base. */

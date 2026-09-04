@@ -40,7 +40,7 @@ Only `build` is reserved in page data.
 | `build.route` | Claims one explicit canonical route. |
 | `build.publish` | Includes or withholds the document. The default is `true`. |
 
-An unpublished document is parsed and layered while remaining outside routing, output, and collections. Links to unpublished documents are errors. This project keeps [`content/drafts/hidden.md`](https://github.com/mit-sdg/syncpress/blob/main/example/content/drafts/hidden.md) as an executable example.
+An unpublished document is parsed and layered while remaining outside routing, output, and collections. Links to unpublished documents produce missing-output warnings without blocking publication. This project keeps [`content/drafts/hidden.md`](https://github.com/mit-sdg/syncpress/blob/main/example/content/drafts/hidden.md) as an executable example.
 
 ## Derived routes
 

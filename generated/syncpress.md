@@ -762,35 +762,40 @@ Defined in [Watching](../design/concepts/Watching.md), line 1.
 
 ## Computations
 
-- `addressOutputPath(address: Value) : Value` — [Syncpress application composition](../design/application.md), line 256.
-- `deploymentFeedPreparation(path: Value, title: Value, description: Value, site: Value, entries: Value) : Value` — [Syncpress application composition](../design/application.md), line 259.
-- `deploymentPaginationContext(site: Value, collections: Value, address: Value, canonicalUrl: Value, sourcePath: Value, title: Value, collection: Value, number: Value, pages: Value, cards: Value, previous: Value, next: Value) : Value` — [Syncpress application composition](../design/application.md), line 262.
-- `deploymentRedirectDocument(target: Value, canonical: Value) : Value` — [Syncpress application composition](../design/application.md), line 265.
-- `deploymentSitemapDocument(urls: Value) : Value` — [Syncpress application composition](../design/application.md), line 268.
-- `deploymentTransitionWork(action: Value, result: Value) : Value` — [Syncpress application composition](../design/application.md), line 271.
-- `deriveAddress(path: Value) : Value` — [Syncpress application composition](../design/application.md), line 274.
-- `directoryPath(path: Value) : Value` — [Syncpress application composition](../design/application.md), line 277.
-- `isAbsentValue(value: Value) : Value` — [Syncpress application composition](../design/application.md), line 280.
-- `isTextValue(value: Value) : Value` — [Syncpress application composition](../design/application.md), line 283.
-- `joinPath(prefix: Value, name: Value) : Value` — [Syncpress application composition](../design/application.md), line 286.
-- `outputPathAddress(path: Value) : Value` — [Syncpress application composition](../design/application.md), line 289.
-- `pageRenderingError(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 292.
-- `pageRenderingErrorDetail(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 295.
-- `pageRenderingProfile(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 298.
-- `pageRenderingSelectionHasValidity(path: Value, data: Value, valid: Value) : Value` — [Syncpress application composition](../design/application.md), line 301.
-- `pageRenderingTemplate(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 304.
-- `patternHasResult(pattern: Value, path: Value, matched: Value) : Value` — [Syncpress application composition](../design/application.md), line 307.
-- `projectAbsoluteSiteUrl(base: Value, origin: Value, address: Value) : Value` — [Syncpress application composition](../design/application.md), line 310.
-- `projectSiteUrl(base: Value, target: Value) : Value` — [Syncpress application composition](../design/application.md), line 313.
-- `publicationTransactionPrefix(destination: Value) : Value` — [Syncpress application composition](../design/application.md), line 316.
-- `relativePath(path: Value, prefix: Value) : Value` — [Syncpress application composition](../design/application.md), line 319.
-- `retargetReference(replacement: Value, original: Value) : Value` — [Syncpress application composition](../design/application.md), line 322.
-- `syncpressCommandName(words: Value) : Value` — [Syncpress application composition](../design/application.md), line 325.
-- `syncpressCommandOperands(words: Value) : Value` — [Syncpress application composition](../design/application.md), line 328.
-- `syncpressCommandValid(words: Value) : Value` — [Syncpress application composition](../design/application.md), line 331.
-- `syncpressMisuse() : Value` — [Syncpress application composition](../design/application.md), line 334.
-- `syncpressUsage() : Value` — [Syncpress application composition](../design/application.md), line 337.
-- `targetHasKind(target: Value, kind: Value) : Value` — [Syncpress application composition](../design/application.md), line 340.
+- `absoluteReferenceAddress(target: Value) : Value` — [Syncpress application composition](../design/application.md), line 259.
+- `absoluteReferenceOutputPath(target: Value) : Value` — [Syncpress application composition](../design/application.md), line 262.
+- `absoluteReferencePath(target: Value) : Value` — [Syncpress application composition](../design/application.md), line 265.
+- `addressOutputPath(address: Value) : Value` — [Syncpress application composition](../design/application.md), line 268.
+- `deploymentFeedPreparation(path: Value, title: Value, description: Value, site: Value, entries: Value) : Value` — [Syncpress application composition](../design/application.md), line 271.
+- `deploymentPaginationContext(site: Value, collections: Value, address: Value, canonicalUrl: Value, sourcePath: Value, title: Value, collection: Value, number: Value, pages: Value, cards: Value, previous: Value, next: Value) : Value` — [Syncpress application composition](../design/application.md), line 274.
+- `deploymentRedirectDocument(target: Value, canonical: Value) : Value` — [Syncpress application composition](../design/application.md), line 277.
+- `deploymentSitemapDocument(urls: Value) : Value` — [Syncpress application composition](../design/application.md), line 280.
+- `deploymentTransitionCompleted(action: Value, result: Value) : Value` — [Syncpress application composition](../design/application.md), line 283.
+- `deploymentTransitionWork(action: Value, result: Value) : Value` — [Syncpress application composition](../design/application.md), line 286.
+- `deriveAddress(path: Value) : Value` — [Syncpress application composition](../design/application.md), line 289.
+- `directoryPath(path: Value) : Value` — [Syncpress application composition](../design/application.md), line 292.
+- `isAbsentValue(value: Value) : Value` — [Syncpress application composition](../design/application.md), line 295.
+- `isTextValue(value: Value) : Value` — [Syncpress application composition](../design/application.md), line 298.
+- `joinPath(prefix: Value, name: Value) : Value` — [Syncpress application composition](../design/application.md), line 301.
+- `outputPathAddress(path: Value) : Value` — [Syncpress application composition](../design/application.md), line 304.
+- `pageRenderingError(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 307.
+- `pageRenderingErrorDetail(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 310.
+- `pageRenderingProfile(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 313.
+- `pageRenderingSelectionHasValidity(path: Value, data: Value, valid: Value) : Value` — [Syncpress application composition](../design/application.md), line 316.
+- `pageRenderingTemplate(path: Value, data: Value) : Value` — [Syncpress application composition](../design/application.md), line 319.
+- `patternHasResult(pattern: Value, path: Value, matched: Value) : Value` — [Syncpress application composition](../design/application.md), line 322.
+- `projectAbsoluteSiteUrl(base: Value, origin: Value, address: Value) : Value` — [Syncpress application composition](../design/application.md), line 325.
+- `projectSiteUrl(base: Value, target: Value) : Value` — [Syncpress application composition](../design/application.md), line 328.
+- `prospectiveLocalReferenceAddress(sourcePath: Value, target: Value) : Value` — [Syncpress application composition](../design/application.md), line 331.
+- `publicationTransactionPrefix(destination: Value) : Value` — [Syncpress application composition](../design/application.md), line 334.
+- `relativePath(path: Value, prefix: Value) : Value` — [Syncpress application composition](../design/application.md), line 337.
+- `retargetReference(replacement: Value, original: Value) : Value` — [Syncpress application composition](../design/application.md), line 340.
+- `syncpressCommandName(words: Value) : Value` — [Syncpress application composition](../design/application.md), line 343.
+- `syncpressCommandOperands(words: Value) : Value` — [Syncpress application composition](../design/application.md), line 346.
+- `syncpressCommandValid(words: Value) : Value` — [Syncpress application composition](../design/application.md), line 349.
+- `syncpressMisuse() : Value` — [Syncpress application composition](../design/application.md), line 352.
+- `syncpressUsage() : Value` — [Syncpress application composition](../design/application.md), line 355.
+- `targetHasKind(target: Value, kind: Value) : Value` — [Syncpress application composition](../design/application.md), line 358.
 
 ## Views
 
@@ -799,7 +804,7 @@ _Views name reusable conditions. Multiple `where` blocks are alternatives._
 ### absolute site URL of address (address)
 
 Authored path: `fullSite.calculations.AbsoluteSiteUrl`.
-- Covered by [Syncpress application composition](../design/application.md), line 197.
+- Covered by [Syncpress application composition](../design/application.md), line 200.
 
 ```view
 absolute site URL of address (address) — inputs (address); outputs (url); bindings (base, origin) — answers at most one (url)
@@ -823,7 +828,7 @@ active deployment work returned by queue transition (action, result) — inputs 
 ### address of output path (path)
 
 Authored path: `fullSite.calculations.OutputPathAddress`.
-- Covered by [Syncpress application composition](../design/application.md), line 202.
+- Covered by [Syncpress application composition](../design/application.md), line 205.
 
 ```view
 address of output path (path) — inputs (path); outputs (address); bindings () — answers at most one (address)
@@ -843,7 +848,7 @@ committable deployment work of producer (producer) — inputs (producer); output
 ### content document file
 
 Authored path: `fullSite.views.ContentDocumentFile`.
-- Covered by [Syncpress application composition](../design/application.md), line 218.
+- Covered by [Syncpress application composition](../design/application.md), line 221.
 
 ```view
 content document file — inputs (); outputs (file, text); bindings (root, path) — answers any number of (file, text)
@@ -862,7 +867,7 @@ content document file — inputs (); outputs (file, text); bindings (root, path)
 ### relative body reference of source (source)
 
 Authored path: `fullSite.references.RelativeBodyReference`.
-- Covered by [Syncpress application composition](../design/application.md), line 214.
+- Covered by [Syncpress application composition](../design/application.md), line 217.
 
 ```view
 relative body reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, role); bindings () — answers any number of (rendering, page, reference, raw, role)
@@ -876,7 +881,7 @@ relative body reference of source (source) — inputs (source); outputs (renderi
 ### resolved local body reference of source (source)
 
 Authored path: `fullSite.references.ResolvedLocalBodyReference`.
-- Covered by [Syncpress application composition](../design/application.md), line 215.
+- Covered by [Syncpress application composition](../design/application.md), line 218.
 
 ```view
 resolved local body reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, role, target); bindings () — answers any number of (rendering, page, reference, raw, role, target)
@@ -888,7 +893,7 @@ resolved local body reference of source (source) — inputs (source); outputs (r
 ### unrouted content body asset of source (source)
 
 Authored path: `fullSite.references.UnroutedContentBodyAsset`.
-- Covered by [Syncpress application composition](../design/application.md), line 216.
+- Covered by [Syncpress application composition](../design/application.md), line 219.
 
 ```view
 unrouted content body asset of source (source) — inputs (source); outputs (rendering, page, reference, raw, role, asset, sourcePath, content); bindings (root) — answers any number of (rendering, page, reference, raw, role, asset, sourcePath, content)
@@ -913,7 +918,7 @@ copyable body asset of source (source) — inputs (source); outputs (rendering, 
 ### derived address of path (path)
 
 Authored path: `fullSite.calculations.DerivedAddress`.
-- Covered by [Syncpress application composition](../design/application.md), line 199.
+- Covered by [Syncpress application composition](../design/application.md), line 202.
 
 ```view
 derived address of path (path) — inputs (path); outputs (address); bindings () — answers at most one (address)
@@ -925,7 +930,7 @@ derived address of path (path) — inputs (path); outputs (address); bindings ()
 ### directory prefix of path (path)
 
 Authored path: `fullSite.calculations.DirectoryPath`.
-- Covered by [Syncpress application composition](../design/application.md), line 200.
+- Covered by [Syncpress application composition](../design/application.md), line 203.
 
 ```view
 directory prefix of path (path) — inputs (path); outputs (prefix); bindings () — answers at most one (prefix)
@@ -976,7 +981,7 @@ held layout reference of source (source) — inputs (source); outputs (reference
 ### the settled site build of job (job)
 
 Authored path: `fullSite.endpoints.SettledSiteBuild`.
-- Covered by [Syncpress application composition](../design/application.md), line 209.
+- Covered by [Syncpress application composition](../design/application.md), line 212.
 
 ```view
 the settled site build of job (job) — inputs (job); outputs (state); bindings () — answers at most one (state)
@@ -988,7 +993,7 @@ the settled site build of job (job) — inputs (job); outputs (state); bindings 
 ### unsettled route owner
 
 Authored path: `fullSite.endpoints.UnsettledRouteOwners`.
-- Covered by [Syncpress application composition](../design/application.md), line 210.
+- Covered by [Syncpress application composition](../design/application.md), line 213.
 
 ```view
 unsettled route owner — inputs (); outputs (owner); bindings () — answers any number of (owner)
@@ -1000,7 +1005,7 @@ unsettled route owner — inputs (); outputs (owner); bindings () — answers an
 ### job (job) is a publishable site build
 
 Authored path: `fullSite.endpoints.PublishableSiteBuild`.
-- Covered by [Syncpress application composition](../design/application.md), line 208.
+- Covered by [Syncpress application composition](../design/application.md), line 211.
 
 ```view
 job (job) is a publishable site build — inputs (job); outputs (); bindings ()
@@ -1014,7 +1019,7 @@ job (job) is a publishable site build — inputs (job); outputs (); bindings ()
 ### output path of address (address)
 
 Authored path: `fullSite.calculations.AddressOutputPath`.
-- Covered by [Syncpress application composition](../design/application.md), line 198.
+- Covered by [Syncpress application composition](../design/application.md), line 201.
 
 ```view
 output path of address (address) — inputs (address); outputs (path); bindings () — answers at most one (path)
@@ -1026,7 +1031,7 @@ output path of address (address) — inputs (address); outputs (path); bindings 
 ### path (path) relative to prefix (prefix)
 
 Authored path: `fullSite.calculations.RelativePath`.
-- Covered by [Syncpress application composition](../design/application.md), line 204.
+- Covered by [Syncpress application composition](../design/application.md), line 207.
 
 ```view
 path (path) relative to prefix (prefix) — inputs (path, prefix); outputs (relative); bindings () — answers at most one (relative)
@@ -1038,7 +1043,7 @@ path (path) relative to prefix (prefix) — inputs (path, prefix); outputs (rela
 ### path joining prefix (prefix) and name (name)
 
 Authored path: `fullSite.calculations.JoinedPath`.
-- Covered by [Syncpress application composition](../design/application.md), line 201.
+- Covered by [Syncpress application composition](../design/application.md), line 204.
 
 ```view
 path joining prefix (prefix) and name (name) — inputs (prefix, name); outputs (path); bindings () — answers at most one (path)
@@ -1050,7 +1055,7 @@ path joining prefix (prefix) and name (name) — inputs (prefix, name); outputs 
 ### pending failed rendering cleanup
 
 Authored path: `fullSite.render.PendingFailedRenderingCleanup`.
-- Covered by [Syncpress application composition](../design/application.md), line 217.
+- Covered by [Syncpress application composition](../design/application.md), line 220.
 
 ```view
 pending failed rendering cleanup — inputs (); outputs (page, rendering); bindings (dependencyAttempt, emissionAttempt) — answers any number of (page, rendering)
@@ -1068,7 +1073,7 @@ pending failed rendering cleanup — inputs (); outputs (page, rendering); bindi
 ### primary raster body asset reference of source (source)
 
 Authored path: `fullSite.images.RasterBodyAssetReference`.
-- Covered by [Syncpress application composition](../design/application.md), line 211.
+- Covered by [Syncpress application composition](../design/application.md), line 214.
 
 ```view
 primary raster body asset reference of source (source) — inputs (source); outputs (rendering, page, reference, raw, image, sourcePath, content); bindings () — answers any number of (rendering, page, reference, raw, image, sourcePath, content)
@@ -1077,10 +1082,21 @@ primary raster body asset reference of source (source) — inputs (source); outp
     patternHasResult (matched: true, path: sourcePath, pattern: "**/*.{avif,gif,jpeg,jpg,png,webp}")
 ```
 
+### prospective URL for local reference (raw) from source path (sourcePath)
+
+```view
+prospective URL for local reference (raw) from source path (sourcePath) — inputs (raw, sourcePath); outputs (value, target); bindings () — answers at most one (value, target)
+  where
+    value is prospectiveLocalReferenceAddress (sourcePath, target: raw)
+    isTextValue (value)
+    target is absoluteReferencePath (target: value)
+    isTextValue (value: target)
+```
+
 ### responsive body image embedding (embedding)
 
 Authored path: `fullSite.images.ResponsiveBodyImageEmbedding`.
-- Covered by [Syncpress application composition](../design/application.md), line 212.
+- Covered by [Syncpress application composition](../design/application.md), line 215.
 
 ```view
 responsive body image embedding (embedding) — inputs (embedding); outputs (rendering, page, original); bindings (source, reference, raw, image) — answers at most one (rendering, page, original)
@@ -1097,7 +1113,7 @@ responsive body image embedding (embedding) — inputs (embedding); outputs (ren
 ### retargeted reference from original (original) to replacement (replacement)
 
 Authored path: `fullSite.calculations.RetargetedReference`.
-- Covered by [Syncpress application composition](../design/application.md), line 205.
+- Covered by [Syncpress application composition](../design/application.md), line 208.
 
 ```view
 retargeted reference from original (original) to replacement (replacement) — inputs (replacement, original); outputs (target); bindings () — answers at most one (target)
@@ -1117,7 +1133,7 @@ routed deployment work (work) — inputs (work); outputs (owner, address); bindi
 ### site URL of target (target)
 
 Authored path: `fullSite.calculations.SiteUrl`.
-- Covered by [Syncpress application composition](../design/application.md), line 206.
+- Covered by [Syncpress application composition](../design/application.md), line 209.
 
 ```view
 site URL of target (target) — inputs (target); outputs (url); bindings (base) — answers at most one (url)
@@ -1125,6 +1141,56 @@ site URL of target (target) — inputs (target); outputs (url); bindings (base) 
     Governing._site () has (base)
     url is projectSiteUrl (base, target)
     isTextValue (value: url)
+```
+
+### site-absolute reference (raw) names a routed address
+
+```view
+site-absolute reference (raw) names a routed address — inputs (raw); outputs (); bindings (address)
+  where
+    address is absoluteReferenceAddress (target: raw)
+    isTextValue (value: address)
+    Routing._owner (address)
+```
+
+### site-absolute reference (raw) names an emitted path
+
+```view
+site-absolute reference (raw) names an emitted path — inputs (raw); outputs (); bindings (path)
+  where
+    path is absoluteReferenceOutputPath (target: raw)
+    isTextValue (value: path)
+    Emitting._intent (path)
+```
+
+### site-absolute reference in a completed page
+
+```view
+site-absolute reference in a completed page — inputs (); outputs (raw, sourcePath); bindings (source, rendering, page, owner) — answers any number of (raw, sourcePath)
+  where
+    RenderTracking._all () has (rendering, stage: "completed", subject: page)
+    Referencing._finished (part: "layout", subject: rendering) has (source)
+    Referencing._references (source) has (raw)
+    targetHasKind (kind: "absolute", target: raw)
+    Filing._file (file: page) has (path: sourcePath)
+  where
+    Routing._claims () has (owner)
+    Deploying._forOwner (owner) has (kind: "pagination-page", sourcePath)
+    Referencing._finished (part: "deployment-layout", subject: owner) has (source)
+    Referencing._references (source) has (raw)
+    targetHasKind (kind: "absolute", target: raw)
+```
+
+### site-absolute reference without a produced target
+
+```view
+site-absolute reference without a produced target — inputs (); outputs (raw, target, sourcePath); bindings () — answers any number of (raw, target, sourcePath)
+  where
+    view "site-absolute reference in a completed page" has (raw, sourcePath)
+    target is absoluteReferencePath (target: raw)
+    isTextValue (value: target)
+    no view "site-absolute reference (raw) names a routed address" with (raw)
+    no view "site-absolute reference (raw) names an emitted path" with (raw)
 ```
 
 ### sitemap page
@@ -1140,7 +1206,7 @@ sitemap page — inputs (); outputs (owner, address, url); bindings () — answe
 ### the Syncpress command represented by words (words)
 
 Authored path: `fullSite.commanding.SyncpressCommand`.
-- Covered by [Syncpress application composition](../design/application.md), line 207.
+- Covered by [Syncpress application composition](../design/application.md), line 210.
 
 ```view
 the Syncpress command represented by words (words) — inputs (words); outputs (name, operands); bindings () — answers at most one (name, operands)
@@ -1167,7 +1233,7 @@ the Syncpress usage report — inputs (); outputs (text); bindings () — answer
 ### the inspection owner of target (target)
 
 Authored path: `fullSite.inspection.InspectionOwner`.
-- Covered by [Syncpress application composition](../design/application.md), line 213.
+- Covered by [Syncpress application composition](../design/application.md), line 216.
 
 ```view
 the inspection owner of target (target) — inputs (target); outputs (owner); bindings (root) — answers at most one (owner)
@@ -1190,7 +1256,7 @@ the invalid rendering selection for path (path) and data (data) — inputs (path
 ### the publication place
 
 Authored path: `fullSite.views.PublicationPlace`.
-- Covered by [Syncpress application composition](../design/application.md), line 219.
+- Covered by [Syncpress application composition](../design/application.md), line 222.
 
 ```view
 the publication place — inputs (); outputs (place, destination); bindings () — answers at most one (place, destination)
@@ -1206,7 +1272,7 @@ the publication place — inputs (); outputs (place, destination); bindings () �
 ### the publication transaction prefix of destination (destination)
 
 Authored path: `fullSite.calculations.PublicationTransactionPrefix`.
-- Covered by [Syncpress application composition](../design/application.md), line 203.
+- Covered by [Syncpress application composition](../design/application.md), line 206.
 
 ```view
 the publication transaction prefix of destination (destination) — inputs (destination); outputs (prefix); bindings () — answers at most one (prefix)
@@ -1366,7 +1432,7 @@ Former "the site render facts" — inputs (); bindings (site, collections); prom
 ### the originated completed render context of rendering (rendering)
 
 Authored path: `fullSite.views.CompletedOriginatedPageRenderContext`.
-- Covered by [Syncpress application composition](../design/application.md), line 222.
+- Covered by [Syncpress application composition](../design/application.md), line 225.
 
 ```former
 Former "the originated completed render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
@@ -1381,7 +1447,7 @@ Former "the originated completed render context of rendering (rendering)" — in
 ### the originated render context of rendering (rendering)
 
 Authored path: `fullSite.views.OriginatedPageRenderContext`.
-- Covered by [Syncpress application composition](../design/application.md), line 224.
+- Covered by [Syncpress application composition](../design/application.md), line 227.
 
 ```former
 Former "the originated render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
@@ -1407,7 +1473,7 @@ Former "the output inspection of owner (owner)" — inputs (owner); bindings (pa
 ### the publication card of page (page)
 
 Authored path: `fullSite.views.PublicationCard`.
-- Covered by [Syncpress application composition](../design/application.md), line 225.
+- Covered by [Syncpress application composition](../design/application.md), line 228.
 
 ```former
 Former "the publication card of page (page)" — inputs (page); bindings (data, address, excerpt, root, path); promises exactly one record — forms:
@@ -1464,7 +1530,7 @@ Former "the route inspection of owner (owner)" — inputs (owner); bindings (rou
 ### the site build summary
 
 Authored path: `fullSite.views.SiteBuildSummary`.
-- Covered by [Syncpress application composition](../design/application.md), line 226.
+- Covered by [Syncpress application composition](../design/application.md), line 229.
 
 ```former
 Former "the site build summary" — inputs (); bindings (owner, file, policy, destination, severity, code, message, source, line, column); promises exactly one record — forms:
@@ -1515,7 +1581,7 @@ Former "the template inspection of owner (owner)" — inputs (owner); bindings (
 ### the site inspection of owner (owner)
 
 Authored path: `fullSite.inspection.SiteInspection`.
-- Covered by [Syncpress application composition](../design/application.md), line 221.
+- Covered by [Syncpress application composition](../design/application.md), line 224.
 
 ```former
 Former "the site inspection of owner (owner)" — inputs (owner); bindings (); promises exactly one record — forms:
@@ -1554,7 +1620,7 @@ Former "the unoriginated page render facts of rendering (rendering)" — inputs 
 ### the unoriginated completed render context of rendering (rendering)
 
 Authored path: `fullSite.views.CompletedUnoriginatedPageRenderContext`.
-- Covered by [Syncpress application composition](../design/application.md), line 223.
+- Covered by [Syncpress application composition](../design/application.md), line 226.
 
 ```former
 Former "the unoriginated completed render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
@@ -1569,7 +1635,7 @@ Former "the unoriginated completed render context of rendering (rendering)" — 
 ### the unoriginated render context of rendering (rendering)
 
 Authored path: `fullSite.views.UnoriginatedPageRenderContext`.
-- Covered by [Syncpress application composition](../design/application.md), line 227.
+- Covered by [Syncpress application composition](../design/application.md), line 230.
 
 ```former
 Former "the unoriginated render context of rendering (rendering)" — inputs (rendering); bindings (); promises exactly one record — forms:
@@ -1636,7 +1702,7 @@ then
 
 Authored path: `fullSite.commanding.AnnounceMisuse`.
 - Covered by [Syncpress application composition](../design/application.md), line 14.
-- Covered by [Syncpress application composition](../design/application.md), line 233.
+- Covered by [Syncpress application composition](../design/application.md), line 236.
 
 ```reaction
 when RequestBoundary.request (path: "/cli/misuse", requestId)
@@ -1650,7 +1716,7 @@ then
 
 Authored path: `fullSite.commanding.AnnounceMisuse`.
 - Covered by [Syncpress application composition](../design/application.md), line 14.
-- Covered by [Syncpress application composition](../design/application.md), line 233.
+- Covered by [Syncpress application composition](../design/application.md), line 236.
 
 ```reaction
 when Commanding.writeLine (stream: "error", text), asked by fullSite.commanding.AnnounceMisuse
@@ -1664,7 +1730,7 @@ then
 
 Authored path: `fullSite.commanding.AnnounceUsage`.
 - Covered by [Syncpress application composition](../design/application.md), line 15.
-- Covered by [Syncpress application composition](../design/application.md), line 234.
+- Covered by [Syncpress application composition](../design/application.md), line 237.
 
 ```reaction
 when RequestBoundary.request (path: "/cli/usage", requestId)
@@ -1678,7 +1744,7 @@ then
 
 Authored path: `fullSite.commanding.AnnounceUsage`.
 - Covered by [Syncpress application composition](../design/application.md), line 15.
-- Covered by [Syncpress application composition](../design/application.md), line 234.
+- Covered by [Syncpress application composition](../design/application.md), line 237.
 
 ```reaction
 when Commanding.writeLine (stream: "output", text), asked by fullSite.commanding.AnnounceUsage
@@ -1692,7 +1758,7 @@ then
 
 Authored path: `fullSite.commanding.HoldUntilStopped`.
 - Covered by [Syncpress application composition](../design/application.md), line 16.
-- Covered by [Syncpress application composition](../design/application.md), line 235.
+- Covered by [Syncpress application composition](../design/application.md), line 238.
 
 ```reaction
 when RequestBoundary.request (path: "/cli/hold", requestId)
@@ -1704,7 +1770,7 @@ then
 
 Authored path: `fullSite.commanding.HoldUntilStopped`.
 - Covered by [Syncpress application composition](../design/application.md), line 16.
-- Covered by [Syncpress application composition](../design/application.md), line 235.
+- Covered by [Syncpress application composition](../design/application.md), line 238.
 
 ```reaction
 when Holding.awaitStop (reason), asked by fullSite.commanding.HoldUntilStopped
@@ -1718,7 +1784,7 @@ then
 
 Authored path: `fullSite.commanding.InterpretCommandLine`.
 - Covered by [Syncpress application composition](../design/application.md), line 17.
-- Covered by [Syncpress application composition](../design/application.md), line 236.
+- Covered by [Syncpress application composition](../design/application.md), line 239.
 
 ```reaction
 when RequestBoundary.request (arguments: supplied, path: "/cli/interpret", requestId)
@@ -1730,7 +1796,7 @@ then
 
 Authored path: `fullSite.commanding.InterpretCommandLine`.
 - Covered by [Syncpress application composition](../design/application.md), line 17.
-- Covered by [Syncpress application composition](../design/application.md), line 236.
+- Covered by [Syncpress application composition](../design/application.md), line 239.
 
 ```reaction
 when Commanding.captureArguments (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
@@ -1745,7 +1811,7 @@ then
 
 Authored path: `fullSite.commanding.InterpretCommandLine`.
 - Covered by [Syncpress application composition](../design/application.md), line 17.
-- Covered by [Syncpress application composition](../design/application.md), line 236.
+- Covered by [Syncpress application composition](../design/application.md), line 239.
 
 ```reaction
 when Commanding.captureArguments (arguments: supplied, words), asked by fullSite.commanding.InterpretCommandLine
@@ -1760,7 +1826,7 @@ then
 
 Authored path: `fullSite.commanding.SetCommandLineExit`.
 - Covered by [Syncpress application composition](../design/application.md), line 18.
-- Covered by [Syncpress application composition](../design/application.md), line 237.
+- Covered by [Syncpress application composition](../design/application.md), line 240.
 
 ```reaction
 when RequestBoundary.request (code, path: "/cli/exit", requestId)
@@ -1772,7 +1838,7 @@ then
 
 Authored path: `fullSite.commanding.SetCommandLineExit`.
 - Covered by [Syncpress application composition](../design/application.md), line 18.
-- Covered by [Syncpress application composition](../design/application.md), line 237.
+- Covered by [Syncpress application composition](../design/application.md), line 240.
 
 ```reaction
 when Commanding.setExitStatus (code), asked by fullSite.commanding.SetCommandLineExit
@@ -1786,7 +1852,7 @@ then
 
 Authored path: `fullSite.commanding.WriteCommandLine`.
 - Covered by [Syncpress application composition](../design/application.md), line 19.
-- Covered by [Syncpress application composition](../design/application.md), line 238.
+- Covered by [Syncpress application composition](../design/application.md), line 241.
 
 ```reaction
 when RequestBoundary.request (path: "/cli/write", requestId, stream, text)
@@ -1798,7 +1864,7 @@ then
 
 Authored path: `fullSite.commanding.WriteCommandLine`.
 - Covered by [Syncpress application composition](../design/application.md), line 19.
-- Covered by [Syncpress application composition](../design/application.md), line 238.
+- Covered by [Syncpress application composition](../design/application.md), line 241.
 
 ```reaction
 when Commanding.writeLine (stream, text), asked by fullSite.commanding.WriteCommandLine
@@ -2732,7 +2798,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when RequestBoundary.request (destination, directory, path: "/site/build", requestId)
@@ -2746,7 +2812,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when Locating.recordRequest (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput
@@ -2758,7 +2824,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#2
@@ -2770,7 +2836,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when Phasing.start (sequence, job), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#3
@@ -2785,7 +2851,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
@@ -2801,7 +2867,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
@@ -2816,7 +2882,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
@@ -2833,7 +2899,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput#4
@@ -2847,7 +2913,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtConfiguredOutput`.
 - Covered by [Syncpress application composition](../design/application.md), line 71.
-- Covered by [Syncpress application composition](../design/application.md), line 239.
+- Covered by [Syncpress application composition](../design/application.md), line 242.
 
 ```reaction
 when Emitting.reconcile (kept, removed, replaced, written), asked by fullSite.endpoints.BuildSiteAtConfiguredOutput:published#5
@@ -2861,7 +2927,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when RequestBoundary.request (destination, directory, path: "/site/build", requestId)
@@ -2875,7 +2941,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when Locating.recordRequest (name: "site", path: directory), asked by fullSite.endpoints.BuildSiteAtDestination
@@ -2889,7 +2955,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when Locating.recordRequest (name: "destination", path: destination), asked by fullSite.endpoints.BuildSiteAtDestination#2
@@ -2901,7 +2967,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.endpoints.BuildSiteAtDestination#3
@@ -2913,7 +2979,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when Phasing.start (sequence, job), asked by fullSite.endpoints.BuildSiteAtDestination#4
@@ -2928,7 +2994,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
@@ -2944,7 +3010,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
@@ -2959,7 +3025,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
@@ -2976,7 +3042,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.BuildSiteAtDestination#5
@@ -2990,7 +3056,7 @@ then
 
 Authored path: `fullSite.endpoints.BuildSiteAtDestination`.
 - Covered by [Syncpress application composition](../design/application.md), line 72.
-- Covered by [Syncpress application composition](../design/application.md), line 240.
+- Covered by [Syncpress application composition](../design/application.md), line 243.
 
 ```reaction
 when Emitting.reconcile (kept, removed, replaced, written), asked by fullSite.endpoints.BuildSiteAtDestination:published#6
@@ -3004,7 +3070,7 @@ then
 
 Authored path: `fullSite.endpoints.InspectSite`.
 - Covered by [Syncpress application composition](../design/application.md), line 73.
-- Covered by [Syncpress application composition](../design/application.md), line 241.
+- Covered by [Syncpress application composition](../design/application.md), line 244.
 
 ```reaction
 when RequestBoundary.request (directory, path: "/site/inspect", requestId, target)
@@ -3016,7 +3082,7 @@ then
 
 Authored path: `fullSite.endpoints.InspectSite`.
 - Covered by [Syncpress application composition](../design/application.md), line 73.
-- Covered by [Syncpress application composition](../design/application.md), line 241.
+- Covered by [Syncpress application composition](../design/application.md), line 244.
 
 ```reaction
 when Locating.recordRequest (name: "site", path: directory), asked by fullSite.endpoints.InspectSite
@@ -3028,7 +3094,7 @@ then
 
 Authored path: `fullSite.endpoints.InspectSite`.
 - Covered by [Syncpress application composition](../design/application.md), line 73.
-- Covered by [Syncpress application composition](../design/application.md), line 241.
+- Covered by [Syncpress application composition](../design/application.md), line 244.
 
 ```reaction
 when Phasing.declare (name: "site-build", phases: ["locate", "stage", "settings", "read", "route", "excerpt", "collect", "render", "emit"], sequence), asked by fullSite.endpoints.InspectSite#2
@@ -3040,7 +3106,7 @@ then
 
 Authored path: `fullSite.endpoints.InspectSite`.
 - Covered by [Syncpress application composition](../design/application.md), line 73.
-- Covered by [Syncpress application composition](../design/application.md), line 241.
+- Covered by [Syncpress application composition](../design/application.md), line 244.
 
 ```reaction
 when Phasing.start (sequence, job), asked by fullSite.endpoints.InspectSite#3
@@ -3055,7 +3121,7 @@ then
 
 Authored path: `fullSite.endpoints.InspectSite`.
 - Covered by [Syncpress application composition](../design/application.md), line 73.
-- Covered by [Syncpress application composition](../design/application.md), line 241.
+- Covered by [Syncpress application composition](../design/application.md), line 244.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
@@ -3070,7 +3136,7 @@ then
 
 Authored path: `fullSite.endpoints.InspectSite`.
 - Covered by [Syncpress application composition](../design/application.md), line 73.
-- Covered by [Syncpress application composition](../design/application.md), line 241.
+- Covered by [Syncpress application composition](../design/application.md), line 244.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
@@ -3086,7 +3152,7 @@ then
 
 Authored path: `fullSite.endpoints.InspectSite`.
 - Covered by [Syncpress application composition](../design/application.md), line 73.
-- Covered by [Syncpress application composition](../design/application.md), line 241.
+- Covered by [Syncpress application composition](../design/application.md), line 244.
 
 ```reaction
 when DeliveryArbitration.settle (task: job, interrupted: false), asked by fullSite.endpoints.InspectSite#4
@@ -3102,7 +3168,7 @@ then
 
 Authored path: `fullSite.endpoints.ReadSiteSummary`.
 - Covered by [Syncpress application composition](../design/application.md), line 74.
-- Covered by [Syncpress application composition](../design/application.md), line 242.
+- Covered by [Syncpress application composition](../design/application.md), line 245.
 
 ```reaction
 when RequestBoundary.request (path: "/site/summary", requestId)
@@ -3449,25 +3515,57 @@ then
   Diagnosing.report (code: "INVALID_LOCAL_REFERENCE", message: "This local reference has an invalid path spelling.", scope: "page-rendering", severity: "error", source: path)
 ```
 
+### fullSite.references.MissingAbsoluteReferencesDiagnose
+
+Authored path: `fullSite.references.MissingAbsoluteReferencesDiagnose`.
+- Covered by [Syncpress application composition](../design/application.md), line 97.
+
+```reaction
+when any action is returned (action, concept: "Deploying", result)
+where
+  deploymentTransitionCompleted (action, result)
+  Deploying._outcome () has (state: "completed")
+  view "site-absolute reference without a produced target" has (target)
+then
+  Diagnosing.report (code: "MISSING_OUTPUT_REFERENCE", message: "No generated route or output file matches this reference.", scope: "site-reference-checking", severity: "warning", source: target)
+```
+
 ### fullSite.references.MissingBodyReferencesDiagnose
 
 Authored path: `fullSite.references.MissingBodyReferencesDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 97.
+- Covered by [Syncpress application composition](../design/application.md), line 98.
 
 ```reaction
 when Referencing.scan (part: "body", source)
 where
   view "relative body reference of source (source)" with (source) has (page, raw)
   Filing._resolution (address: raw, file: page) has (status: "missing")
-  Filing._file (file: page) has (path)
+  Filing._file (file: page) has (path: pagePath)
+  view "prospective URL for local reference (raw) from source path (sourcePath)" with (raw, sourcePath: pagePath) has (target: address)
 then
-  Diagnosing.report (code: "MISSING_LOCAL_REFERENCE", message: "This local reference names no staged content file.", scope: "page-rendering", severity: "error", source: path)
+  Diagnosing.report (code: "MISSING_OUTPUT_REFERENCE", message: "No generated route or output file matches this reference.", scope: "site-reference-checking", severity: "warning", source: address)
+```
+
+### fullSite.references.MissingBodyReferencesHold
+
+Authored path: `fullSite.references.MissingBodyReferencesHold`.
+- Covered by [Syncpress application composition](../design/application.md), line 99.
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  view "relative body reference of source (source)" with (source) has (page, raw, reference)
+  Filing._resolution (address: raw, file: page) has (status: "missing")
+  Filing._file (file: page) has (path: pagePath)
+  view "prospective URL for local reference (raw) from source path (sourcePath)" with (raw, sourcePath: pagePath) has (value)
+then
+  Referencing.resolve (form: "address", reference, value)
 ```
 
 ### fullSite.references.NonlocalBodyReferencesHold
 
 Authored path: `fullSite.references.NonlocalBodyReferencesHold`.
-- Covered by [Syncpress application composition](../design/application.md), line 98.
+- Covered by [Syncpress application composition](../design/application.md), line 100.
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3480,7 +3578,7 @@ then
 ### fullSite.references.NonlocalLayoutReferencesHold
 
 Authored path: `fullSite.references.NonlocalLayoutReferencesHold`.
-- Covered by [Syncpress application composition](../design/application.md), line 99.
+- Covered by [Syncpress application composition](../design/application.md), line 101.
 
 ```reaction
 when Referencing.scan (part: "layout", source)
@@ -3493,7 +3591,7 @@ then
 ### fullSite.references.OutsideBodyReferencesDiagnose
 
 Authored path: `fullSite.references.OutsideBodyReferencesDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 100.
+- Covered by [Syncpress application composition](../design/application.md), line 102.
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3508,7 +3606,7 @@ then
 ### fullSite.references.RelativeLayoutReferencesDiagnose
 
 Authored path: `fullSite.references.RelativeLayoutReferencesDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 101.
+- Covered by [Syncpress application composition](../design/application.md), line 103.
 
 ```reaction
 when Referencing.scan (part: "layout", source)
@@ -3525,25 +3623,45 @@ then
 ### fullSite.references.UnpublishedDocumentBodyReferencesDiagnose
 
 Authored path: `fullSite.references.UnpublishedDocumentBodyReferencesDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 102.
+- Covered by [Syncpress application composition](../design/application.md), line 104.
 
 ```reaction
 when Referencing.scan (part: "body", source)
 where
-  view "resolved local body reference of source (source)" with (source) has (page, target)
+  view "resolved local body reference of source (source)" with (source) has (page, raw, target)
   no Routing._address (owner: target)
   DocumentParsing._document (subject: target)
   Filing._file (file: target) has (root)
   Filing._root (root) has (name: "content")
-  Filing._file (file: page) has (path)
+  Filing._file (file: page) has (path: pagePath)
+  view "prospective URL for local reference (raw) from source path (sourcePath)" with (raw, sourcePath: pagePath) has (target: address)
 then
-  Diagnosing.report (code: "UNPUBLISHED_DOCUMENT_REFERENCE", message: "This local reference targets an unpublished document.", scope: "page-rendering", severity: "error", source: path)
+  Diagnosing.report (code: "MISSING_OUTPUT_REFERENCE", message: "No generated route or output file matches this reference.", scope: "site-reference-checking", severity: "warning", source: address)
+```
+
+### fullSite.references.UnpublishedDocumentBodyReferencesHold
+
+Authored path: `fullSite.references.UnpublishedDocumentBodyReferencesHold`.
+- Covered by [Syncpress application composition](../design/application.md), line 105.
+
+```reaction
+when Referencing.scan (part: "body", source)
+where
+  view "resolved local body reference of source (source)" with (source) has (page, raw, reference, target)
+  no Routing._address (owner: target)
+  DocumentParsing._document (subject: target)
+  Filing._file (file: target) has (root)
+  Filing._root (root) has (name: "content")
+  Filing._file (file: page) has (path: pagePath)
+  view "prospective URL for local reference (raw) from source path (sourcePath)" with (raw, sourcePath: pagePath) has (value)
+then
+  Referencing.resolve (form: "address", reference, value)
 ```
 
 ### fullSite.references.UnretargetableClaimedBodyReferencesDiagnose
 
 Authored path: `fullSite.references.UnretargetableClaimedBodyReferencesDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 103.
+- Covered by [Syncpress application composition](../design/application.md), line 106.
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3559,7 +3677,7 @@ then
 ### fullSite.references.UnretargetableCopiedBodyAssetsDiagnose
 
 Authored path: `fullSite.references.UnretargetableCopiedBodyAssetsDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 104.
+- Covered by [Syncpress application composition](../design/application.md), line 107.
 
 ```reaction
 when Referencing.scan (part: "body", source)
@@ -3575,7 +3693,7 @@ then
 ### fullSite.render.BodyConversionFailuresDiagnose
 
 Authored path: `fullSite.render.BodyConversionFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 105.
+- Covered by [Syncpress application composition](../design/application.md), line 108.
 
 ```reaction
 when refused Converting.convert (part: "body", subject: rendering, detail, error)
@@ -3590,7 +3708,7 @@ then
 ### fullSite.render.BodyTemplateFailuresDiagnose
 
 Authored path: `fullSite.render.BodyTemplateFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 106.
+- Covered by [Syncpress application composition](../design/application.md), line 109.
 
 ```reaction
 when refused Templating.renderSource (subject: rendering, detail, error)
@@ -3606,7 +3724,7 @@ then
 ### fullSite.render.BodyTemplateFailuresFailRendering
 
 Authored path: `fullSite.render.BodyTemplateFailuresFailRendering`.
-- Covered by [Syncpress application composition](../design/application.md), line 107.
+- Covered by [Syncpress application composition](../design/application.md), line 110.
 
 ```reaction
 when refused Templating.renderSource (subject: rendering, error)
@@ -3620,7 +3738,7 @@ then
 ### fullSite.render.ClaimedRoutesBeginPageDependencies
 
 Authored path: `fullSite.render.ClaimedRoutesBeginPageDependencies`.
-- Covered by [Syncpress application composition](../design/application.md), line 108.
+- Covered by [Syncpress application composition](../design/application.md), line 111.
 
 ```reaction
 when Routing.claim (owner: page)
@@ -3633,7 +3751,7 @@ then
 ### fullSite.render.CommittedPageOutputsSettleDependencies
 
 Authored path: `fullSite.render.CommittedPageOutputsSettleDependencies`.
-- Covered by [Syncpress application composition](../design/application.md), line 109.
+- Covered by [Syncpress application composition](../design/application.md), line 112.
 
 ```reaction
 when Emitting.commitAttempt (attempt: emissionAttempt, producer: page)
@@ -3647,7 +3765,7 @@ then
 ### fullSite.render.ConvertedBodiesScan
 
 Authored path: `fullSite.render.ConvertedBodiesScan`.
-- Covered by [Syncpress application composition](../design/application.md), line 110.
+- Covered by [Syncpress application composition](../design/application.md), line 113.
 
 ```reaction
 when Converting.convert (part: "body", subject: rendering, output)
@@ -3658,7 +3776,7 @@ then
 ### fullSite.render.EmptyBodyScansSettleRendering
 
 Authored path: `fullSite.render.EmptyBodyScansSettleRendering`.
-- Covered by [Syncpress application composition](../design/application.md), line 111.
+- Covered by [Syncpress application composition](../design/application.md), line 114.
 
 ```reaction
 when Referencing.scan (part: "body", subject: rendering, completed: true)
@@ -3671,7 +3789,7 @@ then
 ### fullSite.render.EmptyLayoutScansSettleRendering
 
 Authored path: `fullSite.render.EmptyLayoutScansSettleRendering`.
-- Covered by [Syncpress application composition](../design/application.md), line 112.
+- Covered by [Syncpress application composition](../design/application.md), line 115.
 
 ```reaction
 when Referencing.scan (part: "layout", subject: rendering, completed: true)
@@ -3684,7 +3802,7 @@ then
 ### fullSite.render.FailedRenderingsAbandonDependencies
 
 Authored path: `fullSite.render.FailedRenderingsAbandonDependencies`.
-- Covered by [Syncpress application composition](../design/application.md), line 113.
+- Covered by [Syncpress application composition](../design/application.md), line 116.
 
 ```reaction
 when RenderTracking.fail (rendering, subject: page, transitioned: true)
@@ -3698,7 +3816,7 @@ then
 ### fullSite.render.FailedRenderingsAbortOutput
 
 Authored path: `fullSite.render.FailedRenderingsAbortOutput`.
-- Covered by [Syncpress application composition](../design/application.md), line 114.
+- Covered by [Syncpress application composition](../design/application.md), line 117.
 
 ```reaction
 when RenderTracking.fail (rendering, subject: page, transitioned: true)
@@ -3712,7 +3830,7 @@ then
 ### fullSite.render.FilledBodiesConvert
 
 Authored path: `fullSite.render.FilledBodiesConvert`.
-- Covered by [Syncpress application composition](../design/application.md), line 115.
+- Covered by [Syncpress application composition](../design/application.md), line 118.
 
 ```reaction
 when Templating.renderSource (subject: rendering, output)
@@ -3726,7 +3844,7 @@ then
 ### fullSite.render.FilledBodiesTrackTemplates
 
 Authored path: `fullSite.render.FilledBodiesTrackTemplates`.
-- Covered by [Syncpress application composition](../design/application.md), line 116.
+- Covered by [Syncpress application composition](../design/application.md), line 119.
 
 ```reaction
 when Templating.renderSource (subject: rendering, filling)
@@ -3741,7 +3859,7 @@ then
 ### fullSite.render.FinishedBodyAnswersSettleRendering
 
 Authored path: `fullSite.render.FinishedBodyAnswersSettleRendering`.
-- Covered by [Syncpress application composition](../design/application.md), line 117.
+- Covered by [Syncpress application composition](../design/application.md), line 120.
 
 ```reaction
 when Referencing.resolve (completed: true, part: "body", subject: rendering)
@@ -3754,7 +3872,7 @@ then
 ### fullSite.render.FinishedLayoutAnswersSettleRendering
 
 Authored path: `fullSite.render.FinishedLayoutAnswersSettleRendering`.
-- Covered by [Syncpress application composition](../design/application.md), line 118.
+- Covered by [Syncpress application composition](../design/application.md), line 121.
 
 ```reaction
 when Referencing.resolve (completed: true, part: "layout", subject: rendering)
@@ -3767,7 +3885,7 @@ then
 ### fullSite.render.IntendedPageOutputsCommit
 
 Authored path: `fullSite.render.IntendedPageOutputsCommit`.
-- Covered by [Syncpress application composition](../design/application.md), line 119.
+- Covered by [Syncpress application composition](../design/application.md), line 122.
 
 ```reaction
 when Emitting.intend (attempt: emissionAttempt, producer: page)
@@ -3781,7 +3899,7 @@ then
 ### fullSite.render.InvalidPageRenderingSelectionsAbandonDependencies
 
 Authored path: `fullSite.render.InvalidPageRenderingSelectionsAbandonDependencies`.
-- Covered by [Syncpress application composition](../design/application.md), line 120.
+- Covered by [Syncpress application composition](../design/application.md), line 123.
 
 ```reaction
 when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
@@ -3798,7 +3916,7 @@ then
 ### fullSite.render.InvalidPageRenderingSelectionsAbortOutput
 
 Authored path: `fullSite.render.InvalidPageRenderingSelectionsAbortOutput`.
-- Covered by [Syncpress application composition](../design/application.md), line 121.
+- Covered by [Syncpress application composition](../design/application.md), line 124.
 
 ```reaction
 when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
@@ -3815,7 +3933,7 @@ then
 ### fullSite.render.InvalidPageRenderingSelectionsDiagnose
 
 Authored path: `fullSite.render.InvalidPageRenderingSelectionsDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 122.
+- Covered by [Syncpress application composition](../design/application.md), line 125.
 
 ```reaction
 when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
@@ -3832,7 +3950,7 @@ then
 ### fullSite.render.LayoutTemplateFailuresDiagnose
 
 Authored path: `fullSite.render.LayoutTemplateFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 123.
+- Covered by [Syncpress application composition](../design/application.md), line 126.
 
 ```reaction
 when refused Templating.renderTemplate (subject: rendering, detail, error)
@@ -3848,7 +3966,7 @@ then
 ### fullSite.render.LayoutTemplateFailuresFailRendering
 
 Authored path: `fullSite.render.LayoutTemplateFailuresFailRendering`.
-- Covered by [Syncpress application composition](../design/application.md), line 124.
+- Covered by [Syncpress application composition](../design/application.md), line 127.
 
 ```reaction
 when refused Templating.renderTemplate (subject: rendering, error)
@@ -3862,7 +3980,7 @@ then
 ### fullSite.render.MissingRenderingProfilesDiagnose
 
 Authored path: `fullSite.render.MissingRenderingProfilesDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 125.
+- Covered by [Syncpress application composition](../design/application.md), line 128.
 
 ```reaction
 when Templating.renderSource (subject: rendering)
@@ -3877,7 +3995,7 @@ then
 ### fullSite.render.MissingRenderingTemplatesDiagnose
 
 Authored path: `fullSite.render.MissingRenderingTemplatesDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 126.
+- Covered by [Syncpress application composition](../design/application.md), line 129.
 
 ```reaction
 when RenderTracking.completeBody (rendering, subject: page, transitioned: true)
@@ -3892,7 +4010,7 @@ then
 ### fullSite.render.PageAssetEmissionFailuresDiagnose
 
 Authored path: `fullSite.render.PageAssetEmissionFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 127.
+- Covered by [Syncpress application composition](../design/application.md), line 130.
 
 ```reaction
 when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
@@ -3908,7 +4026,7 @@ then
 ### fullSite.render.PageDependenciesOpenEmission
 
 Authored path: `fullSite.render.PageDependenciesOpenEmission`.
-- Covered by [Syncpress application composition](../design/application.md), line 128.
+- Covered by [Syncpress application composition](../design/application.md), line 131.
 
 ```reaction
 when DependencyTracking.beginAttempt (subject: page)
@@ -3922,7 +4040,7 @@ then
 ### fullSite.render.PageEmissionFailuresDiagnose
 
 Authored path: `fullSite.render.PageEmissionFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 129.
+- Covered by [Syncpress application composition](../design/application.md), line 132.
 
 ```reaction
 when refused Emitting.intend (attempt: emissionAttempt, producer: page, detail, error)
@@ -3937,7 +4055,7 @@ then
 ### fullSite.render.PageEmissionsBeginRendering
 
 Authored path: `fullSite.render.PageEmissionsBeginRendering`.
-- Covered by [Syncpress application composition](../design/application.md), line 130.
+- Covered by [Syncpress application composition](../design/application.md), line 133.
 
 ```reaction
 when Emitting.beginAttempt (producer: page, attempt: emissionAttempt)
@@ -3957,7 +4075,7 @@ then
 ### fullSite.render.RenderedLayoutsScan
 
 Authored path: `fullSite.render.RenderedLayoutsScan`.
-- Covered by [Syncpress application composition](../design/application.md), line 131.
+- Covered by [Syncpress application composition](../design/application.md), line 134.
 
 ```reaction
 when Templating.renderTemplate (subject: rendering, output)
@@ -3970,7 +4088,7 @@ then
 ### fullSite.render.RenderedLayoutsTrackTemplates
 
 Authored path: `fullSite.render.RenderedLayoutsTrackTemplates`.
-- Covered by [Syncpress application composition](../design/application.md), line 132.
+- Covered by [Syncpress application composition](../design/application.md), line 135.
 
 ```reaction
 when Templating.renderTemplate (subject: attempt, rendering)
@@ -3985,7 +4103,7 @@ then
 ### fullSite.render.RenderingAttemptsRetractDiagnostics
 
 Authored path: `fullSite.render.RenderingAttemptsRetractDiagnostics`.
-- Covered by [Syncpress application composition](../design/application.md), line 133.
+- Covered by [Syncpress application composition](../design/application.md), line 136.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "render", transitioned: true)
@@ -4000,7 +4118,7 @@ then
 ### fullSite.render.RenderingBeginningsAbandonDependencies
 
 Authored path: `fullSite.render.RenderingBeginningsAbandonDependencies`.
-- Covered by [Syncpress application composition](../design/application.md), line 134.
+- Covered by [Syncpress application composition](../design/application.md), line 137.
 
 ```reaction
 when refused RenderTracking.begin (dependencyAttempt, subject: page, error)
@@ -4014,7 +4132,7 @@ then
 ### fullSite.render.RenderingBeginningsAbortEmission
 
 Authored path: `fullSite.render.RenderingBeginningsAbortEmission`.
-- Covered by [Syncpress application composition](../design/application.md), line 135.
+- Covered by [Syncpress application composition](../design/application.md), line 138.
 
 ```reaction
 when refused RenderTracking.begin (emissionAttempt, subject: page)
@@ -4028,7 +4146,7 @@ then
 ### fullSite.render.RenderingBeginningsDiagnose
 
 Authored path: `fullSite.render.RenderingBeginningsDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 136.
+- Covered by [Syncpress application composition](../design/application.md), line 139.
 
 ```reaction
 when refused RenderTracking.begin (dependencyAttempt, emissionAttempt, subject: page, detail, error)
@@ -4043,7 +4161,7 @@ then
 ### fullSite.render.RenderingDiagnosticsFailActiveAttempts
 
 Authored path: `fullSite.render.RenderingDiagnosticsFailActiveAttempts`.
-- Covered by [Syncpress application composition](../design/application.md), line 137.
+- Covered by [Syncpress application composition](../design/application.md), line 140.
 
 ```reaction
 when Diagnosing.report (code, scope: "page-rendering", severity: "error", source: path)
@@ -4059,7 +4177,7 @@ then
 ### fullSite.render.RetractedRenderingAttemptsTrackSource
 
 Authored path: `fullSite.render.RetractedRenderingAttemptsTrackSource`.
-- Covered by [Syncpress application composition](../design/application.md), line 138.
+- Covered by [Syncpress application composition](../design/application.md), line 141.
 
 ```reaction
 when Diagnosing.retractGroup (scope: "page-rendering", source: path)
@@ -4075,7 +4193,7 @@ then
 ### fullSite.render.SettledBodiesRenderOriginatedPages
 
 Authored path: `fullSite.render.SettledBodiesRenderOriginatedPages`.
-- Covered by [Syncpress application composition](../design/application.md), line 139.
+- Covered by [Syncpress application composition](../design/application.md), line 142.
 
 ```reaction
 when RenderTracking.completeBody (rendering, subject: page, transitioned: true)
@@ -4091,7 +4209,7 @@ then
 ### fullSite.render.SettledBodiesRenderUnoriginatedPages
 
 Authored path: `fullSite.render.SettledBodiesRenderUnoriginatedPages`.
-- Covered by [Syncpress application composition](../design/application.md), line 140.
+- Covered by [Syncpress application composition](../design/application.md), line 143.
 
 ```reaction
 when RenderTracking.completeBody (rendering, subject: page, transitioned: true)
@@ -4107,7 +4225,7 @@ then
 ### fullSite.render.SettledLayoutsStagePageOutput
 
 Authored path: `fullSite.render.SettledLayoutsStagePageOutput`.
-- Covered by [Syncpress application composition](../design/application.md), line 141.
+- Covered by [Syncpress application composition](../design/application.md), line 144.
 
 ```reaction
 when RenderTracking.completeLayout (rendering, subject: page, transitioned: true)
@@ -4123,7 +4241,7 @@ then
 ### fullSite.render.TrackedRenderingSourcesFillBodies:originated
 
 Authored path: `fullSite.render.TrackedRenderingSourcesFillBodies`.
-- Covered by [Syncpress application composition](../design/application.md), line 142.
+- Covered by [Syncpress application composition](../design/application.md), line 145.
 
 ```reaction
 when DependencyTracking.recordDependency (attempt: dependencyAttempt, input: page, subject: page)
@@ -4142,7 +4260,7 @@ then
 ### fullSite.render.TrackedRenderingSourcesFillBodies:unoriginated
 
 Authored path: `fullSite.render.TrackedRenderingSourcesFillBodies`.
-- Covered by [Syncpress application composition](../design/application.md), line 142.
+- Covered by [Syncpress application composition](../design/application.md), line 145.
 
 ```reaction
 when DependencyTracking.recordDependency (attempt: dependencyAttempt, input: page, subject: page)
@@ -4161,7 +4279,7 @@ then
 ### fullSite.routes.DerivedRoutesClaim
 
 Authored path: `fullSite.routes.DerivedRoutesClaim`.
-- Covered by [Syncpress application composition](../design/application.md), line 143.
+- Covered by [Syncpress application composition](../design/application.md), line 146.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
@@ -4179,7 +4297,7 @@ then
 ### fullSite.routes.ExplicitRoutesClaim
 
 Authored path: `fullSite.routes.ExplicitRoutesClaim`.
-- Covered by [Syncpress application composition](../design/application.md), line 144.
+- Covered by [Syncpress application composition](../design/application.md), line 147.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
@@ -4196,7 +4314,7 @@ then
 ### fullSite.routes.InvalidRouteClaimsDiagnose
 
 Authored path: `fullSite.routes.InvalidRouteClaimsDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 145.
+- Covered by [Syncpress application composition](../design/application.md), line 148.
 
 ```reaction
 when refused Routing.claim (owner: page, detail, error: "INVALID_ADDRESS")
@@ -4211,7 +4329,7 @@ then
 ### fullSite.routes.RouteCollisionsReport
 
 Authored path: `fullSite.routes.RouteCollisionsReport`.
-- Covered by [Syncpress application composition](../design/application.md), line 146.
+- Covered by [Syncpress application composition](../design/application.md), line 149.
 
 ```reaction
 when refused Routing.claim (owner: page, error: "ADDRESS_TAKEN")
@@ -4226,7 +4344,7 @@ then
 ### fullSite.routes.UnpublishedRoutesRelease
 
 Authored path: `fullSite.routes.UnpublishedRoutesRelease`.
-- Covered by [Syncpress application composition](../design/application.md), line 147.
+- Covered by [Syncpress application composition](../design/application.md), line 150.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "route", transitioned: true)
@@ -4243,8 +4361,8 @@ then
 ### fullSite.serving.CloseSiteServer
 
 Authored path: `fullSite.serving.CloseSiteServer`.
-- Covered by [Syncpress application composition](../design/application.md), line 148.
-- Covered by [Syncpress application composition](../design/application.md), line 243.
+- Covered by [Syncpress application composition](../design/application.md), line 151.
+- Covered by [Syncpress application composition](../design/application.md), line 246.
 
 ```reaction
 when RequestBoundary.request (path: "/serve/close", requestId, server)
@@ -4255,8 +4373,8 @@ then
 ### fullSite.serving.CloseSiteServer#2
 
 Authored path: `fullSite.serving.CloseSiteServer`.
-- Covered by [Syncpress application composition](../design/application.md), line 148.
-- Covered by [Syncpress application composition](../design/application.md), line 243.
+- Covered by [Syncpress application composition](../design/application.md), line 151.
+- Covered by [Syncpress application composition](../design/application.md), line 246.
 
 ```reaction
 when Serving.close (server), asked by fullSite.serving.CloseSiteServer
@@ -4269,8 +4387,8 @@ then
 ### fullSite.serving.OpenSiteServer
 
 Authored path: `fullSite.serving.OpenSiteServer`.
-- Covered by [Syncpress application composition](../design/application.md), line 149.
-- Covered by [Syncpress application composition](../design/application.md), line 244.
+- Covered by [Syncpress application composition](../design/application.md), line 152.
+- Covered by [Syncpress application composition](../design/application.md), line 247.
 
 ```reaction
 when RequestBoundary.request (host, path: "/serve/open", port, requestId)
@@ -4281,8 +4399,8 @@ then
 ### fullSite.serving.OpenSiteServer#2
 
 Authored path: `fullSite.serving.OpenSiteServer`.
-- Covered by [Syncpress application composition](../design/application.md), line 149.
-- Covered by [Syncpress application composition](../design/application.md), line 244.
+- Covered by [Syncpress application composition](../design/application.md), line 152.
+- Covered by [Syncpress application composition](../design/application.md), line 247.
 
 ```reaction
 when Serving.open (host, port, result.port: bound, server), asked by fullSite.serving.OpenSiteServer
@@ -4295,8 +4413,8 @@ then
 ### fullSite.serving.PublishSiteOutput
 
 Authored path: `fullSite.serving.PublishSiteOutput`.
-- Covered by [Syncpress application composition](../design/application.md), line 150.
-- Covered by [Syncpress application composition](../design/application.md), line 245.
+- Covered by [Syncpress application composition](../design/application.md), line 153.
+- Covered by [Syncpress application composition](../design/application.md), line 248.
 
 ```reaction
 when RequestBoundary.request (directory, path: "/serve/publish", requestId, server)
@@ -4307,8 +4425,8 @@ then
 ### fullSite.serving.PublishSiteOutput#2
 
 Authored path: `fullSite.serving.PublishSiteOutput`.
-- Covered by [Syncpress application composition](../design/application.md), line 150.
-- Covered by [Syncpress application composition](../design/application.md), line 245.
+- Covered by [Syncpress application composition](../design/application.md), line 153.
+- Covered by [Syncpress application composition](../design/application.md), line 248.
 
 ```reaction
 when Serving.serveDirectory (directory, server, readers), asked by fullSite.serving.PublishSiteOutput
@@ -4321,7 +4439,7 @@ then
 ### fullSite.settings.AssessedConfigurationProblemsDiagnose
 
 Authored path: `fullSite.settings.AssessedConfigurationProblemsDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 151.
+- Covered by [Syncpress application composition](../design/application.md), line 154.
 
 ```reaction
 when refused Governing.assess (error: "INVALID_CONFIGURATION")
@@ -4334,7 +4452,7 @@ then
 ### fullSite.settings.ConfigurationAssessmentRetractsDiagnostics
 
 Authored path: `fullSite.settings.ConfigurationAssessmentRetractsDiagnostics`.
-- Covered by [Syncpress application composition](../design/application.md), line 152.
+- Covered by [Syncpress application composition](../design/application.md), line 155.
 
 ```reaction
 when requested Governing.assess ()
@@ -4345,7 +4463,7 @@ then
 ### fullSite.settings.SettingsCollectionDeclarationFailuresDiagnose
 
 Authored path: `fullSite.settings.SettingsCollectionDeclarationFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 153.
+- Covered by [Syncpress application composition](../design/application.md), line 156.
 
 ```reaction
 when refused Cataloging.declare (detail, error)
@@ -4358,7 +4476,7 @@ then
 ### fullSite.settings.SettingsDeclareCatalogs
 
 Authored path: `fullSite.settings.SettingsDeclareCatalogs`.
-- Covered by [Syncpress application composition](../design/application.md), line 154.
+- Covered by [Syncpress application composition](../design/application.md), line 157.
 
 ```reaction
 when Cataloging.reset ()
@@ -4372,7 +4490,7 @@ then
 ### fullSite.settings.SettingsDeclareMarkdownProfile
 
 Authored path: `fullSite.settings.SettingsDeclareMarkdownProfile`.
-- Covered by [Syncpress application composition](../design/application.md), line 155.
+- Covered by [Syncpress application composition](../design/application.md), line 158.
 
 ```reaction
 when Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
@@ -4386,7 +4504,7 @@ then
 ### fullSite.settings.SettingsDeclareVerbatimProfile
 
 Authored path: `fullSite.settings.SettingsDeclareVerbatimProfile`.
-- Covered by [Syncpress application composition](../design/application.md), line 156.
+- Covered by [Syncpress application composition](../design/application.md), line 159.
 
 ```reaction
 when Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
@@ -4400,7 +4518,7 @@ then
 ### fullSite.settings.SettingsMarkdownProfileFailuresDiagnose
 
 Authored path: `fullSite.settings.SettingsMarkdownProfileFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 157.
+- Covered by [Syncpress application composition](../design/application.md), line 160.
 
 ```reaction
 when refused Converting.declareProfile (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
@@ -4414,7 +4532,7 @@ then
 ### fullSite.settings.SettingsPhaseRetractsDiagnostics
 
 Authored path: `fullSite.settings.SettingsPhaseRetractsDiagnostics`.
-- Covered by [Syncpress application composition](../design/application.md), line 158.
+- Covered by [Syncpress application composition](../design/application.md), line 161.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
@@ -4425,7 +4543,7 @@ then
 ### fullSite.settings.SettingsResetCatalogs
 
 Authored path: `fullSite.settings.SettingsResetCatalogs`.
-- Covered by [Syncpress application composition](../design/application.md), line 159.
+- Covered by [Syncpress application composition](../design/application.md), line 162.
 
 ```reaction
 when Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
@@ -4438,7 +4556,7 @@ then
 ### fullSite.settings.SettingsVerbatimProfileFailuresDiagnose
 
 Authored path: `fullSite.settings.SettingsVerbatimProfileFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 160.
+- Covered by [Syncpress application composition](../design/application.md), line 163.
 
 ```reaction
 when refused Converting.declareProfile (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
@@ -4452,7 +4570,7 @@ then
 ### fullSite.sources.ClearedContentGetsAttributes
 
 Authored path: `fullSite.sources.ClearedContentGetsAttributes`.
-- Covered by [Syncpress application composition](../design/application.md), line 161.
+- Covered by [Syncpress application composition](../design/application.md), line 164.
 
 ```reaction
 when Layering.clear (subject)
@@ -4468,7 +4586,7 @@ then
 ### fullSite.sources.ClearedContentGetsDefaults
 
 Authored path: `fullSite.sources.ClearedContentGetsDefaults`.
-- Covered by [Syncpress application composition](../design/application.md), line 162.
+- Covered by [Syncpress application composition](../design/application.md), line 165.
 
 ```reaction
 when Layering.clear (subject)
@@ -4485,7 +4603,7 @@ then
 ### fullSite.sources.ContentDocumentsParse
 
 Authored path: `fullSite.sources.ContentDocumentsParse`.
-- Covered by [Syncpress application composition](../design/application.md), line 163.
+- Covered by [Syncpress application composition](../design/application.md), line 166.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
@@ -4498,7 +4616,7 @@ then
 ### fullSite.sources.DocumentParseFailuresDiagnose
 
 Authored path: `fullSite.sources.DocumentParseFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 164.
+- Covered by [Syncpress application composition](../design/application.md), line 167.
 
 ```reaction
 when refused DocumentParsing.parseDocument (subject: file, detail, error: "MALFORMED_ATTRIBUTES")
@@ -4513,7 +4631,7 @@ then
 ### fullSite.sources.ParsedContentClearsLayers
 
 Authored path: `fullSite.sources.ParsedContentClearsLayers`.
-- Covered by [Syncpress application composition](../design/application.md), line 165.
+- Covered by [Syncpress application composition](../design/application.md), line 168.
 
 ```reaction
 when DocumentParsing.parseDocument (subject)
@@ -4528,7 +4646,7 @@ then
 ### fullSite.sources.PublicFilesIntendOutput
 
 Authored path: `fullSite.sources.PublicFilesIntendOutput`.
-- Covered by [Syncpress application composition](../design/application.md), line 166.
+- Covered by [Syncpress application composition](../design/application.md), line 169.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
@@ -4543,7 +4661,7 @@ then
 ### fullSite.sources.TemplateDefinitionFailuresDiagnose
 
 Authored path: `fullSite.sources.TemplateDefinitionFailuresDiagnose`.
-- Covered by [Syncpress application composition](../design/application.md), line 167.
+- Covered by [Syncpress application composition](../design/application.md), line 170.
 
 ```reaction
 when refused Templating.register (name: path, origin: file, source: text, detail, error)
@@ -4559,7 +4677,7 @@ then
 ### fullSite.sources.TemplatesDefine
 
 Authored path: `fullSite.sources.TemplatesDefine`.
-- Covered by [Syncpress application composition](../design/application.md), line 168.
+- Covered by [Syncpress application composition](../design/application.md), line 171.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "read", transitioned: true)
@@ -4574,7 +4692,7 @@ then
 ### fullSite.staging.AdmittedConfigurationIsLoaded
 
 Authored path: `fullSite.staging.AdmittedConfigurationIsLoaded`.
-- Covered by [Syncpress application composition](../design/application.md), line 169.
+- Covered by [Syncpress application composition](../design/application.md), line 172.
 
 ```reaction
 when Locating.inspectLocation (name: "settings", path, status: "admitted")
@@ -4585,7 +4703,7 @@ then
 ### fullSite.staging.AdmittedSourceRootsAreLoaded
 
 Authored path: `fullSite.staging.AdmittedSourceRootsAreLoaded`.
-- Covered by [Syncpress application composition](../design/application.md), line 170.
+- Covered by [Syncpress application composition](../design/application.md), line 173.
 
 ```reaction
 when Locating.inspectLocation (name: root, path: directory, contained: true, real, resolved: true, status: "admitted")
@@ -4598,7 +4716,7 @@ then
 ### fullSite.staging.BegunSiteBuildDeliveriesRetractStagingDiagnostics
 
 Authored path: `fullSite.staging.BegunSiteBuildDeliveriesRetractStagingDiagnostics`.
-- Covered by [Syncpress application composition](../design/application.md), line 171.
+- Covered by [Syncpress application composition](../design/application.md), line 174.
 
 ```reaction
 when DeliveryArbitration.beginDelivery (task: job)
@@ -4611,7 +4729,7 @@ then
 ### fullSite.staging.ConfiguredOutputDirectsPublication
 
 Authored path: `fullSite.staging.ConfiguredOutputDirectsPublication`.
-- Covered by [Syncpress application composition](../design/application.md), line 172.
+- Covered by [Syncpress application composition](../design/application.md), line 175.
 
 ```reaction
 when Locating.inspectLocation (name: "output", path: directory, contained: true, real, resolved: true, status: "admitted")
@@ -4624,7 +4742,7 @@ then
 ### fullSite.staging.DestinationDirectsPublication
 
 Authored path: `fullSite.staging.DestinationDirectsPublication`.
-- Covered by [Syncpress application composition](../design/application.md), line 173.
+- Covered by [Syncpress application composition](../design/application.md), line 176.
 
 ```reaction
 when Locating.inspectLocation (name: "destination", path: directory, real, status: "admitted")
@@ -4637,7 +4755,7 @@ then
 ### fullSite.staging.EscapingConfiguredOutputDiagnoses
 
 Authored path: `fullSite.staging.EscapingConfiguredOutputDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 174.
+- Covered by [Syncpress application composition](../design/application.md), line 177.
 
 ```reaction
 when Locating.inspectLocation (name: "output", path: directory, place: admitted, status: "admitted")
@@ -4650,7 +4768,7 @@ then
 ### fullSite.staging.EscapingContentRootDiagnoses
 
 Authored path: `fullSite.staging.EscapingContentRootDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 175.
+- Covered by [Syncpress application composition](../design/application.md), line 178.
 
 ```reaction
 when Locating.inspectLocation (name: "content", path: directory, place: admitted, status: "admitted")
@@ -4663,7 +4781,7 @@ then
 ### fullSite.staging.EscapingPublicRootDiagnoses
 
 Authored path: `fullSite.staging.EscapingPublicRootDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 176.
+- Covered by [Syncpress application composition](../design/application.md), line 179.
 
 ```reaction
 when Locating.inspectLocation (name: "public", path: directory, place: admitted, status: "admitted")
@@ -4676,7 +4794,7 @@ then
 ### fullSite.staging.EscapingTemplateRootDiagnoses
 
 Authored path: `fullSite.staging.EscapingTemplateRootDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 177.
+- Covered by [Syncpress application composition](../design/application.md), line 180.
 
 ```reaction
 when Locating.inspectLocation (name: "templates", path: directory, place: admitted, status: "admitted")
@@ -4689,7 +4807,7 @@ then
 ### fullSite.staging.GroundedSiteAdmitsConfiguration
 
 Authored path: `fullSite.staging.GroundedSiteAdmitsConfiguration`.
-- Covered by [Syncpress application composition](../design/application.md), line 178.
+- Covered by [Syncpress application composition](../design/application.md), line 181.
 
 ```reaction
 when Locating.establishBase (status: "grounded")
@@ -4700,7 +4818,7 @@ then
 ### fullSite.staging.LoadedConfigurationIsAssessed
 
 Authored path: `fullSite.staging.LoadedConfigurationIsAssessed`.
-- Covered by [Syncpress application composition](../design/application.md), line 179.
+- Covered by [Syncpress application composition](../design/application.md), line 182.
 
 ```reaction
 when Filing.replaceTreeFromFile (name: "project", path: "site.yaml", file, root, status: "loaded")
@@ -4714,7 +4832,7 @@ then
 ### fullSite.staging.LocateGroundsSiteDirectory
 
 Authored path: `fullSite.staging.LocateGroundsSiteDirectory`.
-- Covered by [Syncpress application composition](../design/application.md), line 180.
+- Covered by [Syncpress application composition](../design/application.md), line 183.
 
 ```reaction
 when Diagnosing.retractGroup (scope: "project-staging", source: "site.yaml")
@@ -4728,7 +4846,7 @@ then
 ### fullSite.staging.OutputOverlappingConfigurationDiagnoses
 
 Authored path: `fullSite.staging.OutputOverlappingConfigurationDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 181.
+- Covered by [Syncpress application composition](../design/application.md), line 184.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
@@ -4743,7 +4861,7 @@ then
 ### fullSite.staging.OutputOverlappingSourceRootDiagnoses
 
 Authored path: `fullSite.staging.OutputOverlappingSourceRootDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 182.
+- Covered by [Syncpress application composition](../design/application.md), line 185.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
@@ -4759,7 +4877,7 @@ then
 ### fullSite.staging.StageAdmitsConfiguredOutput
 
 Authored path: `fullSite.staging.StageAdmitsConfiguredOutput`.
-- Covered by [Syncpress application composition](../design/application.md), line 183.
+- Covered by [Syncpress application composition](../design/application.md), line 186.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "stage", transitioned: true)
@@ -4773,7 +4891,7 @@ then
 ### fullSite.staging.StageAdmitsRequestedDestination
 
 Authored path: `fullSite.staging.StageAdmitsRequestedDestination`.
-- Covered by [Syncpress application composition](../design/application.md), line 184.
+- Covered by [Syncpress application composition](../design/application.md), line 187.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "stage", transitioned: true)
@@ -4786,7 +4904,7 @@ then
 ### fullSite.staging.StageAdmitsSourceRoots
 
 Authored path: `fullSite.staging.StageAdmitsSourceRoots`.
-- Covered by [Syncpress application composition](../design/application.md), line 185.
+- Covered by [Syncpress application composition](../design/application.md), line 188.
 
 ```reaction
 when Phasing.completePhase (name: "site-build", phase: "stage", transitioned: true)
@@ -4799,7 +4917,7 @@ then
 ### fullSite.staging.StartedSiteBuildsBeginAggregateDelivery
 
 Authored path: `fullSite.staging.StartedSiteBuildsBeginAggregateDelivery`.
-- Covered by [Syncpress application composition](../design/application.md), line 186.
+- Covered by [Syncpress application composition](../design/application.md), line 189.
 
 ```reaction
 when Phasing.start (job, name: "site-build", phase: "locate")
@@ -4810,7 +4928,7 @@ then
 ### fullSite.staging.UndecodableConfigurationDiagnoses
 
 Authored path: `fullSite.staging.UndecodableConfigurationDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 187.
+- Covered by [Syncpress application composition](../design/application.md), line 190.
 
 ```reaction
 when Filing.replaceTreeFromFile (name: "project", path: "site.yaml", file, root, status: "loaded")
@@ -4824,7 +4942,7 @@ then
 ### fullSite.staging.UndirectablePublicationDiagnoses
 
 Authored path: `fullSite.staging.UndirectablePublicationDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 188.
+- Covered by [Syncpress application composition](../design/application.md), line 191.
 
 ```reaction
 when refused Emitting.configureDestination (destination, detail, error)
@@ -4835,7 +4953,7 @@ then
 ### fullSite.staging.UngroundableSiteDirectoryDiagnoses
 
 Authored path: `fullSite.staging.UngroundableSiteDirectoryDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 189.
+- Covered by [Syncpress application composition](../design/application.md), line 192.
 
 ```reaction
 when Locating.establishBase (path, code, detail, status: "problem")
@@ -4846,7 +4964,7 @@ then
 ### fullSite.staging.UnloadableSourceRootDiagnoses
 
 Authored path: `fullSite.staging.UnloadableSourceRootDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 190.
+- Covered by [Syncpress application composition](../design/application.md), line 193.
 
 ```reaction
 when Filing.replaceTreeFromDirectory (name: root, code, detail, status: "problem")
@@ -4857,7 +4975,7 @@ then
 ### fullSite.staging.UnreadableConfigurationDiagnoses
 
 Authored path: `fullSite.staging.UnreadableConfigurationDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 191.
+- Covered by [Syncpress application composition](../design/application.md), line 194.
 
 ```reaction
 when Filing.replaceTreeFromFile (name: "project", path: "site.yaml", code, detail, status: "problem")
@@ -4868,7 +4986,7 @@ then
 ### fullSite.staging.UnresolvableLocationDiagnoses
 
 Authored path: `fullSite.staging.UnresolvableLocationDiagnoses`.
-- Covered by [Syncpress application composition](../design/application.md), line 192.
+- Covered by [Syncpress application composition](../design/application.md), line 195.
 
 ```reaction
 when Locating.inspectLocation (name, path, code, detail, status: "problem")
@@ -4879,8 +4997,8 @@ then
 ### fullSite.watching.AttendSiteWatch
 
 Authored path: `fullSite.watching.AttendSiteWatch`.
-- Covered by [Syncpress application composition](../design/application.md), line 193.
-- Covered by [Syncpress application composition](../design/application.md), line 246.
+- Covered by [Syncpress application composition](../design/application.md), line 196.
+- Covered by [Syncpress application composition](../design/application.md), line 249.
 
 ```reaction
 when RequestBoundary.request (path: "/watch/attend", requestId, watch, within)
@@ -4891,8 +5009,8 @@ then
 ### fullSite.watching.AttendSiteWatch#2
 
 Authored path: `fullSite.watching.AttendSiteWatch`.
-- Covered by [Syncpress application composition](../design/application.md), line 193.
-- Covered by [Syncpress application composition](../design/application.md), line 246.
+- Covered by [Syncpress application composition](../design/application.md), line 196.
+- Covered by [Syncpress application composition](../design/application.md), line 249.
 
 ```reaction
 when Watching.waitForChange (watch, within, changed, watching), asked by fullSite.watching.AttendSiteWatch
@@ -4905,8 +5023,8 @@ then
 ### fullSite.watching.CloseSiteWatch
 
 Authored path: `fullSite.watching.CloseSiteWatch`.
-- Covered by [Syncpress application composition](../design/application.md), line 194.
-- Covered by [Syncpress application composition](../design/application.md), line 247.
+- Covered by [Syncpress application composition](../design/application.md), line 197.
+- Covered by [Syncpress application composition](../design/application.md), line 250.
 
 ```reaction
 when RequestBoundary.request (path: "/watch/close", requestId, watch)
@@ -4917,8 +5035,8 @@ then
 ### fullSite.watching.CloseSiteWatch#2
 
 Authored path: `fullSite.watching.CloseSiteWatch`.
-- Covered by [Syncpress application composition](../design/application.md), line 194.
-- Covered by [Syncpress application composition](../design/application.md), line 247.
+- Covered by [Syncpress application composition](../design/application.md), line 197.
+- Covered by [Syncpress application composition](../design/application.md), line 250.
 
 ```reaction
 when Watching.close (watch), asked by fullSite.watching.CloseSiteWatch
@@ -4931,8 +5049,8 @@ then
 ### fullSite.watching.OpenSiteWatch
 
 Authored path: `fullSite.watching.OpenSiteWatch`.
-- Covered by [Syncpress application composition](../design/application.md), line 195.
-- Covered by [Syncpress application composition](../design/application.md), line 248.
+- Covered by [Syncpress application composition](../design/application.md), line 198.
+- Covered by [Syncpress application composition](../design/application.md), line 251.
 
 ```reaction
 when RequestBoundary.request (directory, output, path: "/watch/open", requestId, settling)
@@ -4946,8 +5064,8 @@ then
 ### fullSite.watching.OpenSiteWatch#2
 
 Authored path: `fullSite.watching.OpenSiteWatch`.
-- Covered by [Syncpress application composition](../design/application.md), line 195.
-- Covered by [Syncpress application composition](../design/application.md), line 248.
+- Covered by [Syncpress application composition](../design/application.md), line 198.
+- Covered by [Syncpress application composition](../design/application.md), line 251.
 
 ```reaction
 when Watching.open (directory, excluded: output, prefix, settling, watch), asked by fullSite.watching.OpenSiteWatch

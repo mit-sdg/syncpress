@@ -22,7 +22,7 @@ The scanner recognizes these locations:
 
 Scanning is limited to the table above. CSS URLs, SVG-internal URLs, form actions, citations, and `srcdoc` remain unchanged.
 
-External, site-absolute, and fragment-only references bypass content-file lookup. A content-relative document link is replaced by the document's canonical route. Safe query strings and fragments are retained.
+External, site-absolute, and fragment-only references bypass content-file lookup. A content-relative document link is replaced by the document's canonical route. Safe query strings and fragments are retained. After all pages and deployment artifacts are staged, Syncpress checks site-absolute references against the complete route and output set. External URLs and fragment-only references are not checked.
 
 ```md
 [Configuration](./configuration.md?source=assets#paths)
@@ -34,7 +34,9 @@ The generated target for this source is `/syncpress/reference/configuration/?sou
 
 A relative reference to a non-document file copies the source to its content-root-relative output path. Directory structure is preserved, so `content/one/shared.txt` and `content/two/shared.txt` become `one/shared.txt` and `two/shared.txt`. If several pages reference one source file, Syncpress emits one shared copy and rewrites each generated reference to its output URL. The authored relative references remain unchanged and continue to work in source browsers such as GitHub.
 
-Missing files, paths that escape the content root, invalid URLs, unsafe retargeting, and references to unpublished documents are build errors.
+References to missing files or unpublished documents produce `MISSING_OUTPUT_REFERENCE` warnings and do not prevent publication. Syncpress projects those references to the URL the missing target would have used, which also lets repeated relative and site-absolute spellings of one target produce a single warning. Paths that escape the content root, invalid URLs, and unsafe retargeting remain build errors.
+
+A site-absolute reference also produces one `MISSING_OUTPUT_REFERENCE` warning when no generated route or output file matches its path. Query strings and fragments do not create separate warnings. Because a static host may provide proxied, legacy, or separately deployed paths, this diagnostic states only that the current build does not produce the target.
 
 The download in the [getting-started tutorial](../guides/getting-started.md#verify-local-asset-handling) begins at `content/assets/guide.txt` and is emitted as `assets/guide.txt`.
 

@@ -146,6 +146,12 @@ export function deploymentTransitionWork(action: unknown, result: unknown): stri
   return isText(returned.deployment) && isText(returned.work) ? returned.work : null;
 }
 
+export function deploymentTransitionCompleted(action: unknown, result: unknown): boolean {
+  if (!isText(action) || !queueTransitions.has(action)) return false;
+  const returned = record(result);
+  return isText(returned.deployment) && returned.completed === true;
+}
+
 export function deploymentRedirectDocument(targetValue: unknown, canonicalValue: unknown): string {
   const target = text(targetValue);
   const canonical = text(canonicalValue);
@@ -232,6 +238,8 @@ export function deploymentFeedPreparation(input: DeploymentFeedInput): Deploymen
 export const deploymentComputations = {
   deploymentTransitionWork: ({ action, result }: { action: unknown; result: unknown }) =>
     deploymentTransitionWork(action, result),
+  deploymentTransitionCompleted: ({ action, result }: { action: unknown; result: unknown }) =>
+    deploymentTransitionCompleted(action, result),
   deploymentRedirectDocument: ({ target, canonical }: { target: unknown; canonical: unknown }) =>
     deploymentRedirectDocument(target, canonical),
   deploymentPaginationContext: (input: DeploymentPaginationContextInput) => deploymentPaginationContext(input),
