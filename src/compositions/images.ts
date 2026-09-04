@@ -3,7 +3,6 @@ import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { JoinedPath, OutputPathAddress, RetargetedReference } from "./calculations.ts";
 import { DIAGNOSTIC_SCOPES, PAGE_PATTERNS, PARTS } from "./shared.ts";
 import {
-  BesidePageOutput,
   ResolvedLocalBodyReference,
   UnroutedContentBodyAsset,
 } from "./references.ts";
@@ -22,7 +21,7 @@ const {
 
 export const RasterBodyAssetReference = view(
   "primary raster body asset reference of source (source)",
-  ({ source }, { rendering, page, reference, raw, image, name, content }, { imagePath }) =>
+  ({ source }, { rendering, page, reference, raw, image, sourcePath, content }, _bindings) =>
     where(
       UnroutedContentBodyAsset({ source }).is({
         rendering,
@@ -31,11 +30,10 @@ export const RasterBodyAssetReference = view(
         raw,
         role: "image",
         asset: image,
-        sourcePath: imagePath,
-        name,
+        sourcePath,
         content,
       }),
-      computations.patternHasResult({ pattern: PAGE_PATTERNS.raster, path: imagePath, matched: true }),
+      computations.patternHasResult({ pattern: PAGE_PATTERNS.raster, path: sourcePath, matched: true }),
     ),
 ).many();
 
@@ -70,7 +68,7 @@ export const AdmittedRasterImagesRender = reaction(({ original, widths, formats 
     .then(Transcoding.generateRenditions({ original, widths, formats })),
 );
 
-/** Stage the exact fallback beside the page that owns its primary image reference. */
+/** Stage the exact fallback at its content-root-relative path. */
 export const RasterFallbacksStage = reaction(
   ({
     original,
@@ -78,8 +76,7 @@ export const RasterFallbacksStage = reaction(
     source,
     rendering,
     page,
-    name,
-    path,
+    sourcePath,
     content,
     mediaType,
     emissionAttempt,
@@ -88,16 +85,15 @@ export const RasterFallbacksStage = reaction(
       .where(
         earlier(Referencing.scan, { part: PARTS.body }, { source }),
         Transcoding._original({ subject: image }).is({ original }),
-        RasterBodyAssetReference({ source }).is({ rendering, page, image, name }),
+        RasterBodyAssetReference({ source }).is({ rendering, page, image, sourcePath }),
         RenderTracking._active({ rendering }).is({ emissionAttempt }),
-        BesidePageOutput({ page, name }).is({ path }),
         Transcoding._renditions({ original }).is({
           fallback: true,
           content,
           mediaType,
         }),
       )
-      .then(Emitting.intend({ producer: page, attempt: emissionAttempt, claim: image, path, content, medium: mediaType })),
+      .then(Emitting.intend({ producer: page, attempt: emissionAttempt, claim: image, path: sourcePath, content, medium: mediaType })),
 );
 
 /** Declare the embedding only after that fallback intent has been staged. */
@@ -105,7 +101,7 @@ export const RasterFallbacksDeclare = reaction(
   ({
     page,
     rendering,
-    path,
+    sourcePath,
     emissionAttempt,
     original,
     derived,
@@ -114,7 +110,6 @@ export const RasterFallbacksDeclare = reaction(
     raw,
     label,
     image,
-    name,
     address,
     fallback,
     format,
@@ -122,16 +117,15 @@ export const RasterFallbacksDeclare = reaction(
     height,
     attributes,
   }) =>
-    when(Emitting.intend({ producer: page, attempt: emissionAttempt, path }).responds({}))
+    when(Emitting.intend({ producer: page, attempt: emissionAttempt, path: sourcePath }).responds({}))
       .where(
         earlier(Transcoding.generateRenditions, { original }, { derived }),
         earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
-        RasterBodyAssetReference({ source }).is({ rendering, page, reference, raw, image, name }),
+        RasterBodyAssetReference({ source }).is({ rendering, page, reference, raw, image, sourcePath }),
         RenderTracking._active({ rendering }).is({ emissionAttempt }),
         Referencing._reference({ reference }).is({ label, attributes }),
         Transcoding._original({ subject: image }).is({ original }),
-        BesidePageOutput({ page, name }).is({ path }),
-        OutputPathAddress({ path }).is({ address }),
+        OutputPathAddress({ path: sourcePath }).is({ address }),
         RetargetedReference({ replacement: address, original: raw }).is({ target: fallback }),
         Transcoding._renditions({ original }).is({ fallback: true, format, width, height }),
       )
@@ -151,14 +145,13 @@ export const RasterFallbacksDeclare = reaction(
 
 /** Unsafe raster fallback spellings cannot become safe responsive markup. */
 export const UnretargetableRasterPrimaryImagesDiagnose = reaction(
-  ({ source, page, raw, name, outputPath, address, sourcePath }) =>
+  ({ source, page, raw, assetPath, address, pagePath }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        RasterBodyAssetReference({ source }).is({ page, raw, name }),
-        BesidePageOutput({ page, name }).is({ path: outputPath }),
-        OutputPathAddress({ path: outputPath }).is({ address }),
+        RasterBodyAssetReference({ source }).is({ page, raw, sourcePath: assetPath }),
+        OutputPathAddress({ path: assetPath }).is({ address }),
         no(RetargetedReference({ replacement: address, original: raw })),
-        Filing._file({ file: page }).is({ path: sourcePath }),
+        Filing._file({ file: page }).is({ path: pagePath }),
       )
       .then(
         Diagnosing.report({
@@ -166,7 +159,7 @@ export const UnretargetableRasterPrimaryImagesDiagnose = reaction(
           severity: "error",
           code: "INVALID_LOCAL_REFERENCE",
           message: "This local reference cannot be safely retargeted.",
-          source: sourcePath,
+          source: pagePath,
         }),
       ),
 );

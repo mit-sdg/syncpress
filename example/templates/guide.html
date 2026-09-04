@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en">
 <head>
-  {% render "head.html" %}
+  {% render "includes/head.html" %}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  {% render "header.html" %}
+  {% render "includes/header.html" %}
   <main id="main" class="site-main site-main-wide">
     <div class="docs-shell">
       <nav class="docs-nav" aria-label="Documentation sections">
@@ -40,7 +40,7 @@
         <div class="prose">
           {{ page.content }}
         </div>
-        {% render "page-footer.html" %}
+        {% render "includes/page-footer.html" %}
       </article>
       <div class="docs-aside">
         <nav class="toc" data-toc hidden aria-label="On this page">
@@ -50,6 +50,6 @@
       </div>
     </div>
   </main>
-  {% render "footer.html" %}
+  {% render "includes/footer.html" %}
 </body>
 </html>

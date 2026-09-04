@@ -8,20 +8,20 @@ topics: [templates, liquid, site-building]
 
 Syncpress uses Liquid for page bodies, layouts, and named includes. Body Liquid runs before markup conversion. The selected layout runs after body references have resolved and receives the completed body as `page.content`.
 
-## Layouts and includes
+## Layouts and reusable templates
 
-Layouts are files below `templates/`. Includes are files below `templates/includes/` and are called with a literal name:
+Every file below `templates/` has one name: its complete templates-root-relative path. There are no reserved subdirectories. Projects may organize reusable templates under a conventional `includes/` directory and call them by literal path:
 
 {% raw %}
 ```liquid
-{% render "header.html" %}
-{% render "cards/article.html", article: item %}
+{% render "includes/header.html" %}
+{% render "includes/cards/article.html", article: item %}
 ```
 {% endraw %}
 
-The include name is relative to `templates/includes/`. It cannot be dynamic, absolute, or relative to the caller. `render ... with` and `render ... for` are not supported. Liquid `include`, Liquid `layout`, and `cycle` are rejected.
+The rendered template name cannot be dynamic, absolute, or relative to the caller. `render ... with` and `render ... for` are not supported. Liquid `include`, Liquid `layout`, and `cycle` are rejected.
 
-This page uses [`templates/guide.html`](https://github.com/mit-sdg/syncpress/blob/main/example/templates/guide.html). The shared header is [`templates/includes/header.html`](https://github.com/mit-sdg/syncpress/blob/main/example/templates/includes/header.html).
+This page uses [`templates/guide.html`](https://github.com/mit-sdg/syncpress/blob/main/example/templates/guide.html). The shared header is [`templates/includes/header.html`](https://github.com/mit-sdg/syncpress/blob/main/example/templates/includes/header.html) and is rendered as `includes/header.html`.
 
 ## Template context
 

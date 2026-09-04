@@ -1,6 +1,5 @@
-import { earlier, no, reaction, when } from "@mit-sdg/sync-engine/language";
+import { earlier, reaction, when } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concepts";
-import { RelativePath } from "./calculations.ts";
 import { MAX_PAGE_LAYER_RANK, PHASE_SEQUENCE, ROOTS } from "./shared.ts";
 import { ContentDocumentFile } from "./views.ts";
 
@@ -35,18 +34,6 @@ export const TemplatesDefine = reaction(({ root, file, path, text }) =>
     .where(
       Filing._named({ name: ROOTS.templates }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
-      no(RelativePath({ path, prefix: ROOTS.includes })),
-      Filing._text({ file }).is({ text }),
-    )
-    .then(Templating.register({ name: path, source: text, origin: file })),
-);
-
-export const IncludesDefine = reaction(({ root, file, physicalPath, path, text }) =>
-  when(Phasing.completePhase({}).responds({ name: PHASE_SEQUENCE, phase: "read", transitioned: true }))
-    .where(
-      Filing._named({ name: ROOTS.templates }).is({ root }),
-      Filing._under({ root, prefix: ROOTS.includes }).is({ file, path: physicalPath }),
-      RelativePath({ path: physicalPath, prefix: ROOTS.includes }).is({ relative: path }),
       Filing._text({ file }).is({ text }),
     )
     .then(Templating.register({ name: path, source: text, origin: file })),
@@ -58,18 +45,6 @@ export const TemplateDefinitionFailuresDiagnose = reaction(({ root, file, path, 
       earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
       Filing._named({ name: ROOTS.templates }).is({ root }),
       Filing._under({ root, prefix: "" }).is({ file, path }),
-      Filing._text({ file }).is({ text }),
-    )
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),
-);
-
-export const IncludeDefinitionFailuresDiagnose = reaction(({ root, file, physicalPath, path, text, error, detail }) =>
-  when(Templating.register({ name: path, source: text, origin: file }).refuses({ error, detail }))
-    .where(
-      earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "read", transitioned: true }),
-      Filing._named({ name: ROOTS.templates }).is({ root }),
-      Filing._under({ root, prefix: ROOTS.includes }).is({ file, path: physicalPath }),
-      RelativePath({ path: physicalPath, prefix: ROOTS.includes }).is({ relative: path }),
       Filing._text({ file }).is({ text }),
     )
     .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: path })),

@@ -32,11 +32,11 @@ The generated target for this source is `/syncpress/reference/configuration/?sou
 
 ## Content-relative assets
 
-A relative reference to a non-document file copies the source beside the referencing page's output. If two pages at different routes reference one source file, Syncpress emits one copy at each required page-relative output path.
+A relative reference to a non-document file copies the source to its content-root-relative output path. Directory structure is preserved, so `content/one/shared.txt` and `content/two/shared.txt` become `one/shared.txt` and `two/shared.txt`. If several pages reference one source file, Syncpress emits one shared copy and rewrites each generated reference to its output URL. The authored relative references remain unchanged and continue to work in source browsers such as GitHub.
 
 Missing files, paths that escape the content root, invalid URLs, unsafe retargeting, and references to unpublished documents are build errors.
 
-The download in the [getting-started tutorial](../guides/getting-started.md#verify-local-asset-handling) begins at `content/assets/guide.txt` and is emitted beside that guide's `index.html`.
+The download in the [getting-started tutorial](../guides/getting-started.md#verify-local-asset-handling) begins at `content/assets/guide.txt` and is emitted as `assets/guide.txt`.
 
 ## Public files
 
@@ -51,7 +51,7 @@ A local primary `<img src>` enters responsive processing when its source filenam
 1. resolves the source relative to the content page;
 2. validates the image and reads dimensions with EXIF orientation applied;
 3. generates configured width and format offers up to the source width;
-4. copies the exact original as the fallback beside the page output;
+4. copies the exact original to its content-root-relative output path;
 5. writes derived offers below `paths.assets` with digest-based names;
 6. replaces the `<img>` with `<picture>` after every required output is staged.
 
@@ -65,4 +65,4 @@ The [introduction](../index.md) contains both paths: `blue.png` becomes a respon
 
 ## Output collisions
 
-Asset and rendition outputs participate in the same producer-claim checks as pages and deployment files. Emitting rejects a public file, page-local copy, or generated rendition that contests another producer's path.
+Asset and rendition outputs participate in the same producer-claim checks as pages and deployment files. Emitting rejects a public file, content-relative copy, or generated rendition that contests another producer's path.

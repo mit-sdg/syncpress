@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
+import sharp from "sharp";
 import { buildSite, inspectSite, serveSite, watchSite } from "@syncpress/syncpress";
 
 const exampleDirectory = resolve(import.meta.dir, "../../example");
@@ -60,7 +61,7 @@ test("the example site produces its exact deterministic golden tree", async () =
       pages: 21,
       inputFiles: 38,
       outputDirectory: destination,
-      written: 35,
+      written: 34,
       replaced: 0,
       kept: 0,
       removed: 1,
@@ -72,23 +73,25 @@ test("the example site produces its exact deterministic golden tree", async () =
     expect(index).toContain('href="/syncpress/guides/getting-started/?from=home#prerequisites"');
     expect(index).toContain('href="/syncpress/posts/second/">Assets follow explicit references</a>');
     expect(index).toContain('<source type="image/webp"');
-    expect(index).toContain('src="/syncpress/blue.png?variant=field-note#pixel"');
+    expect(index).toContain('src="/syncpress/assets/blue.png?variant=field-note#pixel"');
     expect(index).toContain('class="field-image" data-fixture="responsive" sizes="(min-width: 48rem) 42rem, 100vw"');
     expect(index).toContain('<div class="post-excerpt"><p>The <code>posts</code> collection sorts');
     expect(index).toContain('<link rel="canonical" href="https://mit-sdg.github.io/syncpress/">');
-    expect(await readFile(join(destination, "legal", "index.html"), "utf8")).toContain(
-      "This authored HTML passes through the verbatim profile for Syncpress Documentation.",
-    );
+    const legal = await readFile(join(destination, "legal", "index.html"), "utf8");
+    expect(legal).toContain("This authored HTML passes through the verbatim profile for Syncpress Documentation.");
+    expect(legal).toContain('href="/syncpress/assets/guide.txt?format=text#checklist"');
     expect(await readFile(join(destination, ".nojekyll"), "utf8")).toBe("");
     expect(await readFile(join(destination, "start", "index.html"), "utf8")).toContain('href="/syncpress/guides/getting-started/"');
     expect(await readFile(join(destination, "sitemap.xml"), "utf8")).toContain("https://mit-sdg.github.io/syncpress/journal/1/");
     expect(await readFile(join(destination, "feed.xml"), "utf8")).toContain("Assets follow explicit references");
     expect(await readFile(join(destination, "journal", "1", "index.html"), "utf8")).toContain("Field note archive");
-    expect(await readFile(join(destination, "guides", "getting-started", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
-    expect(await readFile(join(destination, "legal", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
+    expect(await readFile(join(destination, "assets", "guide.txt"), "utf8")).toContain("Syncpress Field Guide Checklist");
+    expect(await readFile(join(destination, "guides", "getting-started", "index.html"), "utf8")).toContain(
+      'href="/syncpress/assets/guide.txt?format=text#checklist"',
+    );
 
     const second = await buildSite(exampleDirectory, destination);
-    expect(second).toMatchObject({ written: 0, replaced: 0, kept: 35, removed: 0, diagnostics: [] });
+    expect(second).toMatchObject({ written: 0, replaced: 0, kept: 34, removed: 0, diagnostics: [] });
     await expectGoldenTree(destination);
   } finally {
     await rm(destination, { recursive: true, force: true });
@@ -103,8 +106,8 @@ test("concurrent builds serialize reconciliation at one destination", async () =
       buildSite(exampleDirectory, destination),
     ]);
     expect(results.map(({ outputDirectory }) => outputDirectory)).toEqual([destination, destination]);
-    expect(results.map(({ written }) => written).sort((left, right) => left - right)).toEqual([0, 35]);
-    expect(results.map(({ kept }) => kept).sort((left, right) => left - right)).toEqual([0, 35]);
+    expect(results.map(({ written }) => written).sort((left, right) => left - right)).toEqual([0, 34]);
+    expect(results.map(({ kept }) => kept).sort((left, right) => left - right)).toEqual([0, 34]);
     await expectGoldenTree(destination);
   } finally {
     await rm(destination, { recursive: true, force: true });
@@ -188,7 +191,7 @@ test("uses paths.output when no explicit destination is supplied", async () => {
   try {
     await copyExample(project);
     const result = await buildSite(project);
-    expect(result).toMatchObject({ pages: 21, written: 35, diagnostics: [] });
+    expect(result).toMatchObject({ pages: 21, written: 34, diagnostics: [] });
     expect(await readFile(join(project, "dist", "index.html"), "utf8")).toContain("Syncpress Documentation");
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -610,8 +613,8 @@ test("a link to an unpublished document is not copied as an asset", async () => 
   }
 }, BUILD_TEST_TIMEOUT_MS);
 
-test("two different local assets cannot silently claim one beside-page output path", async () => {
-  const project = await mkdtemp(join(tmpdir(), "syncpress-asset-collision-"));
+test("local assets with the same filename retain their content-relative paths", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-asset-paths-"));
   const destination = join(project, "dist");
 
   try {
@@ -622,11 +625,41 @@ test("two different local assets cannot silently claim one beside-page output pa
     await writeFile(join(project, "content", "two", "shared.txt"), "second\n");
     const indexPath = join(project, "content", "index.md");
     await writeFile(indexPath, `${await readFile(indexPath, "utf8")}\n[First](./one/shared.txt) [Second](./two/shared.txt)\n`);
-    await mkdir(destination);
-    await writeFile(join(destination, "previous.txt"), "keep this file\n");
 
-    await expect(buildSite(project, "dist")).rejects.toThrow("PATH_CONTESTED");
-    expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
+    await buildSite(project, "dist");
+
+    expect(await readFile(join(destination, "one", "shared.txt"), "utf8")).toBe("first\n");
+    expect(await readFile(join(destination, "two", "shared.txt"), "utf8")).toBe("second\n");
+    const index = await readFile(join(destination, "index.html"), "utf8");
+    expect(index).toContain('href="/syncpress/one/shared.txt"');
+    expect(index).toContain('href="/syncpress/two/shared.txt"');
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+}, BUILD_TEST_TIMEOUT_MS);
+
+test("raster images with the same filename retain distinct fallbacks", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-image-paths-"));
+  const destination = join(project, "dist");
+
+  try {
+    await copyExample(project);
+    await mkdir(join(project, "content", "one"));
+    await mkdir(join(project, "content", "two"));
+    const original = await readFile(join(project, "content", "assets", "blue.png"));
+    const altered = await sharp(original).negate().png().toBuffer();
+    await writeFile(join(project, "content", "one", "shared.png"), original);
+    await writeFile(join(project, "content", "two", "shared.png"), altered);
+    const indexPath = join(project, "content", "index.md");
+    await writeFile(indexPath, `${await readFile(indexPath, "utf8")}\n![First image](./one/shared.png) ![Second image](./two/shared.png)\n`);
+
+    await buildSite(project, "dist");
+
+    expect(await readFile(join(destination, "one", "shared.png"))).toEqual(original);
+    expect(await readFile(join(destination, "two", "shared.png"))).toEqual(altered);
+    const index = await readFile(join(destination, "index.html"), "utf8");
+    expect(index).toContain('src="/syncpress/one/shared.png"');
+    expect(index).toContain('src="/syncpress/two/shared.png"');
   } finally {
     await rm(project, { recursive: true, force: true });
   }
@@ -647,14 +680,14 @@ test("an invalid asset output prefix fails before source staging", async () => {
   }
 }, BUILD_TEST_TIMEOUT_MS);
 
-test("duplicate include and layout names are rejected by template ownership", async () => {
-  const project = await mkdtemp(join(tmpdir(), "syncpress-duplicate-template-site-"));
+test("template names retain their templates-root-relative paths", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-template-path-site-"));
 
   try {
     await copyExample(project);
-    await writeFile(join(project, "templates", "includes", "page.html"), "<p>duplicate</p>");
+    await writeFile(join(project, "templates", "includes", "page.html"), "<p>distinct partial</p>");
 
-    await expect(buildSite(project, "dist")).rejects.toThrow("TEMPLATE_NAME_TAKEN");
+    await expect(buildSite(project, "dist")).resolves.toMatchObject({ diagnostics: [] });
   } finally {
     await rm(project, { recursive: true, force: true });
   }

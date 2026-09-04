@@ -52,7 +52,7 @@ The `documented` collection uses an existence filter and currently contains **{{
 
 <div class="feature-grid">
 {% for item in collections.featured %}
-{% render "cards/feature.html", item: item %}
+{% render "includes/cards/feature.html", item: item %}
 {% endfor %}
 </div>
 
@@ -60,6 +60,6 @@ The `documented` collection uses an existence filter and currently contains **{{
 
 <div id="journal" class="post-list">
 {% for post in collections.posts %}
-{% render "cards/post.html", post: post %}
+{% render "includes/cards/post.html", post: post %}
 {% endfor %}
 </div>

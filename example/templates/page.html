@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en">
 <head>
-  {% render "head.html" %}
+  {% render "includes/head.html" %}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  {% render "header.html" %}
+  {% render "includes/header.html" %}
   <main id="main" class="site-main{% unless page.data.hero %} site-main-narrow{% endunless %}">
     {% assign lede = page.data.description | default: "" %}
     <article class="document{% if page.data.hero %} document-hero{% endif %}">
@@ -29,7 +29,7 @@
         {% if pagination %}
           <div class="post-list">
             {% for item in pagination.items %}
-              {% render "cards/post.html", post: item, compact: true %}
+              {% render "includes/cards/post.html", post: item, compact: true %}
             {% endfor %}
           </div>
           <nav class="pager" aria-label="Archive pages">
@@ -49,9 +49,9 @@
           {{ page.content }}
         {% endif %}
       </div>
-      {% render "page-footer.html" %}
+      {% render "includes/page-footer.html" %}
     </article>
   </main>
-  {% render "footer.html" %}
+  {% render "includes/footer.html" %}
 </body>
 </html>

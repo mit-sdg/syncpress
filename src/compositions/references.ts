@@ -1,9 +1,6 @@
 import { earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import {
-  AddressOutputPath,
-  DirectoryPath,
-  JoinedPath,
   OutputPathAddress,
   RetargetedReference,
   SiteUrl,
@@ -37,35 +34,24 @@ export const ResolvedLocalBodyReference = view(
 
 export const UnroutedContentBodyAsset = view(
   "unrouted content body asset of source (source)",
-  ({ source }, { rendering, page, reference, raw, role, asset, sourcePath, name, content }, { root }) =>
+  ({ source }, { rendering, page, reference, raw, role, asset, sourcePath, content }, { root }) =>
     where(
       ResolvedLocalBodyReference({ source }).is({ rendering, page, reference, raw, role, target: asset }),
       no(Routing._address({ owner: asset })),
       no(DocumentParsing._document({ subject: asset })),
-      Filing._file({ file: asset }).is({ root, path: sourcePath, name, content }),
+      Filing._file({ file: asset }).is({ root, path: sourcePath, content }),
       Filing._root({ root }).is({ name: ROOTS.content }),
     ),
 ).many();
 
-export const BesidePageOutput = view(
-  "beside-page output for page (page) and name (name)",
-  ({ page, name }, { path }, { pageAddress, pagePath, prefix }) =>
-    where(
-      Routing._address({ owner: page }).is({ address: pageAddress }),
-      AddressOutputPath({ address: pageAddress }).is({ path: pagePath }),
-      DirectoryPath({ path: pagePath }).is({ prefix }),
-      JoinedPath({ prefix, name }).is({ path }),
-    ),
-).optional();
-
 const CopyableBodyAsset = view(
   "copyable body asset of source (source)",
-  ({ source }, { rendering, page, reference, raw, asset, name, content }, { sourcePath }) => [
+  ({ source }, { rendering, page, reference, raw, asset, sourcePath, content }, _bindings) => [
     where(
-      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, asset, name, content }).is.not({ role: "image" }),
+      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, asset, sourcePath, content }).is.not({ role: "image" }),
     ),
     where(
-      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", asset, sourcePath, name, content }),
+      UnroutedContentBodyAsset({ source }).is({ rendering, page, reference, raw, role: "image", asset, sourcePath, content }),
       computations.patternHasResult({ pattern: PAGE_PATTERNS.raster, path: sourcePath, matched: false }),
     ),
   ],
@@ -99,21 +85,20 @@ export const ClaimedBodyReferencesRetarget = reaction(({ source, reference, raw,
     .then(Referencing.resolve({ reference, form: "address", value })),
 );
 
-/** Copy ordinary and non-raster image assets beside the page that references them. */
+/** Copy ordinary and non-raster image assets at their content-root-relative paths. */
 export const CopyableBodyAssetsCopy = reaction(
-  ({ source, rendering, page, target, name, content, path, emissionAttempt }) =>
+  ({ source, rendering, page, target, sourcePath, content, emissionAttempt }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        CopyableBodyAsset({ source }).is({ rendering, page, asset: target, name, content }),
+        CopyableBodyAsset({ source }).is({ rendering, page, asset: target, sourcePath, content }),
         RenderTracking._active({ rendering }).is({ emissionAttempt }),
-        BesidePageOutput({ page, name }).is({ path }),
       )
       .then(
         Emitting.intend({
           producer: page,
           attempt: emissionAttempt,
           claim: target,
-          path,
+          path: sourcePath,
           content,
           medium: ASSET_MEDIUM,
         }),
@@ -122,13 +107,12 @@ export const CopyableBodyAssetsCopy = reaction(
 
 /** Answer a copied asset only after its bytes are staged in the page attempt. */
 export const CopiedBodyAssetsAnswer = reaction(
-  ({ page, rendering, path, source, reference, raw, name, address, value }) =>
-    when(Emitting.intend({ producer: page, path }).responds({}))
+  ({ page, rendering, sourcePath, source, reference, raw, address, value }) =>
+    when(Emitting.intend({ producer: page, path: sourcePath }).responds({}))
       .where(
         earlier(Referencing.scan, { subject: rendering, part: PARTS.body }, { source }),
-        CopyableBodyAsset({ source }).is({ rendering, page, reference, raw, name }),
-        BesidePageOutput({ page, name }).is({ path }),
-        OutputPathAddress({ path }).is({ address }),
+        CopyableBodyAsset({ source }).is({ rendering, page, reference, raw, sourcePath }),
+        OutputPathAddress({ path: sourcePath }).is({ address }),
         RetargetedReference({ replacement: address, original: raw }).is({ target: value }),
       )
     .then(Referencing.resolve({ reference, form: "address", value })),
@@ -215,14 +199,13 @@ export const UnretargetableClaimedBodyReferencesDiagnose = reaction(
 );
 
 export const UnretargetableCopiedBodyAssetsDiagnose = reaction(
-  ({ source, page, raw, name, outputPath, address, sourcePath }) =>
+  ({ source, page, raw, assetPath, address, pagePath }) =>
     when(Referencing.scan({ part: PARTS.body }).responds({ source }))
       .where(
-        CopyableBodyAsset({ source }).is({ page, raw, name }),
-        BesidePageOutput({ page, name }).is({ path: outputPath }),
-        OutputPathAddress({ path: outputPath }).is({ address }),
+        CopyableBodyAsset({ source }).is({ page, raw, sourcePath: assetPath }),
+        OutputPathAddress({ path: assetPath }).is({ address }),
         no(RetargetedReference({ replacement: address, original: raw })),
-        Filing._file({ file: page }).is({ path: sourcePath }),
+        Filing._file({ file: page }).is({ path: pagePath }),
       )
       .then(
         Diagnosing.report({
@@ -230,7 +213,7 @@ export const UnretargetableCopiedBodyAssetsDiagnose = reaction(
           severity: "error",
           code: "INVALID_LOCAL_REFERENCE",
           message: "This local reference cannot be safely retargeted.",
-          source: sourcePath,
+          source: pagePath,
         }),
       ),
 );

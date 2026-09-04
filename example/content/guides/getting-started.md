@@ -128,8 +128,8 @@ The development server listens on `127.0.0.1:3000` by default. It continues to s
 ## Verify local asset handling
 
 Open this [local checklist](../assets/guide.txt?format=text#checklist). The source
-file is `content/assets/guide.txt`; Syncpress copies it beside this page because
-the page links to it. Unreferenced content assets remain source-only.
+file is `content/assets/guide.txt`; Syncpress copies it to `assets/guide.txt`
+because the page links to it. Unreferenced content assets remain source-only.
 
 ## Next steps
 

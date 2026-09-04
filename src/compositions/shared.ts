@@ -11,7 +11,6 @@ export const DIAGNOSTIC_SCOPES = {
 
 export const ROOTS = {
   content: "content",
-  includes: "includes",
   project: "project",
   public: "public",
   templates: "templates",

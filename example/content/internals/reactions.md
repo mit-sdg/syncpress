@@ -49,7 +49,7 @@ Originated and unoriginated contexts are distinct alternatives. When `site.origi
 
 ## Local files fork by role and bytes
 
-A resolved body reference to another document is answered with the routed address. A resolved reference to an unrouted local file first claims an output beside the page.
+A resolved body reference to another document is answered with the routed address. A resolved reference to an unrouted local file first claims its content-root-relative output path.
 
 Primary raster image references then take a longer path. Filename matching admits the reference to Transcoding, byte inspection establishes the actual format and dimensions, configured renditions are staged under digest-derived names, and Embedding forms the final `<picture>`. The reference is answered only after every promised rendition and the exact fallback have output intentions.
 

@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/syncpress",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A deterministic static publishing generator built from independently specified concepts.",
   "type": "module",
   "exports": {

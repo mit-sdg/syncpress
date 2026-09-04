@@ -74,7 +74,7 @@ Other keys have no built-in meaning. A layout can read `site.title`, `site.navig
 | Key | Default | Use |
 | --- | --- | --- |
 | `content` | `content` | Markdown, HTML, and content-relative assets. |
-| `templates` | `templates` | Layouts and the `includes/` subtree. |
+| `templates` | `templates` | Liquid templates, named by their root-relative paths. |
 | `public` | `public` | Files copied unchanged. |
 | `assets` | `assets` | Output prefix for generated image renditions. |
 | `output` | `dist` | Destination used when the CLI receives no explicit destination. |
