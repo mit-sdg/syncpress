@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -84,6 +84,73 @@ test("a missing site directory is diagnosed rather than left to time out", async
   expect((await summary()).diagnostics).toContainEqual(
     expect.objectContaining({ code: "LOCATION_MISSING", source: "site.yaml" }),
   );
+});
+
+test("shared template failures settle as one specific diagnostic without late boundary answers", async () => {
+  const directory = await project();
+  const warnings = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    await writeFile(join(directory, "templates", "page.html"), "before\n{{ missing.value }}\n");
+    await Promise.all([
+      writeFile(join(directory, "content", "one.md"), "one\n"),
+      writeFile(join(directory, "content", "two.md"), "two\n"),
+      writeFile(join(directory, "content", "three.md"), "three\n"),
+    ]);
+
+    const { build, summary } = runtime();
+    expect(await build({ directory })).toMatchObject({
+      ok: false,
+      error: { kind: "domain", value: "BUILD_HAS_ERRORS" },
+    });
+    expect((await summary()).diagnostics).toEqual([expect.objectContaining({
+      code: "UNDEFINED_VARIABLE",
+      source: "page.html",
+      message: 'This Liquid template reads a context value that is not defined. Missing: "missing".',
+    })]);
+    expect(warnings).not.toHaveBeenCalled();
+  } finally {
+    warnings.mockRestore();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("multiple body template failures aggregate without late boundary answers", async () => {
+  const directory = await project();
+  const warnings = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    await Promise.all([
+      writeFile(join(directory, "content", "one.md"), "{{ absent }}\n"),
+      writeFile(join(directory, "content", "two.md"), "{{ absent }}\n"),
+      writeFile(join(directory, "content", "three.md"), "{{ absent }}\n"),
+    ]);
+
+    const { build, summary } = runtime();
+    expect(await build({ directory })).toMatchObject({
+      ok: false,
+      error: { kind: "domain", value: "BUILD_HAS_ERRORS" },
+    });
+    expect((await summary()).diagnostics.map(({ code, source, message }) => ({ code, source, message }))).toEqual([
+      {
+        code: "UNDEFINED_VARIABLE",
+        source: "one.md",
+        message: 'This Liquid template reads a context value that is not defined. Missing: "absent".',
+      },
+      {
+        code: "UNDEFINED_VARIABLE",
+        source: "three.md",
+        message: 'This Liquid template reads a context value that is not defined. Missing: "absent".',
+      },
+      {
+        code: "UNDEFINED_VARIABLE",
+        source: "two.md",
+        message: 'This Liquid template reads a context value that is not defined. Missing: "absent".',
+      },
+    ]);
+    expect(warnings).not.toHaveBeenCalled();
+  } finally {
+    warnings.mockRestore();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("invalid untyped build inputs are rejected before a build flow starts", async () => {

@@ -73,7 +73,12 @@ export async function buildSite(projectDirectory = ".", destination?: string) {
     destination === undefined ? { directory: projectDirectory } : { directory: projectDirectory, destination },
     { timeoutMs: BATCH_TIMEOUT_MS },
   );
-  if (!built.ok) throw await refusal(gateway, "Could not build the site", reason(built.error));
+  if (!built.ok) {
+    const detail = built.error.kind === "domain" && built.error.value === "BUILD_HAS_ERRORS"
+      ? "one or more errors were diagnosed"
+      : reason(built.error);
+    throw await refusal(gateway, "Could not build the site", detail);
+  }
 
   const { summary, ...counts } = built.value;
   if (summary.destination === null) {

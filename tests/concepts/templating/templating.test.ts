@@ -627,10 +627,78 @@ test("failed renderSource and renderTemplate attempts preserve snapshots and exp
     TemplateNotFound,
   );
   expect(templating._failure({ subject: "missing" })).toEqual([
-    { code: "TEMPLATE_NOT_FOUND", templateName: undefined, line: undefined, column: undefined },
+    {
+      code: "TEMPLATE_NOT_FOUND",
+      message: "There is no such template.",
+      templateName: undefined,
+      line: undefined,
+      column: undefined,
+    },
   ]);
   expect(templating.renderSource({ subject: "missing", source: "recovered", context: {}, trusted: [] }).output).toBe("recovered");
   expect(templating._failure({ subject: "missing" })).toEqual([]);
+});
+
+test("aggregate render attempts return located, specific failures as data", () => {
+  const templating = new TemplatingConcept();
+  const page = templating.define({ name: "page.html", source: "before\n{{ missing.value }}" });
+
+  expect(templating.attemptTemplate({ channel: "test", template: page.template, subject: "page", context: {}, trusted: [] })).toEqual({
+    status: "failed",
+    code: "UNDEFINED_VARIABLE",
+    message: 'This Liquid template reads a context value that is not defined. Missing: "missing".',
+    source: "page.html",
+    line: 2,
+    column: 4,
+  });
+  expect(templating.attemptSource({
+    subject: "post",
+    source: "{{ absent }}",
+    context: {},
+    trusted: [],
+    sourceName: "post.md",
+    sourceLine: 7,
+  })).toEqual({
+    status: "failed",
+    code: "UNDEFINED_VARIABLE",
+    message: 'This Liquid template reads a context value that is not defined. Missing: "absent".',
+    source: "post.md",
+    line: 7,
+    column: 4,
+  });
+  expect(templating.attemptSource({
+    subject: "working",
+    source: "okay",
+    context: {},
+    trusted: [],
+  })).toEqual({ status: "rendered", filling: expect.any(String), output: "okay" });
+});
+
+test("aggregate attempts never disguise an unexpected exception as a stale failure", () => {
+  const templating = new TemplatingConcept();
+  expect(templating.attemptSource({
+    subject: "page",
+    source: "{{ missing }}",
+    context: {},
+    trusted: [],
+  })).toMatchObject({ status: "failed", code: "UNDEFINED_VARIABLE" });
+
+  expect(() => templating.attemptSource({
+    subject: "page",
+    get source(): string {
+      throw new Error("boom");
+    },
+    context: {},
+    trusted: [],
+  })).toThrow("boom");
+  expect(() => templating.attemptSource({
+    subject: "page",
+    get source(): string {
+      throw new TemplateNotFound();
+    },
+    context: {},
+    trusted: [],
+  })).toThrow(TemplateNotFound);
 });
 
 test("named fills report original source coordinates and a fallback source", () => {
@@ -766,5 +834,7 @@ test("the registry maps every declared refusal to its error class", () => {
         "TEMPLATE_FAILED",
       ],
     ],
+    ["attemptSource", []],
+    ["attemptTemplate", []],
   ]);
 });

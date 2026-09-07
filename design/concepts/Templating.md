@@ -17,8 +17,10 @@ can reach. Reusing the same source changes nothing; replacing it keeps the same
 template identity. A missing fragment, recursive tree, unsupported dependency,
 or Liquid error reports its location and leaves the last successful output
 untouched. That failed renderSource or renderTemplate is also available by its subject with its
-normalized refusal code and any available location. A later successful renderSource or
-renderTemplate for that subject clears the failure.
+normalized refusal code, operator-readable message, and any available location. A later
+successful renderSource or renderTemplate for that subject clears the failure. Aggregate
+workflows can attempt either render and receive the same failure as data, allowing all affected
+sources to be diagnosed before the workflow answers.
 
 The concept retains this value vocabulary and its constraints:
 
@@ -31,6 +33,11 @@ The concept retains this value vocabulary and its constraints:
 `Digest = Text` A SHA-256 digest.
 
 `Code = "INVALID_TRUSTED_PATH" | "INVALID_TRUSTED_VALUE" | "RECURSIVE_TEMPLATE" | "TEMPLATE_FAILED" | "TEMPLATE_NOT_FOUND" | "TEMPLATE_SYNTAX" | "UNDEFINED_VARIABLE" | "UNSUPPORTED_TEMPLATE" | "USED_TEMPLATE_NOT_FOUND"`
+
+`AttemptStatus = "rendered" | "failed"`
+
+`Channel = Text` An application-supplied coordination channel that distinguishes otherwise
+similar template attempts.
 
 `Keys = List<JavaScriptString>` A nonempty literal context path.
 
@@ -63,6 +70,15 @@ All values written by Liquid output are HTML-escaped, replacing `&`, `<`, `>`, `
 Trust belongs to the exact internal value, not to a variable name or text with the same contents. It survives an `assign` alias and a named `render` argument. Any filter result is ordinary text and is escaped, even for `raw`, `default`, or an identity-like filter. `capture` also produces ordinary text, so interpolating a captured trusted value escapes it. Template authors cannot create a trusted value.
 
 Names and subjects are arbitrary JavaScript strings. Identities are deterministic, injective length-prefixed encodings, so punctuation and control characters cannot collide. A template keeps its identity when its source changes. A filling keeps its identity for its subject. A rendering keeps its identity for its exact template and subject pair.
+
+A Failure message begins with the normative sentence for its code. For an undefined variable
+whose name is available, it appends ` Missing: `, the JSON-quoted variable name, and `.`.
+Other safe details already identified by the corresponding template error are appended after
+its sentence. An attempt returns status `rendered` with only its Filling or Rendering and
+output populated; its failure fields are absent. It returns status `failed` with code and
+message populated, any available source, line, and column populated, and its successful-result
+fields absent. An exception outside the declared template failure classes remains a fault; an
+older Failure for the subject must not turn it into a failed attempt.
 
 ## Types
 
@@ -98,6 +114,7 @@ a set of Renderings with
 a set of Failures with
   a subject Subject
   a code Code
+  a message Text
   an optional templateName Name
   an optional line PositiveInteger
   an optional column PositiveInteger
@@ -229,6 +246,26 @@ renderTemplate(template: Template, subject: Subject, context: Values, trusted: P
     clear any Failure for subject
     produce rendering and output
     return rendering, output
+
+attemptSource(subject: Subject, source: JavaScriptString, context: Values, trusted: Paths, sourceName?: Name, sourceLine?: PositiveInteger) : return (status: AttemptStatus, filling?: Filling, output?: JavaScriptString, code?: Code, message?: Text, source?: DiagnosticSource, line?: PositiveInteger, column?: PositiveInteger)
+  where renderSource would succeed
+  then
+    make the same state transition as renderSource and set status to rendered
+    return status, filling, output, code, message, source, line, column
+  where renderSource would refuse with a declared template failure
+  then
+    make the same Failure transition as renderSource without refusing and set status to failed
+    return status, filling, output, code, message, source, line, column
+
+attemptTemplate(channel: Channel, template: Template, subject: Subject, context: Values, trusted: Paths) : return (status: AttemptStatus, rendering?: Rendering, output?: JavaScriptString, code?: Code, message?: Text, source?: DiagnosticSource, line?: PositiveInteger, column?: PositiveInteger)
+  where renderTemplate would succeed
+  then
+    make the same state transition as renderTemplate and set status to rendered; channel distinguishes independently coordinated callers without changing the result
+    return status, rendering, output, code, message, source, line, column
+  where renderTemplate would refuse with a declared template failure
+  then
+    make the same Failure transition as renderTemplate without refusing and set status to failed; channel distinguishes independently coordinated callers without changing the result
+    return status, rendering, output, code, message, source, line, column
 ```
 
 ## Queries
@@ -268,9 +305,10 @@ _reads (owner: Owner) : many (path: Keys)
   template does not rewrite the snapshot. An unknown owner returns no rows.
   Apart from these fresh path lists, query rows contain no mutable values.
 
-_failure (subject: Subject) : optional (code: Code, templateName?: Name, line?: PositiveInteger, column?: PositiveInteger)
+_failure (subject: Subject) : optional (code: Code, message: Text, templateName?: Name, line?: PositiveInteger, column?: PositiveInteger)
   Returns the latest failed renderSource or renderTemplate for exactly the subject, or no row
-  when none is recorded. The code is one of the declared refusal codes.
+  when none is recorded. The code is one of the declared refusal codes, and message includes
+  safe failure-specific context when available.
   templateName, line, and column are present and undefined when no corresponding
   location is available.
 

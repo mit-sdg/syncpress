@@ -1,7 +1,15 @@
 import { compute, earlier, no, reaction, view, when, where } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { AbsoluteSiteUrl, AddressOutputPath } from "./calculations.ts";
-import { DIAGNOSTIC_SCOPES, PAGE_CONTENT_PATH, PARTS, PHASE_SEQUENCE, ROOTS, TRUSTED_COLLECTION_EXCERPTS } from "./shared.ts";
+import {
+  DIAGNOSTIC_SCOPES,
+  PAGE_CONTENT_PATH,
+  PARTS,
+  PHASE_SEQUENCE,
+  ROOTS,
+  TEMPLATE_ATTEMPT_CHANNELS,
+  TRUSTED_COLLECTION_EXCERPTS,
+} from "./shared.ts";
 import {
   CompletedOriginatedPageRenderContext,
   CompletedUnoriginatedPageRenderContext,
@@ -161,7 +169,7 @@ export const TrackedRenderingSourcesFillBodies = reaction(
     )
     .then(
       where(AbsoluteSiteUrl({ address }))
-        .then(Templating.renderSource({
+        .then(Templating.attemptSource({
           subject: rendering,
           source: body,
           context: OriginatedPageRenderContext({ rendering }) as unknown as Record<string, unknown>,
@@ -171,7 +179,7 @@ export const TrackedRenderingSourcesFillBodies = reaction(
         }))
         .named("originated"),
       where(no(AbsoluteSiteUrl({ address })))
-        .then(Templating.renderSource({
+        .then(Templating.attemptSource({
           subject: rendering,
           source: body,
           context: UnoriginatedPageRenderContext({ rendering }) as unknown as Record<string, unknown>,
@@ -185,7 +193,7 @@ export const TrackedRenderingSourcesFillBodies = reaction(
 
 /** Diagnose a selected profile only after this render has cleared prior source diagnostics. */
 export const MissingRenderingProfilesDiagnose = reaction(({ rendering, page, name, path }) =>
-  when(Templating.renderSource({ subject: rendering }).responds({}))
+  when(Templating.attemptSource({ subject: rendering }).responds({ status: "rendered" }))
     .where(
       RenderTracking._active({ rendering }).is({ subject: page, profile: name }),
       no(Converting._profile({ name })),
@@ -202,7 +210,7 @@ export const MissingRenderingProfilesDiagnose = reaction(({ rendering, page, nam
 
 /** Honor an explicit page conversion profile. */
 export const FilledBodiesConvert = reaction(({ rendering, output, profile, name }) =>
-  when(Templating.renderSource({ subject: rendering }).responds({ output }))
+  when(Templating.attemptSource({ subject: rendering }).responds({ status: "rendered", output }))
     .where(
       RenderTracking._active({ rendering }).is({ profile: name }),
       Converting._profile({ name }).is({ profile }),
@@ -219,7 +227,7 @@ export const ConvertedBodiesScan = reaction(({ rendering, output }) =>
 
 /** Retain the exact body template tree as page inputs. */
 export const FilledBodiesTrackTemplates = reaction(({ page, rendering, filling, used, template, dependencyAttempt }) =>
-  when(Templating.renderSource({ subject: rendering }).responds({ filling }))
+  when(Templating.attemptSource({ subject: rendering }).responds({ status: "rendered", filling }))
     .where(
       RenderTracking._active({ rendering }).is({ subject: page, dependencyAttempt }),
       Templating._tree({ owner: filling }).is({ used }),
@@ -250,7 +258,8 @@ export const SettledBodiesRenderOriginatedPages = reaction(({ rendering, page, a
       RenderTracking._active({ rendering }).is({ template: name }),
       Templating._template({ name }).is({ template }),
     )
-    .then(Templating.renderTemplate({
+    .then(Templating.attemptTemplate({
+      channel: TEMPLATE_ATTEMPT_CHANNELS.page,
       template,
       subject: rendering,
       context: CompletedOriginatedPageRenderContext({ rendering }) as unknown as Record<string, unknown>,
@@ -267,7 +276,8 @@ export const SettledBodiesRenderUnoriginatedPages = reaction(({ rendering, page,
       RenderTracking._active({ rendering }).is({ template: name }),
       Templating._template({ name }).is({ template }),
     )
-    .then(Templating.renderTemplate({
+    .then(Templating.attemptTemplate({
+      channel: TEMPLATE_ATTEMPT_CHANNELS.page,
       template,
       subject: rendering,
       context: CompletedUnoriginatedPageRenderContext({ rendering }) as unknown as Record<string, unknown>,
@@ -295,7 +305,7 @@ export const MissingRenderingTemplatesDiagnose = reaction(({ rendering, page, na
 
 /** Retain the exact layout template tree as page inputs. */
 export const RenderedLayoutsTrackTemplates = reaction(({ page, attempt, rendering, used, template, attemptDependency }) =>
-  when(Templating.renderTemplate({ subject: attempt }).responds({ rendering }))
+  when(Templating.attemptTemplate({ channel: TEMPLATE_ATTEMPT_CHANNELS.page, subject: attempt }).responds({ status: "rendered", rendering }))
     .where(
       RenderTracking._active({ rendering: attempt }).is({ subject: page, dependencyAttempt: attemptDependency }),
       Templating._tree({ owner: rendering }).is({ used }),
@@ -306,7 +316,7 @@ export const RenderedLayoutsTrackTemplates = reaction(({ page, attempt, renderin
 
 /** The layout output gets a second reference pass so site-base rebasing is final. */
 export const RenderedLayoutsScan = reaction(({ rendering, output }) =>
-  when(Templating.renderTemplate({ subject: rendering }).responds({ output }))
+  when(Templating.attemptTemplate({ channel: TEMPLATE_ATTEMPT_CHANNELS.page, subject: rendering }).responds({ status: "rendered", output }))
     .where(RenderTracking._active({ rendering }))
     .then(Referencing.scan({ subject: rendering, part: PARTS.layout, text: output })),
 );
@@ -427,7 +437,7 @@ export const FailedRenderingsAbandonDependencies = reaction(
 
 /** Convert expected template and conversion failures into page diagnostics. */
 export const BodyTemplateFailuresDiagnose = reaction(({ page, rendering, error, detail, path, source, line, column }) =>
-  when(Templating.renderSource({ subject: rendering }).refuses({ error, detail }))
+  when(Templating.attemptSource({ subject: rendering }).responds({ status: "failed", code: error, message: detail }))
     .where(
       earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "render", transitioned: true }),
       RenderTracking._active({ rendering }).is({ subject: page }),
@@ -438,7 +448,7 @@ export const BodyTemplateFailuresDiagnose = reaction(({ page, rendering, error, 
 );
 
 export const BodyTemplateFailuresFailRendering = reaction(({ rendering, error }) =>
-  when(Templating.renderSource({ subject: rendering }).refuses({ error }))
+  when(Templating.attemptSource({ subject: rendering }).responds({ status: "failed", code: error }))
     .where(
       earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "render", transitioned: true }),
       RenderTracking._active({ rendering }),
@@ -457,7 +467,7 @@ export const BodyConversionFailuresDiagnose = reaction(({ page, rendering, error
 );
 
 export const LayoutTemplateFailuresDiagnose = reaction(({ page, rendering, error, detail, path, source, line, column }) =>
-  when(Templating.renderTemplate({ subject: rendering }).refuses({ error, detail }))
+  when(Templating.attemptTemplate({ channel: TEMPLATE_ATTEMPT_CHANNELS.page, subject: rendering }).responds({ status: "failed", code: error, message: detail }))
     .where(
       earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "render", transitioned: true }),
       RenderTracking._active({ rendering }).is({ subject: page }),
@@ -468,7 +478,7 @@ export const LayoutTemplateFailuresDiagnose = reaction(({ page, rendering, error
 );
 
 export const LayoutTemplateFailuresFailRendering = reaction(({ rendering, error }) =>
-  when(Templating.renderTemplate({ subject: rendering }).refuses({ error }))
+  when(Templating.attemptTemplate({ channel: TEMPLATE_ATTEMPT_CHANNELS.page, subject: rendering }).responds({ status: "failed", code: error }))
     .where(
       earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "render", transitioned: true }),
       RenderTracking._active({ rendering }),

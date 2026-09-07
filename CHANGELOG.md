@@ -5,6 +5,11 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Shared Liquid failures are now aggregated without late-answer warning logs. Diagnostics
+  name the failing template or content source and include the missing context variable.
+
 ## [0.3.1] — 2026-09-04
 
 ### Changed
