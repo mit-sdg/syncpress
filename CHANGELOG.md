@@ -5,6 +5,8 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-07
+
 ### Fixed
 
 - Shared Liquid failures are now aggregated without late-answer warning logs. Diagnostics
@@ -98,7 +100,8 @@ Initial npm release of `@mit-sdg/syncpress`.
   destination when a build fails before reconciliation.
 - ESM packaging for Node.js `>=24 <25` and Bun `>=1.3.14 <1.4`.
 
-[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mit-sdg/syncpress/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/mit-sdg/syncpress/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mit-sdg/syncpress/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/mit-sdg/syncpress/compare/v0.2.0...v0.2.1
