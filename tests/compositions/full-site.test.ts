@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -652,9 +652,31 @@ test("body Liquid failures report their original source coordinate after front m
     await mkdir(destination);
     await writeFile(join(destination, "previous.txt"), "keep this file\n");
 
-    await expect(buildSite(project, "dist")).rejects.toThrow("UNDEFINED_VARIABLE index.md:4:");
+    await expect(buildSite(project, "dist")).rejects.toThrow(
+      'Could not build the site: one or more errors were diagnosed\n\nDiagnostics:\n' +
+      'ERROR UNDEFINED_VARIABLE index.md:4:4: This Liquid template reads a context value that is not defined. Missing: "missing".',
+    );
     expect(await readFile(join(destination, "previous.txt"), "utf8")).toBe("keep this file\n");
   } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+}, BUILD_TEST_TIMEOUT_MS);
+
+test("repeated pagination template failures aggregate without late-answer warnings", async () => {
+  const project = await mkdtemp(join(tmpdir(), "syncpress-pagination-template-failure-"));
+  const warnings = spyOn(console, "warn").mockImplementation(() => {});
+
+  try {
+    await copyExample(project);
+    const template = join(project, "templates", "page.html");
+    await writeFile(template, `${await readFile(template, "utf8")}\n{% if pagination %}{{ missing.value }}{% endif %}\n`);
+
+    await expect(buildSite(project, "dist")).rejects.toThrow(
+      'ERROR UNDEFINED_VARIABLE page.html:59:23: This Liquid template reads a context value that is not defined. Missing: "missing".',
+    );
+    expect(warnings).not.toHaveBeenCalled();
+  } finally {
+    warnings.mockRestore();
     await rm(project, { recursive: true, force: true });
   }
 }, BUILD_TEST_TIMEOUT_MS);

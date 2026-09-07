@@ -142,10 +142,31 @@ type FailureCode =
   | "USED_TEMPLATE_NOT_FOUND";
 type FailureRecord = {
   code: FailureCode;
+  message: string;
   templateName: string | undefined;
   line: number | undefined;
   column: number | undefined;
 };
+
+type RenderAttemptFailure = {
+  status: "failed";
+  code: FailureCode;
+  message: string;
+  source?: string;
+  line?: number;
+  column?: number;
+};
+type SourceRenderAttempt = {
+  status: "rendered" | "failed";
+  filling?: string;
+  output?: string;
+  code?: FailureCode;
+  message?: string;
+  source?: string;
+  line?: number;
+  column?: number;
+};
+type TemplateRenderAttempt = Omit<SourceRenderAttempt, "filling"> & { rendering?: string };
 type Read = { path: string[] };
 type SegmentArray = Array<string | number | SegmentArray>;
 type Use = { used: string; location: TemplateErrorLocation };
@@ -223,14 +244,18 @@ function failureFromError(error: unknown): FailureRecord | undefined {
                       : undefined;
   if (code === undefined) return undefined;
   if (error instanceof LocatedTemplateError) {
+    const message = error instanceof UndefinedVariable && error.variable !== undefined
+      ? `${UNDEFINED_VARIABLE} Missing: ${JSON.stringify(error.variable)}.`
+      : error.message;
     return {
       code,
+      message,
       templateName: error.templateName,
       line: error.line,
       column: error.column,
     };
   }
-  return { code, templateName: undefined, line: undefined, column: undefined };
+  return { code, message: (error as Error).message, templateName: undefined, line: undefined, column: undefined };
 }
 
 const htmlEscape = new Liquid({ outputEscape: "escape" }).options.outputEscape!;
@@ -572,6 +597,7 @@ export class TemplatingConcept {
   readonly #renderingsByKey = new Map<string, RenderingRecord>();
   readonly #renderingsByID = new Map<string, RenderingRecord>();
   readonly #failuresBySubject = new Map<string, FailureRecord>();
+  readonly #failureCausesBySubject = new Map<string, unknown>();
   readonly #originsByName = new Map<string, string>();
 
   define({ name, source }: { name: string; source: string }) {
@@ -655,7 +681,7 @@ export class TemplatingConcept {
       };
       this.#fillingsBySubject.set(subject, record);
       this.#fillingsByID.set(filling, record);
-      this.#failuresBySubject.delete(subject);
+      this.#clearFailure(subject);
       return { filling, output };
     } catch (error) {
       this.#recordFailure(subject, error, sourceName, sourceLine - 1);
@@ -687,11 +713,30 @@ export class TemplatingConcept {
       const rendered: RenderingRecord = { rendering, template, subject, output, tree, reads };
       this.#renderingsByKey.set(key, rendered);
       this.#renderingsByID.set(rendering, rendered);
-      this.#failuresBySubject.delete(subject);
+      this.#clearFailure(subject);
       return { rendering, output };
     } catch (error) {
       this.#recordFailure(subject, error);
       throw error;
+    }
+  }
+
+  /** Render for an aggregate workflow without turning an expected template failure into its boundary answer. */
+  attemptSource(input: Parameters<TemplatingConcept["renderSource"]>[0]): SourceRenderAttempt {
+    try {
+      return { status: "rendered" as const, ...this.renderSource(input) };
+    } catch (error) {
+      return this.#attemptFailure(input.subject, input.sourceName, error);
+    }
+  }
+
+  /** Render for an aggregate workflow without turning an expected template failure into its boundary answer. */
+  attemptTemplate(input: Parameters<TemplatingConcept["renderTemplate"]>[0] & { channel: string }): TemplateRenderAttempt {
+    const { channel: _channel, ...rendering } = input;
+    try {
+      return { status: "rendered" as const, ...this.renderTemplate(rendering) };
+    } catch (error) {
+      return this.#attemptFailure(input.subject, undefined, error);
     }
   }
 
@@ -732,16 +777,7 @@ export class TemplatingConcept {
 
   _failure({ subject }: { subject: string }): FailureRecord[] {
     const failure = this.#failuresBySubject.get(subject);
-    return failure === undefined
-      ? []
-      : [
-          {
-            code: failure.code,
-            templateName: failure.templateName,
-            line: failure.line,
-            column: failure.column,
-          },
-        ];
+    return failure === undefined ? [] : [{ ...failure }];
   }
 
   /** Resolve a failure to its named template, or to the caller's authored source. */
@@ -978,5 +1014,25 @@ export class TemplatingConcept {
       failure.line += lineOffset;
     }
     this.#failuresBySubject.set(subject, failure);
+    this.#failureCausesBySubject.set(subject, error);
+  }
+
+  #clearFailure(subject: string): void {
+    this.#failuresBySubject.delete(subject);
+    this.#failureCausesBySubject.delete(subject);
+  }
+
+  #attemptFailure(subject: string, fallbackSource: string | undefined, error: unknown): RenderAttemptFailure {
+    if (this.#failureCausesBySubject.get(subject) !== error) throw error;
+    const failure = this.#failuresBySubject.get(subject);
+    if (failure === undefined) throw error;
+    return {
+      status: "failed",
+      code: failure.code,
+      message: failure.message,
+      ...((failure.templateName ?? fallbackSource) === undefined ? {} : { source: failure.templateName ?? fallbackSource }),
+      ...(failure.line === undefined ? {} : { line: failure.line }),
+      ...(failure.column === undefined ? {} : { column: failure.column }),
+    };
   }
 }

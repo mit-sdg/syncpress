@@ -31,7 +31,7 @@ test("superseded template work cannot enter the replacement dependency attempt",
     emissionAttempt: 2,
   }));
 
-  await app.concepts.Templating.renderSource({
+  await app.concepts.Templating.attemptSource({
     subject: first.rendering,
     source: '{% render "old" %}',
     context: {},
@@ -42,7 +42,7 @@ test("superseded template work cannot enter the replacement dependency attempt",
   await app.whenIdle();
   expect(await app.concepts.DependencyTracking._uses({ subject: page })).toEqual([]);
 
-  await app.concepts.Templating.renderSource({
+  await app.concepts.Templating.attemptSource({
     subject: second.rendering,
     source: '{% render "old" %}',
     context: {},

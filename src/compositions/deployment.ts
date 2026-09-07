@@ -1,7 +1,14 @@
 import { compute, earlier, each, former, no, reaction, returned, view, when, where, whether } from "@mit-sdg/sync-engine/language";
 import { computations, concepts as conceptRefs } from "@syncpress/concepts";
 import { AbsoluteSiteUrl, AddressOutputPath, SiteUrl } from "./calculations.ts";
-import { CONFIGURATION_PATH, PAGE_CONTENT_PATH, PHASE_SEQUENCE, TRUSTED_COLLECTION_EXCERPTS } from "./shared.ts";
+import {
+  CONFIGURATION_PATH,
+  DIAGNOSTIC_SCOPES,
+  PAGE_CONTENT_PATH,
+  PHASE_SEQUENCE,
+  TEMPLATE_ATTEMPT_CHANNELS,
+  TRUSTED_COLLECTION_EXCERPTS,
+} from "./shared.ts";
 
 const {
   Cataloging,
@@ -281,7 +288,8 @@ export const ClaimedPaginationPagesPrepareContext = reaction(
 
 export const PaginationContextsRender = reaction(({ work, owner, template, context }) =>
   when(Deploying.preparePageContext({ work }).responds({ owner, template, context })).then(
-    Templating.renderTemplate({
+    Templating.attemptTemplate({
+      channel: TEMPLATE_ATTEMPT_CHANNELS.deployment,
       template,
       subject: owner,
       context,
@@ -291,8 +299,11 @@ export const PaginationContextsRender = reaction(({ work, owner, template, conte
 );
 
 export const RenderedPaginationLayoutsScan = reaction(({ owner, output }) =>
-  when(Templating.renderTemplate({ subject: owner }).responds({ output }))
-    .where(Deploying._forOwner({ owner }).is({ kind: "pagination-page" }))
+  when(Templating.attemptTemplate({ channel: TEMPLATE_ATTEMPT_CHANNELS.deployment, subject: owner }).responds({ status: "rendered", output }))
+    .where(
+      earlier(Deploying.preparePageContext, {}, { owner }),
+      Deploying._forOwner({ owner }).is({ kind: "pagination-page" }),
+    )
     .then(Referencing.scan({ subject: owner, part: DEPLOYMENT_LAYOUT, text: output })),
 );
 
@@ -376,10 +387,33 @@ export const BegunPaginationPagesIntend = reaction(({ producer, attempt, address
     .then(Emitting.intend({ producer, attempt, path, content: text, medium: "text/html" })),
 );
 
-export const PaginationTemplateFailuresDiagnose = reaction(({ owner, error, detail }) =>
-  when(Templating.renderTemplate({ subject: owner }).refuses({ error, detail }))
-    .where(Deploying._forOwner({ owner }).is({ kind: "pagination-page" }))
-    .then(Diagnosing.report({ severity: "error", code: error, message: detail, source: CONFIGURATION_PATH }).responds({}))
+export const PaginationTemplateFailuresDiagnose = reaction(({ owner, error, detail, source, line, column }) =>
+  when(Templating.attemptTemplate({ channel: TEMPLATE_ATTEMPT_CHANNELS.deployment, subject: owner }).responds({ status: "failed", code: error, message: detail }))
+    .where(
+      earlier(Deploying.preparePageContext, {}, { owner }),
+      Deploying._forOwner({ owner }).is({ kind: "pagination-page" }),
+      Templating._failureLocation({ subject: owner, fallbackSource: CONFIGURATION_PATH }).is({ source, line, column }),
+    )
+    .then(Diagnosing.report({
+      scope: DIAGNOSTIC_SCOPES.rendering,
+      severity: "error",
+      code: error,
+      message: detail,
+      source,
+      line,
+      column,
+    })),
+);
+
+export const PaginationTemplateFailuresReject = reaction(({ owner }) =>
+  when(Templating.attemptTemplate({
+    channel: TEMPLATE_ATTEMPT_CHANNELS.deployment,
+    subject: owner,
+  }).responds({ status: "failed" }))
+    .where(
+      earlier(Deploying.preparePageContext, {}, { owner }),
+      Deploying._forOwner({ owner }).is({ kind: "pagination-page" }),
+    )
     .then(Deploying.rejectOwnerWork({ owner })),
 );
 

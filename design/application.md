@@ -59,6 +59,7 @@ step of those flows; each view and former derives the named reusable read model.
 - [OriginlessFeedsDiagnose](reaction:fullSite.deployment.OriginlessFeedsDiagnose)
 - [PaginationContextsRender](reaction:fullSite.deployment.PaginationContextsRender)
 - [PaginationTemplateFailuresDiagnose](reaction:fullSite.deployment.PaginationTemplateFailuresDiagnose)
+- [PaginationTemplateFailuresReject](reaction:fullSite.deployment.PaginationTemplateFailuresReject)
 - [PreparedFeedsBegin](reaction:fullSite.deployment.PreparedFeedsBegin)
 - [PreparedRedirectsBegin](reaction:fullSite.deployment.PreparedRedirectsBegin)
 - [PreparedSitemapsBegin](reaction:fullSite.deployment.PreparedSitemapsBegin)

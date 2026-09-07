@@ -43,6 +43,11 @@ export const PARTS = {
 
 export const PAGE_CONTENT_PATH = ["page", "content"] as const;
 
+export const TEMPLATE_ATTEMPT_CHANNELS = {
+  page: "page-rendering",
+  deployment: "deployment-rendering",
+} as const;
+
 export const PROFILES = {
   markdown: "markdown",
   verbatim: "verbatim",
