@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Marked, type MarkedExtension, type Token } from "marked";
+import { gfmHeadingId } from "marked-gfm-heading-id";
 
 export class InvalidProfile extends Error {}
 export class UnsupportedProfileKind extends Error {}
@@ -20,6 +21,7 @@ type Profile = {
   kind: ProfileKind;
   extensions: MarkdownExtension[];
   raw: boolean;
+  headingIds: boolean;
   separator: string;
 };
 type Conversion = {
@@ -78,6 +80,7 @@ function normalizeProfile(input: {
   kind: string;
   extensions: string[];
   raw: boolean;
+  headingIds: boolean;
   separator: string;
 }): Omit<Profile, "profile" | "settingsKey"> {
   try {
@@ -86,6 +89,7 @@ function normalizeProfile(input: {
       typeof input.kind !== "string" ||
       !Array.isArray(input.extensions) ||
       typeof input.raw !== "boolean" ||
+      typeof input.headingIds !== "boolean" ||
       typeof input.separator !== "string"
     ) {
       throw new InvalidProfile();
@@ -102,8 +106,17 @@ function normalizeProfile(input: {
       throw new UnsupportedExtension();
     }
     const extensions = SUPPORTED_EXTENSIONS.filter((extension) => requested.has(extension));
-    if (input.kind === "verbatim" && (extensions.length !== 0 || !input.raw)) throw new IncompatibleProfile();
-    return { name: input.name, kind: input.kind, extensions, raw: input.raw, separator: input.separator };
+    if (input.kind === "verbatim" && (extensions.length !== 0 || !input.raw || input.headingIds)) {
+      throw new IncompatibleProfile();
+    }
+    return {
+      name: input.name,
+      kind: input.kind,
+      extensions,
+      raw: input.raw,
+      headingIds: input.headingIds,
+      separator: input.separator,
+    };
   } catch (error) {
     if (isOwnError(error)) throw error;
     throw new InvalidProfile();
@@ -239,6 +252,7 @@ function markdown(profile: Profile, source: string): string {
     tokenizer,
     renderer,
   });
+  if (profile.headingIds) parser.use(gfmHeadingId());
   if (enabled.has("footnotes")) parser.use(footnotes());
   return parser.parse(source, { async: false });
 }
@@ -250,13 +264,21 @@ export class ConvertingConcept {
   readonly #conversionsBySubject = new Map<string, Map<string, Conversion>>();
   readonly #conversionsByID = new Map<string, Conversion>();
 
-  declareProfile(input: { name: string; kind: string; extensions: string[]; raw: boolean; separator: string }) {
+  declareProfile(input: {
+    name: string;
+    kind: string;
+    extensions: string[];
+    raw: boolean;
+    headingIds: boolean;
+    separator: string;
+  }) {
     const normalized = normalizeProfile(input);
     const settingsKey = JSON.stringify([
       normalized.name,
       normalized.kind,
       normalized.extensions,
       normalized.raw,
+      normalized.headingIds,
       normalized.separator,
     ]);
     const current = this.#profilesByName.get(normalized.name);
@@ -271,6 +293,7 @@ export class ConvertingConcept {
       normalized.kind,
       normalized.extensions,
       normalized.raw,
+      normalized.headingIds,
       normalized.separator,
     ]);
     const record: Profile = { profile, settingsKey, ...normalized, extensions: [...normalized.extensions] };
@@ -333,7 +356,7 @@ export class ConvertingConcept {
 
   _profile(
     { name }: { name: string },
-  ): { profile: string; kind: string; extensions: string[]; raw: boolean; separator: string }[] {
+  ): { profile: string; kind: string; extensions: string[]; raw: boolean; headingIds: boolean; separator: string }[] {
     if (typeof name !== "string") return [];
     const profile = this.#profilesByName.get(name);
     return profile === undefined
@@ -344,6 +367,7 @@ export class ConvertingConcept {
             kind: profile.kind,
             extensions: [...profile.extensions],
             raw: profile.raw,
+            headingIds: profile.headingIds,
             separator: profile.separator,
           },
         ];

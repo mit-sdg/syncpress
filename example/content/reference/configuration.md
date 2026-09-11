@@ -46,6 +46,7 @@ collections:
 markdown:
   extensions: [tables, footnotes, strikethrough, autolinks]
   raw: true
+  headingIds: true
   excerptSeparator: "<!--more-->"
 
 images:
@@ -104,6 +105,25 @@ Patterns are case-sensitive and match the complete slash-separated relative path
 ## `markdown`
 
 `extensions` accepts `tables`, `footnotes`, `strikethrough`, and `autolinks`. All four are enabled by default. `raw` controls whether authored HTML remains markup; the default is `true`. When `raw` is `false`, authored HTML is escaped.
+
+`headingIds` must be a boolean and defaults to `true`. When enabled, every Markdown heading receives an `id` derived from its text using GitHub-style slugging. IDs are unique within each converted Markdown body; headings that produce the same slug receive numbered suffixes beginning with `-1`:
+
+```md
+## Hello, *world*!
+## Hello, world!
+```
+
+```html
+<h2 id="hello-world">Hello, <em>world</em>!</h2>
+<h2 id="hello-world-1">Hello, world!</h2>
+```
+
+Changing heading text can change its generated ID, so update fragment links that target the heading. To emit Markdown headings without generated IDs:
+
+```yaml
+markdown:
+  headingIds: false
+```
 
 `excerptSeparator` marks the end of a collection excerpt in an authored body. The default separator is empty, which disables excerpts. Excerpt extraction occurs before body Liquid evaluation.
 

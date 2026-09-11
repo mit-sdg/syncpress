@@ -44,6 +44,7 @@
     "@mit-sdg/sync-engine": "1.0.0-beta.16",
     "liquidjs": "^10.27.2",
     "marked": "^18.0.7",
+    "marked-gfm-heading-id": "^4.1.4",
     "parse5": "^8.0.1",
     "picomatch": "^4.0.5",
     "sharp": "^0.35.3",

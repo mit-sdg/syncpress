@@ -5,6 +5,11 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+### Added
+
+- Markdown headings now receive unique GitHub-style IDs by default. Set
+  `markdown.headingIds` to `false` to disable generated heading IDs.
+
 ## [0.4.0] — 2026-09-07
 
 ### Fixed
