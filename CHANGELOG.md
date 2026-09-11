@@ -5,6 +5,8 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-11
+
 ### Added
 
 - Markdown headings now receive unique GitHub-style IDs by default. Set
@@ -105,7 +107,8 @@ Initial npm release of `@mit-sdg/syncpress`.
   destination when a build fails before reconciliation.
 - ESM packaging for Node.js `>=24 <25` and Bun `>=1.3.14 <1.4`.
 
-[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/mit-sdg/syncpress/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mit-sdg/syncpress/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/mit-sdg/syncpress/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mit-sdg/syncpress/compare/v0.2.1...v0.3.0
