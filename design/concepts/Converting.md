@@ -8,7 +8,7 @@ independent, reusable results for named parts of a subject.
 ## Principle
 
 Ada declares an explicit Markdown profile with tables, footnotes,
-strikethrough, autolinks, raw HTML, and an excerpt separator. Each option changes
+strikethrough, autolinks, raw HTML, generated heading IDs, and an excerpt separator. Each option changes
 only its advertised syntax. Converting two parts of one subject keeps both
 results. Repeating an unchanged conversion reuses it. A separator creates an
 excerpt even when it occurs at the beginning; no separator means no excerpt. A
@@ -39,7 +39,9 @@ Markdown uses Marked 18.0.7's non-pedantic block and inline grammar, emits synch
 
 With `raw` true, authored HTML is copied into the generated HTML. With `raw` false, authored inline and block HTML is HTML-escaped; HTML generated from Markdown remains markup. This is an encoding control, not sanitization.
 
-A verbatim profile requires no extensions and `raw` true, and its output is the exact source. Its separator still controls excerpts.
+With `headingIds` true, every Markdown heading receives a unique `id` generated with GitHub's heading slug semantics. Repeated headings receive distinct IDs. With `headingIds` false, Markdown headings receive no generated `id`.
+
+A verbatim profile requires no extensions, `raw` true, and `headingIds` false, and its output is the exact source. Its separator still controls excerpts.
 
 Only the four extension names above are accepted. Extensions are a set: declaration order is irrelevant, while a duplicate is malformed. Declaration copies its options.
 
@@ -62,6 +64,7 @@ a set of Profiles with
   a kind Kind
   an extensions set of Extension
   a raw Flag
+  a headingIds Flag
   a separator JavaScriptString
 
 a set of Conversions with
@@ -79,8 +82,8 @@ Rule: current-profile-and-conversion-keys: At most one current Profile exists pe
 ## Actions
 
 ```actions
-declareProfile(name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)
-  where name, kind, extensions, raw, or separator has the wrong value kind; name is empty; or an extension is duplicated
+declareProfile(name: Name, kind: Kind, extensions: Extensions, raw: Flag, headingIds: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)
+  where name, kind, extensions, raw, headingIds, or separator has the wrong value kind; name is empty; or an extension is duplicated
   then
     refuse INVALID_PROFILE "This rendering profile is malformed."
   where kind is not markdown or verbatim
@@ -89,9 +92,9 @@ declareProfile(name: Name, kind: Kind, extensions: Extensions, raw: Flag, separa
   where an extension is not tables, footnotes, strikethrough, or autolinks
   then
     refuse UNSUPPORTED_EXTENSION "This Markdown extension is not supported."
-  where a verbatim profile has extensions or raw false
+  where a verbatim profile has extensions, raw false, or headingIds true
   then
-    refuse INCOMPATIBLE_PROFILE "A verbatim profile requires no extensions and raw true."
+    refuse INCOMPATIBLE_PROFILE "A verbatim profile requires no extensions, raw true, and headingIds false."
   where the named profile has the same normalized settings
   then
     produce that profile and changed false
@@ -136,7 +139,7 @@ removeConversions(subject: Subject) : return (subject: Subject, count: Number)
 ## Queries
 
 ```queries
-_profile (name: Name) : optional (profile: Profile, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString)
+_profile (name: Name) : optional (profile: Profile, kind: Kind, extensions: Extensions, raw: Flag, headingIds: Flag, separator: JavaScriptString)
   Returns only the current Profile for the name, or no row when the name has no
   current Profile. The extensions list is a fresh copy. No query returns a
   mutable value that aliases stored state.

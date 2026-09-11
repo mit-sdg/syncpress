@@ -30,6 +30,7 @@ test("its principle: replace one isolated, location-aware policy assessment", ()
       markdown: {
         extensions: ["tables", "footnotes", "strikethrough", "autolinks"],
         raw: true,
+        headingIds: true,
         excerptSeparator: "",
       },
       images: { widths: [480, 960, 1440], formats: ["avif", "webp", "original"] },
@@ -123,6 +124,22 @@ test("reports an invalid output setting once", () => {
   expect(() => governing.assess({ source: "paths:\n  output: []\n" })).toThrow();
 
   expect(governing._problems().map(({ message }) => message)).toEqual(["output must be a string."]);
+});
+
+test("configures generated Markdown heading IDs and validates the toggle", () => {
+  const governing = new GoverningConcept();
+  const assessed = governing.assess({ source: "markdown:\n  headingIds: false\n" });
+
+  expect(assessed.policy.markdown.headingIds).toBe(false);
+  expect(governing._markdown()).toEqual([{
+    extensions: ["tables", "footnotes", "strikethrough", "autolinks"],
+    raw: true,
+    headingIds: false,
+    separator: "",
+  }]);
+
+  expect(() => governing.assess({ source: "markdown:\n  headingIds: off\n" })).toThrow(InvalidConfiguration);
+  expect(governing._problems().map(({ message }) => message)).toEqual(["headingIds must be a boolean."]);
 });
 
 test("invalid collection predicates never become unconditional policy", () => {

@@ -78,7 +78,7 @@ _site () : optional (site: Values, base: Address)
 _origin () : optional (origin: Origin)
   Returns the normalized origin when one is configured.
 
-_markdown () : optional (extensions: Values, raw: Flag, separator: Text)
+_markdown () : optional (extensions: Values, raw: Flag, headingIds: Flag, separator: Text)
   Projects the effective Markdown policy.
 
 _images () : optional (widths: Values, formats: Values)

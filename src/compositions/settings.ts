@@ -36,11 +36,11 @@ export const SettingsPhaseRetractsDiagnostics = reaction(() =>
   ),
 );
 
-export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, separator }) =>
+export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, headingIds, separator }) =>
   when(Diagnosing.retractGroup({ scope: DIAGNOSTIC_SCOPES.settings, source: CONFIGURATION_PATH }).responds({}))
     .where(
       earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._markdown({}).is({ extensions, raw, separator }),
+      Governing._markdown({}).is({ extensions, raw, headingIds, separator }),
     )
     .then(
       Converting.declareProfile({
@@ -48,24 +48,26 @@ export const SettingsDeclareMarkdownProfile = reaction(({ extensions, raw, separ
         kind: "markdown",
         extensions,
         raw,
+        headingIds,
         separator,
       }),
     ),
 );
 
-export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ extensions, raw, separator, error, detail }) =>
+export const SettingsMarkdownProfileFailuresDiagnose = reaction(({ extensions, raw, headingIds, separator, error, detail }) =>
   when(
     Converting.declareProfile({
       name: PROFILES.markdown,
       kind: "markdown",
       extensions,
       raw,
+      headingIds,
       separator,
     }).refuses({ error, detail }),
   )
     .where(
       earlier(Phasing.completePhase, {}, { name: PHASE_SEQUENCE, phase: "settings", transitioned: true }),
-      Governing._markdown({}).is({ extensions, raw, separator }),
+      Governing._markdown({}).is({ extensions, raw, headingIds, separator }),
     )
     .then(Diagnosing.report({ scope: DIAGNOSTIC_SCOPES.settings, severity: "error", code: error, message: detail, source: CONFIGURATION_PATH })),
 );
@@ -82,6 +84,7 @@ export const SettingsDeclareVerbatimProfile = reaction(({ separator }) =>
         kind: "verbatim",
         extensions: [],
         raw: true,
+        headingIds: false,
         separator,
       }),
     ),
@@ -94,6 +97,7 @@ export const SettingsVerbatimProfileFailuresDiagnose = reaction(({ separator, er
       kind: "verbatim",
       extensions: [],
       raw: true,
+      headingIds: false,
       separator,
     }).refuses({ error, detail }),
   )

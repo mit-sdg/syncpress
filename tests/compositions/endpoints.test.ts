@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSyncpressRuntime } from "@compositions/api.ts";
@@ -54,6 +54,21 @@ test("an empty project builds into its configured output and reports what it sta
     const staged = await summary();
     expect(staged).toMatchObject({ pages: 0, files: 2, diagnostics: [] });
     expect(staged.destination).toBe(join(directory, "dist"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a site can disable generated Markdown heading IDs", async () => {
+  const directory = await project("markdown:\n  headingIds: false\n");
+  try {
+    await writeFile(join(directory, "content", "index.md"), "# Plain heading\n");
+    const { build } = runtime();
+
+    expect(await build({ directory })).toMatchObject({ ok: true });
+    expect(await readFile(join(directory, "dist", "index.html"), "utf8")).toContain(
+      "<h1>Plain heading</h1>",
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

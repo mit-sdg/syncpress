@@ -126,6 +126,7 @@ collections:
 markdown:
   extensions: [tables, footnotes, strikethrough, autolinks]
   raw: true
+  headingIds: true
   excerptSeparator: "<!--more-->"
 images:
   widths: [1]

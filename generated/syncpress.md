@@ -78,11 +78,11 @@ Defined in [Converting](../design/concepts/Converting.md), line 1.
 
 #### Actions
 
-- `declareProfile(name: Name, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)`
+- `declareProfile(name: Name, kind: Kind, extensions: Extensions, raw: Flag, headingIds: Flag, separator: JavaScriptString) : return (profile: Profile, changed: Flag)`
   - Refuses `INVALID_PROFILE`: This rendering profile is malformed.
   - Refuses `UNSUPPORTED_PROFILE_KIND`: This rendering profile kind is not supported.
   - Refuses `UNSUPPORTED_EXTENSION`: This Markdown extension is not supported.
-  - Refuses `INCOMPATIBLE_PROFILE`: A verbatim profile requires no extensions and raw true.
+  - Refuses `INCOMPATIBLE_PROFILE`: A verbatim profile requires no extensions, raw true, and headingIds false.
 - `convert(subject: Subject, part: Part, profile: Profile, source: JavaScriptString) : return (conversion: Conversion, output: JavaScriptString)`
   - Refuses `PROFILE_NOT_FOUND`: There is no such current rendering profile.
   - Refuses `INVALID_CONVERSION_INPUT`: A conversion subject, part, and source must be text.
@@ -92,7 +92,7 @@ Defined in [Converting](../design/concepts/Converting.md), line 1.
 
 #### Queries
 
-- `_profile(name: Name) : optional (profile: Profile, kind: Kind, extensions: Extensions, raw: Flag, separator: JavaScriptString)`
+- `_profile(name: Name) : optional (profile: Profile, kind: Kind, extensions: Extensions, raw: Flag, headingIds: Flag, separator: JavaScriptString)`
 - `_conversion(conversion: Conversion) : optional (subject: Subject, part: Part, profile: Profile, digest: Digest, output: JavaScriptString)`
 - `_for(subject: Subject, part: Part) : optional (conversion: Conversion, profile: Profile, digest: Digest, output: JavaScriptString)`
 - `_excerpt(subject: Subject, part: Part) : optional (conversion: Conversion, excerpt: JavaScriptString)`
@@ -425,7 +425,7 @@ Defined in [Governing](../design/concepts/Governing.md), line 1.
 - `_sources() : many (name: Name, path: Path)`
 - `_site() : optional (site: Values, base: Address)`
 - `_origin() : optional (origin: Origin)`
-- `_markdown() : optional (extensions: Values, raw: Flag, separator: Text)`
+- `_markdown() : optional (extensions: Values, raw: Flag, headingIds: Flag, separator: Text)`
 - `_images() : optional (widths: Values, formats: Values)`
 - `_defaults() : many (index: Number, text: Text, values: Values)`
 - `_collections() : many (name: Name, match: Text, direction: Direction, sort: Field | null, condition: Condition | null)`
@@ -4502,9 +4502,9 @@ Authored path: `fullSite.settings.SettingsDeclareMarkdownProfile`.
 when Diagnosing.retractGroup (scope: "configuration-settings", source: "site.yaml")
 where
   earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
-  Governing._markdown () has (extensions, raw, separator)
+  Governing._markdown () has (extensions, headingIds, raw, separator)
 then
-  Converting.declareProfile (extensions, kind: "markdown", name: "markdown", raw, separator)
+  Converting.declareProfile (extensions, headingIds, kind: "markdown", name: "markdown", raw, separator)
 ```
 
 ### fullSite.settings.SettingsDeclareVerbatimProfile
@@ -4518,7 +4518,7 @@ where
   earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
   Governing._markdown () has (separator)
 then
-  Converting.declareProfile (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator)
+  Converting.declareProfile (extensions: [], headingIds: false, kind: "verbatim", name: "verbatim", raw: true, separator)
 ```
 
 ### fullSite.settings.SettingsMarkdownProfileFailuresDiagnose
@@ -4527,10 +4527,10 @@ Authored path: `fullSite.settings.SettingsMarkdownProfileFailuresDiagnose`.
 - Covered by [Syncpress application composition](../design/application.md), line 161.
 
 ```reaction
-when refused Converting.declareProfile (extensions, kind: "markdown", name: "markdown", raw, separator, detail, error)
+when refused Converting.declareProfile (extensions, headingIds, kind: "markdown", name: "markdown", raw, separator, detail, error)
 where
   earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
-  Governing._markdown () has (extensions, raw, separator)
+  Governing._markdown () has (extensions, headingIds, raw, separator)
 then
   Diagnosing.report (code: error, message: detail, scope: "configuration-settings", severity: "error", source: "site.yaml")
 ```
@@ -4565,7 +4565,7 @@ Authored path: `fullSite.settings.SettingsVerbatimProfileFailuresDiagnose`.
 - Covered by [Syncpress application composition](../design/application.md), line 164.
 
 ```reaction
-when refused Converting.declareProfile (extensions: [], kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
+when refused Converting.declareProfile (extensions: [], headingIds: false, kind: "verbatim", name: "verbatim", raw: true, separator, detail, error)
 where
   earlier, Phasing.completePhase (name: "site-build", phase: "settings", transitioned: true)
   Governing._markdown () has (separator)

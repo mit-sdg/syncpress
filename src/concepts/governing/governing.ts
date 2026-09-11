@@ -51,7 +51,7 @@ export type SitePolicy = {
   site: SiteValues;
   defaults: DefaultPolicy[];
   collections: CollectionPolicy[];
-  markdown: { extensions: string[]; raw: boolean; excerptSeparator: string };
+  markdown: { extensions: string[]; raw: boolean; headingIds: boolean; excerptSeparator: string };
   images: { widths: number[]; formats: string[] };
   deploy: {
     nojekyll: boolean;
@@ -85,6 +85,7 @@ const DEFAULT_PATHS = {
 const DEFAULT_MARKDOWN = {
   extensions: ["tables", "footnotes", "strikethrough", "autolinks"],
   raw: true,
+  headingIds: true,
   excerptSeparator: "",
 };
 const DEFAULT_IMAGES = { widths: [480, 960, 1440], formats: ["avif", "webp", "original"] };
@@ -456,6 +457,7 @@ function parseMarkdown(node: Node | null | undefined, problems: ConfigurationPro
     problem(problems, counter, extensions, "markdown.extensions must be a sequence of strings.");
   } else if (isSeq(extensions)) settings.extensions = extensions.items.map((item) => (item as { value: string }).value);
   settings.raw = booleanValue(markdown, "raw", true, problems, counter);
+  settings.headingIds = booleanValue(markdown, "headingIds", true, problems, counter);
   settings.excerptSeparator = stringValue(markdown, "excerptSeparator", "", problems, counter);
   return settings;
 }
@@ -721,8 +723,13 @@ export class GoverningConcept {
     return this.#valid(({ site }) => typeof site.origin === "string" ? { origin: site.origin } : undefined);
   }
 
-  _markdown(): { extensions: string[]; raw: boolean; separator: string }[] {
-    return this.#valid(({ markdown }) => ({ extensions: [...markdown.extensions], raw: markdown.raw, separator: markdown.excerptSeparator }));
+  _markdown(): { extensions: string[]; raw: boolean; headingIds: boolean; separator: string }[] {
+    return this.#valid(({ markdown }) => ({
+      extensions: [...markdown.extensions],
+      raw: markdown.raw,
+      headingIds: markdown.headingIds,
+      separator: markdown.excerptSeparator,
+    }));
   }
 
   _images(): { widths: number[]; formats: string[] }[] {
