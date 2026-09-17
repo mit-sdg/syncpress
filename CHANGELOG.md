@@ -5,6 +5,8 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-09-17
+
 ### Fixed
 
 - Stop expanding image and download bytes into occurrence-log fields during
@@ -119,7 +121,8 @@ Initial npm release of `@mit-sdg/syncpress`.
   destination when a build fails before reconciliation.
 - ESM packaging for Node.js `>=24 <25` and Bun `>=1.3.14 <1.4`.
 
-[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mit-sdg/syncpress/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/mit-sdg/syncpress/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/mit-sdg/syncpress/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mit-sdg/syncpress/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/mit-sdg/syncpress/compare/v0.3.0...v0.3.1
