@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
+import { availableParallelism } from "node:os";
+import { arch, platform } from "node:process";
 import sharp from "sharp";
+import { RenditionCache } from "./cache.ts";
+import { deriveInParallel } from "./parallel.ts";
 
 const INVALID_SUBJECT = "An image subject must be well-formed text.";
 const UNREADABLE_IMAGE = "These bytes are not a fully readable image.";
@@ -91,6 +95,13 @@ type Rendition = {
   fallback: boolean;
 };
 type Plan = Pick<Rendition, "width" | "format" | "order"> & { exactOriginal: boolean };
+
+// Bump the recipe when resize, encoding, or verification rules change. Codec
+// versions and platform are part of the key so upgrades cannot reuse old bytes.
+const RENDITION_RECIPE = 1;
+const CODECS = [platform, arch, Object.entries(sharp.versions).sort(([left], [right]) => left.localeCompare(right))];
+const MAX_RENDITION_WORKERS = 4;
+const PARALLEL_SOURCE_PIXELS = 16_000_000;
 
 const factsByFormat: Record<ImageFormat, FormatFacts> = {
   avif: { extension: "avif", mediaType: "image/avif" },
@@ -224,6 +235,11 @@ export class TranscodingConcept {
   readonly #originalsByID = new Map<string, Original>();
   readonly #renditionsByOriginal = new Map<string, Rendition[]>();
   readonly #renditionsByID = new Map<string, Rendition>();
+  readonly #cache: RenditionCache;
+
+  constructor({ cacheDirectory }: { cacheDirectory?: string | null } = {}) {
+    this.#cache = new RenditionCache(cacheDirectory);
+  }
 
   async ingest({ subject, content }: { subject: string; content: Uint8Array }) {
     if (!isText(subject)) throw new InvalidSubject();
@@ -242,7 +258,8 @@ export class TranscodingConcept {
     if (dimensions === undefined) throw new UnreadableImage();
 
     try {
-      await sharp(nextContent, { animated: true, failOn: "warning" }).stats();
+      // Decode every pixel without computing unused channel/entropy statistics.
+      await sharp(nextContent, { animated: true, failOn: "warning" }).raw().toBuffer();
     } catch {
       throw new UnreadableImage();
     }
@@ -284,8 +301,7 @@ export class TranscodingConcept {
     const current = this.#renditionsByOriginal.get(original) ?? [];
     if (this.#matches(current, plan)) return this.#renderResult(original, current, false);
 
-    const renditions: Rendition[] = [];
-    for (const item of plan) renditions.push(await this.#derive(source, item));
+    const renditions = await this.#derivePlan(source, plan);
 
     this.#discardRenditions(original);
     this.#renditionsByOriginal.set(original, renditions);
@@ -365,8 +381,31 @@ export class TranscodingConcept {
     });
   }
 
+  async #derivePlan(original: Original, plan: Plan[]): Promise<Rendition[]> {
+    // Each encoder decodes the source. Reduce concurrency for large or animated
+    // inputs rather than multiplying their full decoded working sets by four.
+    const sourcePixels = original.width * original.height * original.frames;
+    const concurrency = Math.max(1, Math.min(
+      MAX_RENDITION_WORKERS, availableParallelism(), Math.floor(PARALLEL_SOURCE_PIXELS / sourcePixels), plan.length,
+    ));
+    return deriveInParallel(plan, concurrency, (item) => this.#derive(original, item));
+  }
+
   async #derive(original: Original, item: Plan): Promise<Rendition> {
     if (item.exactOriginal) return this.#record(original, item, original.content, original.height, original.animated);
+
+    const key = createHash("sha256").update(JSON.stringify([
+      RENDITION_RECIPE, CODECS, original.digest, item.width, item.format,
+    ])).digest("hex");
+    const cached = await this.#cache.read(key);
+    if (cached !== undefined) {
+      try {
+        return await this.#verify(original, item, cached);
+      } catch {
+        // Even checksum-valid entries must pass the same image checks as fresh
+        // encoder output. A bad cache entry is repaired, not a rendition failure.
+      }
+    }
 
     try {
       let pipeline = sharp(original.content, { animated: true, failOn: "warning" })
@@ -417,24 +456,30 @@ export class TranscodingConcept {
 
       const output = await pipeline.toBuffer({ resolveWithObject: true });
       const content = Uint8Array.from(output.data);
-      const metadata = await sharp(content, { animated: true, failOn: "warning" }).metadata();
-      const dimensions = displayedDimensions(metadata);
-      if (canonicalFormat(metadata) !== item.format || dimensions?.width !== item.width || dimensions.height !== expectedHeight(original, item.width)) {
-        throw new RenditionFailed();
-      }
-      await sharp(content, { animated: true, failOn: "warning" }).stats();
-
-      const frames = metadata.pages ?? 1;
-      if (original.animated) {
-        if (frames !== original.frames || (metadata.loop ?? 0) !== original.loop || !sameNumbers(original.delay, metadata.delay)) throw new RenditionFailed();
-      } else if (frames !== 1) {
-        throw new RenditionFailed();
-      }
-      return this.#record(original, item, content, dimensions.height, original.animated);
+      const rendition = await this.#verify(original, item, content);
+      await this.#cache.write(key, content);
+      return rendition;
     } catch (error) {
       if (error instanceof RenditionFailed) throw error;
       throw new RenditionFailed();
     }
+  }
+
+  async #verify(original: Original, item: Plan, content: Uint8Array): Promise<Rendition> {
+    const metadata = await sharp(content, { animated: true, failOn: "warning" }).metadata();
+    const dimensions = displayedDimensions(metadata);
+    if (canonicalFormat(metadata) !== item.format || dimensions?.width !== item.width || dimensions.height !== expectedHeight(original, item.width)) {
+      throw new RenditionFailed();
+    }
+    await sharp(content, { animated: true, failOn: "warning" }).raw().toBuffer();
+
+    const frames = metadata.pages ?? 1;
+    if (original.animated) {
+      if (frames !== original.frames || (metadata.loop ?? 0) !== original.loop || !sameNumbers(original.delay, metadata.delay)) throw new RenditionFailed();
+    } else if (frames !== 1) {
+      throw new RenditionFailed();
+    }
+    return this.#record(original, item, content, dimensions.height, original.animated);
   }
 
   #record(original: Original, item: Plan, sourceContent: Uint8Array, height: number, animated: boolean): Rendition {

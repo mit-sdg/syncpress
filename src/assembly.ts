@@ -8,5 +8,9 @@ export function assembleSyncpress() {
     conceptSet: applicationConceptSet,
     instances: applicationConceptSet.implementations(),
     composition: { fullSite },
+    // Payload bytes belong to concept state, not occurrence evidence. Redacting
+    // before traversal avoids expanding each Uint8Array into millions of fields.
+    // The engine keeps original values privately for execution and matching.
+    redaction: { fields: ["content"] },
   });
 }
