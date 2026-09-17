@@ -5,6 +5,18 @@ refactoring appear when documented behavior changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Stop expanding image and download bytes into occurrence-log fields during
+  builds, reducing build time and memory use for asset-heavy sites.
+- Reuse verified image renditions across builds and development-server restarts
+  through a disposable, content-addressed disk cache. Source, width, format,
+  recipe, and codec changes invalidate reuse; corrupt or unavailable caches
+  fall back to generation. Generated site bytes and image quality are unchanged.
+- Validate image pixels without computing unused channel and entropy statistics.
+- Encode independent image renditions in a bounded worker pool, reducing
+  parallelism for large or animated sources while preserving exact output bytes.
+
 ## [0.5.0] — 2026-09-11
 
 ### Added

@@ -63,7 +63,7 @@ function actualFormat(metadata: Awaited<ReturnType<ReturnType<typeof sharp>["met
 
 test("admits every supported raster source and fully rejects corrupt or unsupported input", async () => {
   for (const format of ["png", "jpeg", "webp", "gif", "avif"] as const) {
-    const transcoding = new TranscodingConcept();
+    const transcoding = new TranscodingConcept({ cacheDirectory: null });
     const content = await still(format);
     const admitted = await transcoding.ingest({ subject: format, content });
     expect(admitted).toMatchObject({ digest: sha256(content), format, width: 12, height: 8, animated: false, changed: true });
@@ -71,7 +71,7 @@ test("admits every supported raster source and fully rejects corrupt or unsuppor
     expect(await transcoding.ingest({ subject: format, content })).toEqual({ ...admitted, changed: false });
   }
 
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   await expect(transcoding.ingest({ subject: "text", content: new TextEncoder().encode("not an image") })).rejects.toThrow(UnreadableImage);
   await expect(transcoding.ingest({
     subject: "vector",
@@ -88,7 +88,7 @@ test("admits every supported raster source and fully rejects corrupt or unsuppor
 });
 
 test("uses displayed EXIF dimensions and physically orients generated pixels", async () => {
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const content = await orientedJpeg();
   const admitted = await transcoding.ingest({ subject: "portrait", content });
   expect(admitted).toMatchObject({ format: "jpeg", width: 20, height: 40, animated: false });
@@ -122,7 +122,7 @@ test("uses displayed EXIF dimensions and physically orients generated pixels", a
 });
 
 test("normalizes ordering and aliases, prevents upscale, and always ends with an original fallback", async () => {
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const admitted = await transcoding.ingest({ subject: "ordering", content: await still("png", 90, 60) });
   const first = await transcoding.generateRenditions({
     original: admitted.original,
@@ -154,7 +154,7 @@ test("normalizes ordering and aliases, prevents upscale, and always ends with an
   });
   expect(transcoding._rendition({ rendition: removed })).toEqual([]);
 
-  const small = new TranscodingConcept();
+  const small = new TranscodingConcept({ cacheDirectory: null });
   const smallOriginal = await small.ingest({ subject: "small", content: await still("png", 20, 10) });
   expect(await small.generateRenditions({ original: smallOriginal.original, widths: [480, 960], formats: ["avif", "webp"] })).toEqual({
     original: smallOriginal.original,
@@ -175,7 +175,7 @@ test("normalizes ordering and aliases, prevents upscale, and always ends with an
 
 test("reports stable intrinsic rendition facts and collision-resistant suggested names", async () => {
   const content = await still("png", 12, 8);
-  const first = new TranscodingConcept();
+  const first = new TranscodingConcept({ cacheDirectory: null });
   const admitted = await first.ingest({ subject: "facts", content });
   await first.generateRenditions({ original: admitted.original, widths: [6], formats: ["avif", "gif", "jpg", "png", "webp"] });
   const renditions = first._renditions({ original: admitted.original });
@@ -215,7 +215,7 @@ test("reports stable intrinsic rendition facts and collision-resistant suggested
   }
   expect(renditions.at(-1)!.content).toEqual(content);
 
-  const second = new TranscodingConcept();
+  const second = new TranscodingConcept({ cacheDirectory: null });
   const equivalent = await second.ingest({ subject: "facts", content });
   await second.generateRenditions({ original: equivalent.original, widths: [6], formats: ["avif", "gif", "jpg", "png", "webp"] });
   expect(second._renditions({ original: equivalent.original })).toEqual(renditions);
@@ -230,7 +230,7 @@ test("reports stable intrinsic rendition facts and collision-resistant suggested
 test("copies source and rendition bytes at every boundary", async () => {
   const supplied = Buffer.from(await still("png", 10, 5));
   const expected = Uint8Array.from(supplied);
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const admitted = await transcoding.ingest({ subject: "clones", content: supplied });
   supplied.fill(0);
   await transcoding.generateRenditions({ original: admitted.original, widths: [], formats: [] });
@@ -242,7 +242,7 @@ test("copies source and rendition bytes at every boundary", async () => {
 });
 
 test("validates the whole width and format request before changing state", async () => {
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const admitted = await transcoding.ingest({ subject: "validation", content: await still("png") });
   await transcoding.generateRenditions({ original: admitted.original, widths: [6], formats: ["webp"] });
   const before = transcoding._renditions({ original: admitted.original });
@@ -260,7 +260,7 @@ test("validates the whole width and format request before changing state", async
 
 test("preserves animated GIF frames, timing, and loop while skipping static formats", async () => {
   const content = await animation("gif");
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const admitted = await transcoding.ingest({ subject: "animation", content });
   expect(admitted).toMatchObject({ format: "gif", width: 8, height: 6, animated: true });
 
@@ -295,7 +295,7 @@ test("preserves animated GIF frames, timing, and loop while skipping static form
 
 test("failed rendering is atomic and refuses consistently", async () => {
   const content = new Uint8Array(await sharp({ create: { width: 70_000, height: 1, channels: 3, background: "red" } }).png().toBuffer());
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const admitted = await transcoding.ingest({ subject: "too-wide-for-gif", content });
   await transcoding.generateRenditions({ original: admitted.original, widths: [], formats: [] });
   const before = transcoding._renditions({ original: admitted.original });
@@ -309,7 +309,7 @@ test("failed rendering is atomic and refuses consistently", async () => {
 test("replacement and removeSource remove every stale identity and preserve collision-safe identities", async () => {
   const firstContent = await still("png", 12, 8);
   const secondContent = await still("png", 13, 8);
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const first = await transcoding.ingest({ subject: "a:b", content: firstContent });
   await transcoding.generateRenditions({ original: first.original, widths: [6], formats: ["webp"] });
   const staleRendition = transcoding._renditions({ original: first.original })[0]!.rendition;
@@ -330,12 +330,12 @@ test("replacement and removeSource remove every stale identity and preserve coll
 
   const restored = await transcoding.ingest({ subject: "a:b", content: secondContent });
   expect(restored.original).toBe(replacement.original);
-  const equivalent = await new TranscodingConcept().ingest({ subject: "a:b", content: secondContent });
+  const equivalent = await new TranscodingConcept({ cacheDirectory: null }).ingest({ subject: "a:b", content: secondContent });
   expect(equivalent.original).toBe(replacement.original);
 });
 
 test("a failed replacement leaves the current original and renditions intact", async () => {
-  const transcoding = new TranscodingConcept();
+  const transcoding = new TranscodingConcept({ cacheDirectory: null });
   const admitted = await transcoding.ingest({ subject: "atomic-admit", content: await still("png") });
   await transcoding.generateRenditions({ original: admitted.original, widths: [6], formats: ["webp"] });
   const before = transcoding._renditions({ original: admitted.original });
@@ -368,7 +368,7 @@ test("registry maps every refusal to its normative message", async () => {
   ]);
 
   const concepts = conceptSet({ Transcoding: transcodingRegistration });
-  const app = assemble({ conceptSet: concepts, instances: concepts.implementations(), composition: {} });
+  const app = assemble({ conceptSet: concepts, instances: { Transcoding: new TranscodingConcept({ cacheDirectory: null }) }, composition: {} });
   const Transcoding = app.concepts.Transcoding;
   const validContent = await still("png");
   expect(await Transcoding.ingest({ subject: "\ud800", content: validContent })).toEqual({

@@ -65,6 +65,31 @@ SVG and other filenames outside the raster-extension set use ordinary asset copy
 
 The [introduction](../index.md) contains both paths: `blue.png` becomes a responsive `<picture>`, while `mark.svg` is copied as an ordinary local asset.
 
+### Image rendition cache
+
+Syncpress caches derived image bytes across builds, including separate `build`
+commands and `dev` restarts. The first build still encodes each requested
+rendition. Later builds reuse matching source bytes, widths, formats, rendering
+recipe, and codec versions. Cached images are checked for integrity, dimensions,
+format, decodability, and animation before use. This does not skip source
+validation, page rendering, or output reconciliation, and does not change image
+quality or generated filenames.
+
+The cache lives outside the site and its output directory:
+
+| Platform | Cache directory |
+| --- | --- |
+| Linux and other Unix | `$XDG_CACHE_HOME/syncpress/images`, or `~/.cache/syncpress/images` |
+| macOS | `$XDG_CACHE_HOME/syncpress/images`, or `~/Library/Caches/syncpress/images` |
+| Windows | `%LOCALAPPDATA%/syncpress/images`, or `~/.cache/syncpress/images` |
+
+Environment overrides must be absolute paths. Deleting this cache only causes
+renditions to be regenerated; it does not remove source or published files.
+Missing, corrupt, or unreadable entries are regenerated. If the cache cannot be
+written, the build continues without saving new entries. Individual renditions
+larger than 64 MiB are not cached. There is currently no automatic cache eviction;
+delete the cache directory to reclaim space.
+
 ## Output collisions
 
 Asset and rendition outputs participate in the same producer-claim checks as pages and deployment files. Emitting rejects a public file, content-relative copy, or generated rendition that contests another producer's path.

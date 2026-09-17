@@ -27,6 +27,23 @@ compares declared contracts with implementations, verifies generated artifacts,
 runs application diagnostics, and typechecks the repository. `principle` runs
 concept-level Principle tests; `test` runs the complete Bun test suite.
 
+## Benchmark asset-heavy builds
+
+After installing dependencies, build the package and point the opt-in benchmark
+at an existing site:
+
+```sh
+bun run build
+bun tests/benchmarks/assets.ts /path/to/site
+```
+
+The benchmark runs three fresh Node processes: an empty-cache build, an
+unchanged rebuild, and a build with the warm cache but no output directory. It
+reports elapsed time and verifies every output path and SHA-256 digest agrees.
+Output and cache files live in a temporary directory that is removed afterward;
+the site's own output and user cache are untouched. Encoding an empty cache can
+take substantially longer than a warm build, so compare both measurements.
+
 ## Change boundaries
 
 Add behavior at the concept that owns its invariant. Update that concept's
